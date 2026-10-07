@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esercitazioni Modulo 2 — CADMO NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white prose-code">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <div class="flex items-center gap-5 text-sm">
+          <a href="modulo_2.html" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="presentation" class="w-4 h-4"></i><span class="hidden sm:inline">Slide</span></a>
+          <a href="./" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Home</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="bg-gray-950 border-b border-gray-800 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center animate-fade-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-900/30 border border-red-500/30 text-xs text-red-300 font-mono mb-4 uppercase tracking-wider">
+        <i data-lucide="package" class="w-4 h-4"></i> npm · process · fs · eventi
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4">Esercitazioni Modulo 2</h1>
+      <p class="text-gray-400 text-lg">Riscaldamento sull'event loop, una missione npm nel terminale simulato, sei laboratori di codice con verifica automatica, missioni sul vostro PC e quiz finale.</p>
+      <p class="mt-4 text-sm font-mono text-gray-500"><span data-lab-progress="m2-calc,m2-moduli,m2-voti,m2-stagista,m2-forno,m2-todo"></span> · i progressi restano salvati in questo browser</p>
+    </div>
+  </header>
+
+  <!-- Indice -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+    <div class="flex flex-wrap gap-2 justify-center text-sm">
+      <a href="#riscaldamento" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">0 · Riscaldamento</a>
+      <a href="#guida" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">1 · Guida rapida</a>
+      <a href="#terminale" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">2 · Missione npm</a>
+      <a href="#lab" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">3 · Laboratori</a>
+      <a href="#pc" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">4 · Sul tuo PC</a>
+      <a href="#quiz" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">5 · Quiz</a>
+    </div>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-20">
+
+    <!-- 0. RISCALDAMENTO -->
+    <section id="riscaldamento" class="scroll-mt-20 animate-fade-in delay-100">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="brain" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">0. Riscaldamento: indovina l'output</h2>
+      </div>
+      <p class="text-gray-400 mb-6">Ripasso della lezione 1 (event loop) con un paio di novità di oggi. Clicca le righe nell'ordine in cui compariranno nel terminale. Regola d'oro: <strong class="text-white">sincrono → process.nextTick → Promise (microtask) → timer / I/O (macrotask)</strong>.</p>
+      <div id="order-game"></div>
+    </section>
+
+    <!-- 1. GUIDA RAPIDA -->
+    <section id="guida" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="book-open" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">1. Guida rapida</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-red-400 mb-2">npm in 6 comandi</h3>
+          <pre class="code small"><code class="language-bash">npm init -y                # crea package.json
+npm install express        # dipendenza
+npm install -D nodemon     # devDependency
+npm run dev                # lancia lo script "dev"
+npm ci                     # installa esattamente il lock
+npx cowsay ciao            # esegue senza installare</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-yellow-400 mb-2">Semver</h3>
+          <p class="text-gray-400 text-sm mb-3"><code class="inline">MAJOR.MINOR.PATCH</code> — la MAJOR rompe la compatibilità.</p>
+          <pre class="code small"><code class="language-plaintext">"^5.1.0"  →  ≥ 5.1.0  e  < 6.0.0   (default)
+"~5.1.0"  →  ≥ 5.1.0  e  < 5.2.0
+"5.1.0"   →  esattamente 5.1.0</code></pre>
+          <p class="text-gray-400 text-sm mt-3">Su Git: <code class="inline">package.json</code> + <code class="inline">package-lock.json</code>. Mai <code class="inline">node_modules/</code> né <code class="inline">.env</code>.</p>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-blue-400 mb-2">process</h3>
+          <pre class="code small"><code class="language-javascript">// node app.js Anna 42
+const [nome, eta] = process.argv.slice(2); // stringhe!
+const porta = process.env.PORT ?? 3000;
+
+if (!nome) {
+  console.error('Manca il nome');   // stderr
+  process.exit(1);                   // 0 = ok, ≠0 = errore
+}</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-cyan-400 mb-2">fs/promises + JSON</h3>
+          <pre class="code small"><code class="language-javascript">const fs = require('node:fs/promises');
+const path = require('node:path');
+const FILE = path.join(__dirname, 'dati.json');
+
+async function main() {
+  const dati = JSON.parse(await fs.readFile(FILE, 'utf8'));
+  dati.push({ id: 3 });
+  await fs.writeFile(FILE, JSON.stringify(dati, null, 2));
+}</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-purple-400 mb-2">path</h3>
+          <pre class="code small"><code class="language-javascript">path.join('a', 'b', '../c.txt')  // 'a/c.txt'
+path.extname('foto.JPG')         // '.JPG'
+path.basename('/x/y/foto.jpg')   // 'foto.jpg'
+path.join(__dirname, 'dati')     // cartella di QUESTO file</code></pre>
+          <p class="text-gray-400 text-sm mt-3">Errori comuni: <code class="inline">ENOENT</code> (non esiste), <code class="inline">EEXIST</code> (esiste già), <code class="inline">EISDIR</code> (è una cartella).</p>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-pink-400 mb-2">EventEmitter</h3>
+          <pre class="code small"><code class="language-javascript">const EventEmitter = require('node:events');
+
+class Sensore extends EventEmitter {
+  misura(t) { this.emit('dato', t); }   // sincrono!
+}
+const s = new Sensore();
+s.on('dato', (t) => console.log(`${t} °C`));
+s.on('error', (err) => console.error(err.message));</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. TERMINALE -->
+    <section id="terminale" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="terminal-square" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">2. Missione npm: “Meteo CLI”</h2>
+      </div>
+      <div id="npm-terminal" class="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-5 md:p-8"></div>
+    </section>
+
+    <!-- 3. LABORATORI -->
+    <section id="lab" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-conical" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">3. Laboratori nel browser</h2>
+      </div>
+      <div class="text-gray-400 mb-8 space-y-2">
+        <p>Il codice gira in un <strong class="text-white">Node.js simulato</strong> dentro il browser, con un file system virtuale. Scrivi, premi <kbd>▶ Esegui</kbd> (o <kbd>Ctrl</kbd>+<kbd>Invio</kbd>) e quando pensi di aver finito premi <kbd>Verifica</kbd>: le verifiche eseguono il tuo programma più volte, anche con dati diversi.</p>
+        <p class="text-sm">💡 Il codice che scrivi viene salvato automaticamente nel browser. Il simulatore usa i moduli <strong class="text-gray-300">CommonJS</strong> (<code class="inline">require</code> / <code class="inline">module.exports</code>).</p>
+      </div>
+      <div class="space-y-10" id="labs"></div>
+    </section>
+
+    <!-- 4. MISSIONI SUL PC -->
+    <section id="pc" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="laptop" class="w-6 h-6 text-emerald-400"></i>
+        <h2 class="text-2xl font-bold text-white">4. Missioni sul tuo PC</h2>
+      </div>
+      <p class="text-gray-400 mb-6">Ora con il vostro terminale e Node vero. Usate VS Code (<code class="inline">code .</code> apre la cartella corrente). Su Windows usate PowerShell o il terminale di VS Code.</p>
+
+      <div class="space-y-8">
+        <!-- Missione A -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-red-900/50 flex items-center justify-center border border-red-500/30"><i data-lucide="rocket" class="w-5 h-5 text-red-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione A: Il primo progetto vero</h3>
+              <p class="text-sm text-red-400 font-mono">Focus: npm init, dipendenze, script, .gitignore</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-red-500">
+            <li>Crea la cartella <code class="inline">corso-node/lezione2</code>, entraci e inizializza il progetto con le risposte di default.</li>
+            <li>Installa <code class="inline">express</code> come dipendenza e <code class="inline">nodemon</code> come devDependency. Apri <code class="inline">package.json</code>: dove sono finiti?</li>
+            <li>Crea <code class="inline">index.js</code> che stampa <code class="inline">Pronto!</code> e aggiungi gli script <code class="inline">start</code> (node) e <code class="inline">dev</code> (nodemon).</li>
+            <li>Lancia <code class="inline">npm run dev</code>, modifica il messaggio e salva: cosa succede nel terminale? Esci con <kbd>Ctrl</kbd>+<kbd>C</kbd>.</li>
+            <li>Crea un <code class="inline">.gitignore</code> che escluda <code class="inline">node_modules/</code> e <code class="inline">.env</code>.</li>
+            <li>Cancella <code class="inline">node_modules</code> e ricrealo. Poi prova <code class="inline">npm ci</code>: che differenza noti?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-a')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-a" class="solution-container mt-4">
+            <pre class="code small"><code class="language-bash">mkdir -p corso-node/lezione2 && cd corso-node/lezione2
+npm init -y
+npm install express
+npm install -D nodemon
+echo "console.log('Pronto!');" > index.js
+npm pkg set scripts.start="node index.js" scripts.dev="nodemon index.js"
+npm run dev            # salva index.js → "[nodemon] restarting due to changes..."
+printf "node_modules/\n.env\n" > .gitignore
+rm -rf node_modules    # su Windows: Remove-Item -Recurse -Force node_modules
+npm install            # ricrea node_modules da package.json (+ lock)
+npm ci                 # cancella node_modules e installa ESATTAMENTE il lock</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione B -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-blue-900/50 flex items-center justify-center border border-blue-500/30"><i data-lucide="key-round" class="w-5 h-5 text-blue-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione B: Segreti nell'ambiente</h3>
+              <p class="text-sm text-blue-400 font-mono">Focus: process.env, --env-file, exit code</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-blue-500">
+            <li>Crea <code class="inline">config.js</code> che stampa <code class="inline">Benvenuto &lt;NOME&gt;, server sulla porta &lt;PORTA&gt;</code> leggendo le variabili <code class="inline">NOME</code> e <code class="inline">PORTA</code> (default: <code class="inline">ospite</code> e <code class="inline">3000</code>).</li>
+            <li>Lancialo senza variabili, poi impostandole solo per quel comando.</li>
+            <li>Crea un file <code class="inline">.env</code> con le due variabili e lancia con <code class="inline">node --env-file=.env config.js</code>.</li>
+            <li>Se <code class="inline">PORTA</code> non è un numero valido, stampa un errore su stderr ed esci con codice 2. Verifica il codice d'uscita con <code class="inline">echo $?</code> (PowerShell: <code class="inline">$LASTEXITCODE</code>).</li>
+          </ol>
+          <button onclick="toggleSolution('sol-b')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-b" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-javascript">// config.js
+const nome = process.env.NOME ?? 'ospite';
+const porta = Number(process.env.PORTA ?? 3000);
+
+if (!Number.isInteger(porta) || porta < 1 || porta > 65535) {
+  console.error(`PORTA non valida: ${process.env.PORTA}`);
+  process.exit(2);
+}
+
+console.log(`Benvenuto ${nome}, server sulla porta ${porta}`);</code></pre>
+            <pre class="code small"><code class="language-bash">node config.js                        # Benvenuto ospite, server sulla porta 3000
+NOME=Anna PORTA=8080 node config.js   # macOS / Linux
+# PowerShell: $env:NOME="Anna"; $env:PORTA="8080"; node config.js
+printf "NOME=Luca\nPORTA=5000\n" > .env
+node --env-file=.env config.js        # Benvenuto Luca, server sulla porta 5000
+PORTA=ciao node config.js; echo $?    # PORTA non valida: ciao  →  2</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione C -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-yellow-900/50 flex items-center justify-center border border-yellow-500/30"><i data-lucide="search" class="w-5 h-5 text-yellow-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione C: Detective di node_modules</h3>
+              <p class="text-sm text-yellow-400 font-mono">Focus: albero delle dipendenze, lock, versioni</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-yellow-500">
+            <li>Nel progetto della Missione A: quanti pacchetti ci sono in <code class="inline">node_modules</code>? Perché così tanti, se ne hai installati due?</li>
+            <li>Mostra l'albero completo di chi dipende da chi, poi cerca chi usa il pacchetto <code class="inline">debug</code>.</li>
+            <li>Controlla la versione di <code class="inline">express</code> in tre posti: <code class="inline">package.json</code>, <code class="inline">package-lock.json</code>, <code class="inline">node_modules/express/package.json</code>.</li>
+            <li>Installa di proposito <code class="inline">express@4</code>: cosa cambia nel <code class="inline">package.json</code>? Cosa dice <code class="inline">npm outdated</code>? Poi torna a Express 5.</li>
+          </ol>
+          <button onclick="toggleSolution('sol-c')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-c" class="solution-container mt-4">
+            <pre class="code small"><code class="language-bash">ls node_modules | wc -l          # decine di pacchetti: le dipendenze delle dipendenze!
+npm ls --all                     # albero completo
+npm ls debug                     # chi dipende da "debug"
+grep '"express"' package.json
+grep -A2 '"node_modules/express"' package-lock.json
+grep '"version"' node_modules/express/package.json
+npm install express@4            # package.json → "express": "^4.x.x"
+npm outdated                     # Current 4.x, Latest 5.x (MAJOR diversa!)
+npm install express@latest       # si torna alla 5</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione D -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-emerald-900/50 flex items-center justify-center border border-emerald-500/30"><i data-lucide="list-todo" class="w-5 h-5 text-emerald-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione D: La todo-list esce dal browser</h3>
+              <p class="text-sm text-emerald-400 font-mono">Focus: script con argomenti, file reali</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-emerald-500">
+            <li>Copia la tua soluzione del <strong>Lab 6</strong> in <code class="inline">todo.js</code> sul tuo PC e provala: ora <code class="inline">todo.json</code> resta su disco tra un comando e l'altro!</li>
+            <li>Aggiungi uno script npm <code class="inline">todo</code> e usalo per aggiungere un'attività: come passi gli argomenti allo script?</li>
+            <li>Bonus: aggiungi il comando <code class="inline">remove &lt;id&gt;</code> e il comando <code class="inline">clear</code> (cancella le attività completate).</li>
+          </ol>
+          <button onclick="toggleSolution('sol-d')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-d" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-bash">npm pkg set scripts.todo="node todo.js"
+npm run todo -- add Comprare il pane   # tutto ciò che segue "--" va allo script
+npm run todo -- list
+cat todo.json</code></pre>
+            <pre class="code small"><code class="language-javascript">} else if (comando === 'remove') {
+  const id = Number(resto[0]);
+  const rimasti = todos.filter((t) => t.id !== id);
+  if (rimasti.length === todos.length) return errore(`Attività #${resto[0]} non trovata`);
+  await salva(rimasti);
+  console.log(`Rimosso #${id}`);
+} else if (comando === 'clear') {
+  const rimasti = todos.filter((t) => !t.fatto);
+  await salva(rimasti);
+  console.log(`Eliminate ${todos.length - rimasti.length} attività completate`);
+}</code></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 5. QUIZ -->
+    <section id="quiz" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="check-square" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">5. Quiz di verifica</h2>
+      </div>
+      <div id="quiz-box"></div>
+    </section>
+  </main>
+
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm font-mono">studente@nodelab:~$ process.exit(0)</div>
+  </footer>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/terminal.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/labs-m2.js"></script>
+  <script>
+    // ---------------------------------------------------------------- 0. indovina l'output
+    OrderGame.mount(document.getElementById('order-game'), [
+      {
+        title: 'Il timer più veloce del mondo?',
+        code: "console.log('1');\nsetTimeout(() => console.log('2'), 0);\nconsole.log('3');",
+        chips: ['1', '2', '3'], answer: ['1', '3', '2'],
+        explain: 'Anche con 0 ms la callback del timer va in coda e aspetta che il codice sincrono sia finito.',
+      },
+      {
+        title: 'Timer contro Promise',
+        code: "console.log('A');\nsetTimeout(() => console.log('B'), 0);\nPromise.resolve().then(() => console.log('C'));\nconsole.log('D');",
+        chips: ['A', 'B', 'C', 'D'], answer: ['A', 'D', 'C', 'B'],
+        explain: 'Le Promise (microtask) passano sempre prima dei timer (macrotask).',
+      },
+      {
+        title: 'La classifica delle code',
+        code: "setTimeout(() => console.log('timeout'), 0);\nprocess.nextTick(() => console.log('nextTick'));\nPromise.resolve().then(() => console.log('promise'));\nconsole.log('sync');",
+        chips: ['timeout', 'nextTick', 'promise', 'sync'], answer: ['sync', 'nextTick', 'promise', 'timeout'],
+        explain: 'Ordine di priorità: codice sincrono → coda `process.nextTick` → microtask delle Promise → timer.',
+      },
+      {
+        title: 'async / await',
+        code: "async function prepara() {\n  console.log('B');\n  await null;\n  console.log('D');\n}\nconsole.log('A');\nprepara();\nconsole.log('C');",
+        chips: ['A', 'B', 'C', 'D'], answer: ['A', 'B', 'C', 'D'],
+        explain: 'Il corpo di una funzione `async` è sincrono fino al primo `await`; dopo, riprende come microtask.',
+      },
+      {
+        title: 'Sync contro async (novità di oggi)',
+        code: "const fs = require('fs');\nconsole.log('inizio');\nfs.readFile(__filename, () => console.log('letto (async)'));\nconst dati = fs.readFileSync(__filename);\nconsole.log('letto (sync)');\nconsole.log('fine');",
+        chips: ['inizio', 'letto (async)', 'letto (sync)', 'fine'], answer: ['inizio', 'letto (sync)', 'fine', 'letto (async)'],
+        explain: '`readFileSync` blocca e restituisce subito il contenuto; la callback di `readFile` arriva solo dopo che tutto il codice sincrono è terminato.',
+      },
+      {
+        title: 'Gli eventi sono sincroni (novità di oggi)',
+        code: "const EventEmitter = require('events');\nconst e = new EventEmitter();\ne.on('ping', () => console.log('pong'));\nconsole.log('prima');\ne.emit('ping');\nconsole.log('dopo');",
+        chips: ['prima', 'pong', 'dopo'], answer: ['prima', 'pong', 'dopo'],
+        explain: '`emit` chiama subito, in ordine, tutti gli ascoltatori: non passa dall\'event loop!',
+      },
+      {
+        title: 'La catena interrotta',
+        code: "Promise.resolve(1)\n  .then((x) => { console.log(x); return x * 2; })\n  .then((x) => { throw new Error('boom ' + x); })\n  .then(() => console.log('mai'))\n  .catch((e) => console.log(e.message))\n  .finally(() => console.log('fine'));",
+        chips: ['1', '2', 'boom 2', 'mai', 'fine'], answer: ['1', 'boom 2', 'fine'],
+        explain: 'Un errore salta tutti i `.then` successivi fino al primo `.catch`; `.finally` viene eseguito comunque. Attenzione: alcune righe non vengono mai stampate!',
+      },
+      {
+        title: 'Dentro una callback di I/O (difficile!)',
+        code: "const fs = require('fs');\nfs.readFile(__filename, () => {\n  setTimeout(() => console.log('timeout'), 0);\n  setImmediate(() => console.log('immediate'));\n  process.nextTick(() => console.log('nextTick'));\n});",
+        chips: ['timeout', 'immediate', 'nextTick'], answer: ['nextTick', 'immediate', 'timeout'],
+        explain: 'Dopo la fase **poll** (I/O) l\'event loop passa alla fase **check** (`setImmediate`) prima di tornare ai **timers**. E `nextTick` batte tutti.',
+      },
+    ], { id: 'm2-ex-warmup' });
+
+    // ---------------------------------------------------------------- 2. terminale npm
+    NodeTerminal.mount(document.getElementById('npm-terminal'), {
+      id: 'm2-ex-npm',
+      title: 'Missione: Meteo CLI',
+      intro: 'Devi preparare il progetto di una piccola app meteo da terminale. I passi si spuntano da soli, in ordine. Comandi utili: <code class="inline">help</code>, <code class="inline">ls</code>, <code class="inline">cat package.json</code>, <code class="inline">nano &lt;file&gt;</code>.',
+      tasks: [
+        { text: 'Crea la cartella `meteo-cli` ed entraci', check: (t) => t.cwd === '~/meteo-cli' },
+        { text: 'Inizializza il progetto con le risposte di default', check: (t) => t.exists('~/meteo-cli/package.json') },
+        { text: 'Imposta la descrizione `CLI per il meteo` (con `npm pkg set` o con `nano`)', check: (t) => ((t.json('~/meteo-cli/package.json') || {}).description || '').trim() === 'CLI per il meteo' },
+        { text: 'Installa `dayjs` come dipendenza', check: (t) => t.dep('~/meteo-cli', 'dayjs') && t.installed('~/meteo-cli', 'dayjs') },
+        { text: 'Installa `nodemon` come dipendenza di sviluppo', check: (t) => t.devDep('~/meteo-cli', 'nodemon') && !t.dep('~/meteo-cli', 'nodemon') },
+        { text: 'Crea `index.js` che stampa `Meteo pronto!`', check: (t) => /console\.log\(\s*(['"`])Meteo pronto!\1\s*\)/.test(t.read('~/meteo-cli/index.js') || '') },
+        { text: 'Aggiungi gli script `start` (`node index.js`) e `dev` (`nodemon index.js`)', check: (t) => /^node index(\.js)?$/.test((t.script('~/meteo-cli', 'start') || '').trim()) && /nodemon/.test(t.script('~/meteo-cli', 'dev') || '') },
+        { text: 'Avvia l\'app con lo script `start`', check: (t) => t.ran(/^npm (start|run start)\b/) && t.lastOutput().includes('Meteo pronto!') },
+        { text: 'Simula un collega che clona il progetto: cancella `node_modules` e reinstalla **esattamente** le versioni del lock', check: (t) => t.ran(/^npm ci\b/) && t.installed('~/meteo-cli', 'dayjs') },
+        { text: 'Festeggia: `npx cowsay` con un messaggio a tua scelta 🐮', check: (t) => t.ran(/^npx cowsay\b/) },
+      ],
+    });
+
+    // ---------------------------------------------------------------- 3. laboratori
+    const labsBox = document.getElementById('labs');
+    for (const cfg of window.M2_LABS) {
+      const el = document.createElement('article');
+      el.id = cfg.id;
+      labsBox.appendChild(el);
+      NodeLab.mount(el, cfg);
+    }
+
+    // ---------------------------------------------------------------- 5. quiz
+    Quiz.mount(document.getElementById('quiz-box'), [
+      {
+        question: 'Esegui `npm install -D nodemon`. Dove viene registrato nodemon?',
+        options: ['In `dependencies`', 'In `devDependencies`', 'Solo in `node_modules`, non nel `package.json`', 'Viene installato globalmente'],
+        correct: 1,
+        explanation: '`-D` (o `--save-dev`) lo salva tra le **devDependencies**: serve solo durante lo sviluppo.',
+      },
+      {
+        question: 'Nel `package.json` c\'è `"express": "^5.1.0"`. Quale versione può installare npm?',
+        options: ['Solo la 5.1.0', 'Qualsiasi 5.x.x a partire da 5.1.0 (es. 5.4.2), ma non la 6.0.0', 'Qualsiasi versione dalla 5.1.0 in su, anche la 6.0.0', 'Solo le patch 5.1.x'],
+        correct: 1,
+        explanation: 'Il caret `^` accetta aggiornamenti MINOR e PATCH, ma non una nuova MAJOR (che può rompere la compatibilità). La tilde `~` accetterebbe solo le patch 5.1.x.',
+      },
+      {
+        question: 'Quali file vanno salvati nel repository Git?',
+        options: ['`node_modules/` e `package.json`', '`package.json` e `package-lock.json`', 'Solo `package.json`', 'Tutto, compreso il file `.env`'],
+        correct: 1,
+        explanation: '`package.json` e il lock descrivono le dipendenze in modo riproducibile; `node_modules` si ricrea con `npm install`/`npm ci`, e `.env` contiene segreti.',
+      },
+      {
+        question: 'Lanci `node somma.js 5 3`. Che cosa vale `process.argv[2] + process.argv[3]`?',
+        options: ['`8`', '`\'53\'`', '`NaN`', '`undefined`'],
+        correct: 1,
+        explanation: 'Gli argomenti sono sempre **stringhe**: `\'5\' + \'3\'` concatena. Serve `Number()` per sommarli.',
+      },
+      {
+        question: 'Perché non usare `fs.readFileSync` dentro un server web?',
+        options: ['Perché è deprecato', 'Perché blocca l\'event loop: finché legge, il server non risponde a nessun altro', 'Perché non supporta i file JSON', 'Perché funziona solo su Linux'],
+        correct: 1,
+        explanation: 'Le funzioni `Sync` bloccano l\'unico thread JavaScript. Vanno bene in script brevi o all\'avvio, non mentre si servono richieste.',
+      },
+      {
+        question: 'Il file `src/app.js` contiene `fs.readFile(\'dati.json\', …)` e lo lanci dalla cartella del progetto con `node src/app.js`. Dove cerca `dati.json`?',
+        options: ['In `src/`, accanto ad `app.js`', 'Nella cartella da cui hai lanciato il comando (`process.cwd()`)', 'Nella home dell\'utente', 'In `node_modules`'],
+        correct: 1,
+        explanation: 'I percorsi relativi partono da `process.cwd()`. Per i file del progetto usa `path.join(__dirname, \'dati.json\')`.',
+      },
+      {
+        question: 'Che cosa stampa questo codice?',
+        code: "const EventEmitter = require('events');\nconst e = new EventEmitter();\ne.on('x', () => console.log('B'));\nconsole.log('A');\ne.emit('x');\nconsole.log('C');",
+        options: ['A C B', 'A B C', 'B A C', 'A C (B non viene stampato)'],
+        correct: 1,
+        explanation: '`emit` è **sincrono**: chiama subito gli ascoltatori, prima di passare alla riga successiva.',
+      },
+      {
+        question: '`fs.writeFileSync(\'dati.json\', { nome: \'Anna\' })` genera un errore. Quale?',
+        options: ['`ENOENT`', '`ERR_INVALID_ARG_TYPE`: serve una stringa, quindi `JSON.stringify(...)`', '`EISDIR`', 'Nessun errore: salva `[object Object]`'],
+        correct: 1,
+        explanation: '`writeFile` accetta stringhe o Buffer. Gli oggetti vanno convertiti in testo con `JSON.stringify(dati, null, 2)`.',
+      },
+      {
+        question: 'Che differenza c\'è tra `npm install` e `npm ci`?',
+        options: ['Nessuna, sono sinonimi', '`npm ci` cancella `node_modules` e installa esattamente le versioni del `package-lock.json` (errore se non coincide con il `package.json`)', '`npm ci` aggiorna tutti i pacchetti all\'ultima versione', '`npm ci` installa solo le devDependencies'],
+        correct: 1,
+        explanation: '`npm ci` (clean install) è pensato per server e pipeline di CI: installazioni identiche e riproducibili.',
+      },
+      {
+        question: 'Uno script termina con `process.exit(1)`. Che cosa comunica?',
+        options: ['Che è andato tutto bene', 'Che si è verificato un errore', 'Che deve essere rieseguito una volta', 'Che il processo ha usato 1 MB di memoria'],
+        correct: 1,
+        explanation: 'Per convenzione `0` significa successo, qualsiasi altro valore indica un errore. Shell, script npm e CI usano questo codice.',
+      },
+      {
+        question: 'Un oggetto `EventEmitter` emette `\'error\'` ma nessuno sta ascoltando quell\'evento. Che cosa succede?',
+        options: ['Niente, l\'evento viene ignorato', 'L\'errore viene lanciato e, se non gestito, il processo va in crash', 'Viene stampato un warning e si continua', 'L\'evento viene rimandato finché qualcuno non ascolta'],
+        correct: 1,
+        explanation: '`\'error\'` è speciale: senza ascoltatori viene lanciato come eccezione. Aggiungi sempre `.on(\'error\', …)`.',
+      },
+      {
+        question: 'A cosa serve `npx`?',
+        options: ['Ad aggiornare npm', 'Ad eseguire il comando di un pacchetto (locale o scaricato al volo) senza installarlo globalmente', 'A pubblicare un pacchetto su npm', 'A eseguire gli script del `package.json`'],
+        correct: 1,
+        explanation: '`npx cowsay ciao` esegue `cowsay` senza installazioni globali; se il pacchetto è nel progetto usa la versione locale.',
+      },
+    ], { id: 'm2-quiz' });
+
+    if (window.hljs) document.querySelectorAll('pre.code code').forEach((el) => { if (!el.dataset.highlighted) hljs.highlightElement(el); });
+    NodeLab.refreshProgress();
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

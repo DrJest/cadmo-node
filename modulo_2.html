@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 2 · npm, process e file system — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="bg-gray-900">
+
+  <!-- ===================== Esempi di codice (testo puro, niente escape) ===================== -->
+  <script type="text/plain" id="c-init">
+$ mkdir mio-progetto && cd mio-progetto
+$ npm init -y
+Wrote to /home/studente/mio-progetto/package.json:
+
+{
+  "name": "mio-progetto",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
+</script>
+  <script type="text/plain" id="c-pkg">
+{
+  "name": "meteo-api",
+  "version": "1.2.0",
+  "description": "API per le previsioni del tempo",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "engines": { "node": ">=22" },
+  "license": "ISC"
+}
+</script>
+  <script type="text/plain" id="c-install">
+$ npm install express
+
+added 66 packages, and audited 67 packages in 3s
+
+14 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+$ ls
+node_modules  package-lock.json  package.json
+</script>
+  <script type="text/plain" id="c-gitignore">
+# .gitignore
+node_modules/
+.env
+</script>
+  <script type="text/plain" id="c-scripts">
+"scripts": {
+  "start": "node index.js",
+  "dev": "nodemon index.js",
+  "dev:watch": "node --watch index.js",
+  "saluta": "echo Ciao da npm!"
+}
+</script>
+  <script type="text/plain" id="c-run">
+$ npm run saluta
+
+> mio-progetto@1.0.0 saluta
+> echo Ciao da npm!
+
+Ciao da npm!
+
+$ npm start          # start e test non vogliono "run"
+$ npm run dev -- --inspect   # dopo "--" passi argomenti allo script
+</script>
+  <script type="text/plain" id="c-npx">
+$ npx cowsay "Ciao Node!"
+Need to install the following packages:
+  cowsay@1.6.0
+Ok to proceed? (y) y
+
+ ____________
+< Ciao Node! >
+ ------------
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+</script>
+  <script type="text/plain" id="c-argv">
+// calc.js
+console.log(process.argv);
+
+const [a, b] = process.argv.slice(2);
+console.log(Number(a) + Number(b));
+</script>
+  <script type="text/plain" id="c-argv-out">
+$ node calc.js 5 3
+[
+  '/usr/local/bin/node',
+  '/home/studente/progetto/calc.js',
+  '5',
+  '3'
+]
+8
+</script>
+  <script type="text/plain" id="c-env">
+// app.js
+const porta = process.env.PORT ?? 3000;
+console.log(`Avvio sulla porta ${porta}`);
+</script>
+  <script type="text/plain" id="c-env-out">
+$ node app.js
+Avvio sulla porta 3000
+
+$ PORT=8080 node app.js
+Avvio sulla porta 8080
+
+$ echo "PORT=5000" > .env
+$ node --env-file=.env app.js
+Avvio sulla porta 5000
+</script>
+  <script type="text/plain" id="c-exit">
+// saluta.js
+const nome = process.argv[2];
+
+if (!nome) {
+  console.error('Uso: node saluta.js <nome>');
+  process.exit(1);   // 1 = qualcosa è andato storto
+}
+
+console.log(`Ciao ${nome}!`);
+</script>
+  <script type="text/plain" id="c-exit-out">
+$ node saluta.js
+Uso: node saluta.js <nome>
+$ echo $?
+1
+$ node saluta.js Anna
+Ciao Anna!
+$ echo $?
+0
+</script>
+  <script type="text/plain" id="c-fs3-sync">
+const fs = require('node:fs');
+
+const testo = fs.readFileSync('note.txt', 'utf8');
+console.log(testo);
+</script>
+  <script type="text/plain" id="c-fs3-cb">
+const fs = require('node:fs');
+
+fs.readFile('note.txt', 'utf8', (err, testo) => {
+  if (err) return console.error(err.message);
+  console.log(testo);
+});
+</script>
+  <script type="text/plain" id="c-fs3-p">
+const fs = require('node:fs/promises');
+
+const testo = await fs.readFile('note.txt', 'utf8');
+console.log(testo);
+// (await "libero" solo negli ES Modules:
+//  in CommonJS mettilo dentro una funzione async)
+</script>
+  <script type="text/plain" id="c-read">
+const fs = require('node:fs/promises');
+
+async function main() {
+  try {
+    const testo = await fs.readFile('saluto.txt', 'utf8');
+    console.log(testo);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      console.error('File non trovato!');
+    } else {
+      throw err;   // errore inatteso: non nasconderlo
+    }
+  }
+}
+
+main();
+</script>
+  <script type="text/plain" id="c-write">
+const fs = require('node:fs/promises');
+
+async function main() {
+  await fs.mkdir('log', { recursive: true });   // ok anche se esiste già
+
+  await fs.writeFile('log/oggi.txt', 'Prima riga\n');     // crea o SOVRASCRIVE
+  await fs.appendFile('log/oggi.txt', 'Seconda riga\n');  // aggiunge in fondo
+
+  console.log(await fs.readFile('log/oggi.txt', 'utf8'));
+}
+
+main();
+</script>
+  <script type="text/plain" id="c-write-out">
+Prima riga
+Seconda riga
+</script>
+  <script type="text/plain" id="c-dir">
+const fs = require('node:fs/promises');
+
+async function elenca(cartella) {
+  const voci = await fs.readdir(cartella, { withFileTypes: true });
+  for (const voce of voci) {
+    console.log(voce.isDirectory() ? `📁 ${voce.name}` : `📄 ${voce.name}`);
+  }
+}
+
+elenca('.');
+
+// Altre operazioni utili:
+// await fs.stat('foto.jpg')            → { size, mtime, isFile(), ... }
+// await fs.rename('a.txt', 'b.txt')    → rinomina / sposta
+// await fs.rm('tmp', { recursive: true, force: true })  → come rm -rf
+</script>
+  <script type="text/plain" id="c-json">
+const fs = require('node:fs/promises');
+const path = require('node:path');
+
+const FILE = path.join(__dirname, 'studenti.json');
+
+async function aggiungiStudente(nome) {
+  const studenti = JSON.parse(await fs.readFile(FILE, 'utf8'));  // testo → oggetti
+  studenti.push({ id: studenti.length + 1, nome });
+  await fs.writeFile(FILE, JSON.stringify(studenti, null, 2));   // oggetti → testo
+  return studenti.length;
+}
+
+aggiungiStudente('Giulia')
+  .then((n) => console.log(`Ora ci sono ${n} studenti`))
+  .catch((err) => console.error('Errore:', err.message));
+</script>
+  <script type="text/plain" id="c-errors">
+const fs = require('node:fs');
+
+try {
+  fs.writeFileSync('dati.json', { a: 1 });   // ❌ oggetto invece di stringa
+} catch (err) {
+  console.log(err.code);
+  console.log(err.message);
+}
+
+try {
+  fs.readFileSync('non-esiste.txt', 'utf8');
+} catch (err) {
+  console.log(err.code, '→', err.message);
+}
+</script>
+  <script type="text/plain" id="c-errors-out">
+ERR_INVALID_ARG_TYPE
+The "data" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received an instance of Object
+ENOENT → ENOENT: no such file or directory, open 'non-esiste.txt'
+</script>
+  <script type="text/plain" id="c-path">
+const path = require('node:path');
+
+path.join('dati', 'utenti', '..', 'voti.json');  // 'dati/voti.json'
+path.resolve('dati', 'voti.json');               // '/home/studente/progetto/dati/voti.json'
+path.basename('/home/anna/foto.jpg');             // 'foto.jpg'
+path.extname('relazione.PDF');                    // '.PDF'
+path.dirname('/home/anna/foto.jpg');              // '/home/anna'
+path.parse('/home/anna/foto.jpg');
+// { root: '/', dir: '/home/anna', base: 'foto.jpg', ext: '.jpg', name: 'foto' }
+</script>
+  <script type="text/plain" id="c-dirname">
+// progetto/src/report.js
+const fs = require('node:fs');
+const path = require('node:path');
+
+// ❌ relativo alla cartella da cui LANCI node (process.cwd())
+fs.readFileSync('dati.json', 'utf8');
+
+// ✅ relativo alla cartella di QUESTO file
+fs.readFileSync(path.join(__dirname, 'dati.json'), 'utf8');
+
+console.log(__dirname);      // /home/studente/progetto/src
+console.log(process.cwd());  // dipende da dove hai lanciato il comando
+// Negli ES Modules: import.meta.dirname e import.meta.filename
+</script>
+  <script type="text/plain" id="c-ee1">
+const EventEmitter = require('node:events');
+
+const campanello = new EventEmitter();
+
+campanello.on('suona', (chi) => console.log(`Apro la porta a ${chi}`));
+campanello.once('suona', () => console.log('(solo la prima volta)'));
+
+campanello.emit('suona', 'Anna');
+campanello.emit('suona', 'Luca');
+</script>
+  <script type="text/plain" id="c-ee1-out">
+Apro la porta a Anna
+(solo la prima volta)
+Apro la porta a Luca
+</script>
+  <script type="text/plain" id="c-ee2">
+const EventEmitter = require('node:events');
+
+class Ordine extends EventEmitter {
+  completa(prodotto) {
+    // ...logica dell'ordine...
+    this.emit('completato', prodotto);
+  }
+}
+
+const ordine = new Ordine();
+ordine.on('completato', (p) => console.log(`Spedisco: ${p}`));
+
+ordine.completa('tastiera');
+console.log('fine');
+</script>
+  <script type="text/plain" id="c-ee2-out">
+Spedisco: tastiera
+fine
+</script>
+  <script type="text/plain" id="c-ee-core">
+// Molti oggetti di Node SONO EventEmitter:
+
+process.on('exit', (code) => console.log(`Esco con codice ${code}`));
+
+const server = require('node:http').createServer();
+server.on('request', (req, res) => res.end('ciao'));   // ← lezione 3!
+server.on('listening', () => console.log('Server pronto'));
+server.listen(3000);
+
+// req.on('data', ...), req.on('end', ...), stream.on('error', ...)
+</script>
+
+  <!-- ===================== Motori ===================== -->
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/terminal.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script>
+    const C = (id) => document.getElementById(id).textContent.replace(/^\n/, '');
+    const escHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    window.DECK = {
+      module: 'MODULO 2',
+      title: 'npm, process e file system',
+      prompt: 'modulo-2',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover', icon: 'package',
+          title: 'npm, process e file system',
+          subtitle: 'Dai singoli file ai **progetti veri**: dipendenze, script, riga di comando e file su disco.',
+          meta: ['4 ore', 'Lezione 2'],
+        },
+        {
+          type: 'agenda', part: 'PROGRAMMA DI OGGI', title: 'Agenda', icon: 'calendar-clock',
+          rows: [
+            ['Riscaldamento: indovina l\'output (ripasso event loop)', 'quiz'],
+            ['npm in profondità: `package.json`, dipendenze, semver, lock, script, `npx`', 'teoria'],
+            ['Simulazione: il primo progetto npm', 'lab'],
+            ['Pausa', 'pausa'],
+            ['L\'oggetto `process`: argomenti, variabili d\'ambiente, exit code', 'teoria'],
+            ['File system: `fs`, `fs/promises`, `path`, JSON come mini-database', 'teoria'],
+            ['Eventi: `EventEmitter`', 'teoria'],
+            ['Laboratori nel browser + quiz finale', 'lab'],
+          ],
+        },
+        {
+          type: 'custom', part: 'RISCALDAMENTO', title: 'Indovina l\'output', icon: 'brain',
+          html: '<p class="text-gray-400 mb-4 text-lg">Ripasso della lezione 1: in che ordine compaiono le righe? Clicca le righe nell\'ordine giusto.</p><div class="og"></div>',
+          mount: (el) => OrderGame.mount(el.querySelector('.og'), [
+            {
+              title: 'Timer vs Promise',
+              code: "console.log('A');\nsetTimeout(() => console.log('B'), 0);\nPromise.resolve().then(() => console.log('C'));\nconsole.log('D');",
+              chips: ['A', 'B', 'C', 'D'], answer: ['A', 'D', 'C', 'B'],
+              explain: 'Prima tutto il codice sincrono (A, D), poi i **microtask** (la Promise: C), infine i **macrotask** (il timer: B).',
+            },
+            {
+              title: 'async / await',
+              code: "async function prepara() {\n  console.log('B');\n  await null;\n  console.log('D');\n}\nconsole.log('A');\nprepara();\nconsole.log('C');",
+              chips: ['A', 'B', 'C', 'D'], answer: ['A', 'B', 'C', 'D'],
+              explain: 'Una funzione `async` parte **in modo sincrono** fino al primo `await`; il resto riprende come microtask, dopo il codice sincrono (C).',
+            },
+          ], { id: 'm2-slide-warmup' }),
+        },
+
+        // ------------------------------------------------------------ npm
+        {
+          part: 'NPM', title: 'Cos\'è npm', icon: 'package', iconColor: 'text-red-400',
+          items: [
+            '**Node Package Manager**: arriva insieme a Node.js (`npm -v`).',
+            'Un **registro** pubblico (npmjs.com) con milioni di pacchetti open source.',
+            'Una **CLI** per installare, aggiornare e rimuovere dipendenze e lanciare script.',
+            'Un **pacchetto** è una cartella con un `package.json` (e del codice).',
+            'Alternative compatibili: `pnpm`, `yarn`, `bun` — i concetti sono gli stessi.',
+          ],
+        },
+        {
+          type: 'code', part: 'NPM', title: 'Si parte da `npm init`', icon: 'file-plus', iconColor: 'text-red-400',
+          items: [
+            '`npm init` fa domande; `npm init -y` accetta tutte le risposte di default.',
+            'Crea il **package.json**: la carta d\'identità del progetto.',
+            'Il nome viene preso dalla cartella (minuscolo, senza spazi).',
+            '`"type": "commonjs"` → si usano `require` e `module.exports`.',
+          ],
+          code: C('c-init'), lang: 'bash',
+        },
+        {
+          type: 'code', part: 'NPM', title: 'Anatomia di `package.json`', icon: 'file-json', iconColor: 'text-red-400',
+          items: [
+            '`name`, `version`, `description`: identità.',
+            '`main`: il file di ingresso.',
+            '`scripts`: comandi con un nome (`npm run …`).',
+            '`dependencies`: servono per **far girare** l\'app.',
+            '`devDependencies`: servono solo **per sviluppare**.',
+            '`engines`: versioni di Node supportate.',
+          ],
+          code: C('c-pkg'), lang: 'json',
+        },
+        {
+          type: 'code', part: 'NPM', title: 'Installare un pacchetto', icon: 'download', iconColor: 'text-red-400',
+          items: [
+            'Scarica il pacchetto (e le **sue** dipendenze) in `node_modules/`.',
+            'Lo aggiunge a `dependencies` nel `package.json`.',
+            'Crea/aggiorna `package-lock.json`.',
+            'Poi nel codice: `const express = require(\'express\');`',
+            'Abbreviazioni: `npm i express`, `npm i -D nodemon`.',
+          ],
+          code: C('c-install'), lang: 'bash',
+        },
+        {
+          type: 'compare', part: 'NPM', title: 'dependencies vs devDependencies', icon: 'split',
+          columns: [
+            { title: 'dependencies', color: 'green', icon: 'rocket', items: ['Servono all\'app **in produzione**', '`npm install express`', 'Esempi: `express`, `dotenv`, `mongoose`', 'Vengono installate anche sul server'] },
+            { title: 'devDependencies', color: 'purple', icon: 'wrench', items: ['Servono solo **a chi sviluppa**', '`npm install -D nodemon`', 'Esempi: `nodemon`, `eslint`, `prettier`, `jest`', 'In produzione: `npm install --omit=dev`'] },
+          ],
+          footer: 'Regola pratica: “se lo uso con `require()` nel codice dell\'app → dependency; se è uno strumento → devDependency”.',
+        },
+        {
+          part: 'NPM', title: 'Semantic Versioning', icon: 'tags', iconColor: 'text-yellow-400',
+          items: [
+            'Versione = **MAJOR.MINOR.PATCH** → es. `5.1.0`',
+            '• **PATCH** (5.1.**1**): correzioni di bug, nessun cambiamento visibile.',
+            '• **MINOR** (5.**2**.0): nuove funzioni, compatibili con prima.',
+            '• **MAJOR** (**6**.0.0): cambiamenti che possono **rompere** il tuo codice.',
+            '`^5.1.0` → accetta da 5.1.0 fino a <6.0.0 (default di npm)',
+            '`~5.1.0` → accetta da 5.1.0 fino a <5.2.0 · `5.1.0` → esattamente quella',
+          ],
+        },
+        {
+          part: 'NPM', title: '`package-lock.json` e `node_modules`', icon: 'lock', iconColor: 'text-yellow-400',
+          items: [
+            'Il **lock** registra la versione **esatta** di ogni pacchetto dell\'albero.',
+            'Va **sempre** salvato su Git: tutti installano le stesse versioni.',
+            '`node_modules/` invece **non** va mai su Git: è pesante e si ricrea.',
+            'Hai clonato un progetto? `npm install` ricrea `node_modules` dal `package.json`.',
+            '`npm ci`: installa **esattamente** il lock (cancella prima `node_modules`) → ideale per server e CI.',
+          ],
+          html: `<pre class="code small mt-6 max-w-md"><code class="language-bash">${escHtml(C('c-gitignore'))}</code></pre>`,
+        },
+        {
+          type: 'code', part: 'NPM', title: 'Gli script npm', icon: 'scroll-text', iconColor: 'text-green-400',
+          items: [
+            'Danno un **nome breve** a comandi lunghi: tutto il team usa gli stessi.',
+            'Dentro gli script, i comandi dei pacchetti installati (`node_modules/.bin`) sono già disponibili.',
+            '`nodemon` e `node --watch` **riavviano** l\'app quando salvi un file.',
+            'Aggiungi uno script anche da terminale: `npm pkg set scripts.dev="nodemon index.js"`',
+          ],
+          code: C('c-scripts') + '\n\n' + C('c-run'), lang: 'bash',
+        },
+        {
+          type: 'code', part: 'NPM', title: '`npx`: esegui senza installare', icon: 'play', iconColor: 'text-green-400',
+          items: [
+            'Esegue il comando di un pacchetto: prima cerca in `node_modules/.bin`, poi lo scarica al volo.',
+            'Perfetto per strumenti usati una volta sola (es. generatori di progetti).',
+            '`npx nodemon index.js` usa la versione **locale** del progetto.',
+          ],
+          code: C('c-npx'), lang: 'plaintext',
+        },
+        {
+          part: 'NPM', title: 'Comandi da tenere a portata di mano', icon: 'terminal', iconColor: 'text-green-400',
+          items: [
+            '`npm ls` → cosa è installato · `npm view express version` → ultima versione',
+            '`npm outdated` → cosa si può aggiornare · `npm update` → aggiorna rispettando i range',
+            '`npm uninstall nodemon` → rimuove pacchetto e voce nel `package.json`',
+            '`npm audit` → controlla vulnerabilità note nelle dipendenze',
+            '`npm install` · `npm ci` · `npm run <script>` · `npm start` · `npm test`',
+          ],
+        },
+        {
+          part: 'NPM', title: 'Sicurezza: occhio a cosa installi', icon: 'shield-alert', iconColor: 'text-red-400',
+          items: [
+            'Ogni dipendenza è **codice di qualcun altro** che gira sul tuo PC/server.',
+            '**Typosquatting**: pacchetti malevoli con nomi simili (`expres`, `lodahs`…).',
+            'Prima di installare: download settimanali, manutentori, ultima release, repository.',
+            'Meno dipendenze = meno rischi: non installare un pacchetto per 3 righe di codice.',
+            '`npm audit` + lockfile su Git + aggiornamenti regolari.',
+          ],
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE',
+          mount: (el) => NodeTerminal.mount(el, {
+            id: 'm2-slide-npm',
+            title: 'Simulazione: il primo progetto',
+            intro: 'Digita i comandi nel terminale a destra. I passi si spuntano da soli quando li completi (in ordine). Digita <code class="inline">help</code> se ti perdi.',
+            tasks: [
+              { text: 'Crea la cartella `primo-progetto` ed entraci', check: (t) => t.cwd === '~/primo-progetto' },
+              { text: 'Crea il `package.json` con le risposte di default', check: (t) => t.exists('~/primo-progetto/package.json') },
+              { text: 'Installa `express`', check: (t) => t.dep('~/primo-progetto', 'express') && t.installed('~/primo-progetto', 'express') },
+              { text: 'Installa `nodemon` come **devDependency**', check: (t) => t.devDep('~/primo-progetto', 'nodemon') },
+              { text: 'Crea `index.js` con un `console.log` (prova `nano index.js`)', check: (t) => /console\.log/.test(t.read('~/primo-progetto/index.js') || '') },
+              { text: 'Aggiungi lo script `dev` che lancia `nodemon index.js`', check: (t) => /nodemon/.test(t.script('~/primo-progetto', 'dev') || '') },
+              { text: 'Avvia con `npm run dev` (poi esci con Ctrl+C)', check: (t) => t.ran(/^npm run dev\b/) },
+            ],
+          }),
+        },
+
+        // ---------------------------------------------------------- process
+        {
+          part: 'PROCESS', title: 'L\'oggetto `process`', icon: 'cpu', iconColor: 'text-blue-400',
+          items: [
+            'È **globale**: descrive il processo Node in esecuzione (niente `require`).',
+            '`process.argv` → gli argomenti della riga di comando',
+            '`process.env` → le variabili d\'ambiente',
+            '`process.exit(code)` / `process.exitCode` → come termina il programma',
+            '`process.cwd()`, `process.pid`, `process.platform`, `process.version`, `process.memoryUsage()`',
+            'È anche un `EventEmitter`: `process.on(\'exit\', …)`',
+          ],
+        },
+        {
+          type: 'code', part: 'PROCESS', title: 'Argomenti: `process.argv`', icon: 'list-ordered', iconColor: 'text-blue-400',
+          items: [
+            'È un **array di stringhe**: `[percorso di node, percorso dello script, …argomenti]`.',
+            'Gli argomenti veri partono dall\'indice **2** → `process.argv.slice(2)`.',
+            'Sono sempre **stringhe**: `"5" + "3"` fa `"53"`! Converti con `Number()`.',
+            'Per opzioni tipo `--verbose` esiste `util.parseArgs()`.',
+          ],
+          code: C('c-argv'), file: 'calc.js', output: C('c-argv-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'PROCESS', title: 'Variabili d\'ambiente: `process.env`', icon: 'variable', iconColor: 'text-blue-400',
+          items: [
+            'Configurazione **fuori dal codice**: porte, password, chiavi API, modalità.',
+            'Si impostano prima del comando: `PORT=8080 node app.js` (su Windows PowerShell: `$env:PORT=8080`).',
+            'Oppure in un file `.env` + `node --env-file=.env app.js` (integrato in Node).',
+            '`??` usa un valore di default se la variabile non c\'è.',
+            '⚠️ Il file `.env` contiene segreti: **mai su Git**!',
+          ],
+          code: C('c-env'), file: 'app.js', output: C('c-env-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'PROCESS', title: 'Exit code: com\'è andata?', icon: 'log-out', iconColor: 'text-blue-400',
+          items: [
+            'Ogni processo termina con un **numero**: `0` = tutto ok, altro = errore.',
+            'Script, CI e altri programmi leggono questo codice per sapere se fermarsi.',
+            '`console.error` scrive su **stderr** (il canale degli errori).',
+            '`process.exit(1)` termina subito; `process.exitCode = 1` lascia finire il lavoro in corso.',
+          ],
+          code: C('c-exit'), file: 'saluta.js', output: C('c-exit-out'), reveal: true,
+        },
+
+        // --------------------------------------------------------------- fs
+        {
+          type: 'compare', part: 'FILE SYSTEM', title: 'Il modulo `fs`: tre stili', icon: 'hard-drive',
+          columns: [
+            { title: 'Sincrono', color: 'red', icon: 'hourglass', items: ['`readFileSync`', 'Blocca l\'event loop finché non ha finito', 'Ok in script brevi o all\'avvio', '❌ Mai dentro un server'], code: C('c-fs3-sync') },
+            { title: 'Callback', color: 'yellow', icon: 'corner-down-right', items: ['`readFile(…, cb)`', 'Non blocca', 'Convenzione error-first', 'Stile "storico"'], code: C('c-fs3-cb') },
+            { title: 'Promise', color: 'green', icon: 'sparkles', items: ['`require(\'node:fs/promises\')`', 'Non blocca', '`async`/`await` + `try/catch`', '✅ Lo stile consigliato'], code: C('c-fs3-p') },
+          ],
+        },
+        {
+          type: 'code', part: 'FILE SYSTEM', title: 'Leggere un file', icon: 'book-open', iconColor: 'text-cyan-400',
+          items: [
+            'Specifica la codifica `\'utf8\'` per ottenere una **stringa**.',
+            'Senza codifica ottieni un **Buffer** (byte grezzi): `<Buffer 63 69 61 6f>`.',
+            'Gli errori hanno un `code`: `ENOENT` = file non trovato.',
+            'Gestisci gli errori che ti aspetti, rilancia gli altri.',
+          ],
+          code: C('c-read'),
+        },
+        {
+          type: 'code', part: 'FILE SYSTEM', title: 'Scrivere file e cartelle', icon: 'pencil', iconColor: 'text-cyan-400',
+          items: [
+            '`writeFile`: crea il file o lo **sovrascrive** tutto.',
+            '`appendFile`: aggiunge in fondo (perfetto per i log).',
+            '`mkdir(…, { recursive: true })`: crea anche le cartelle intermedie e non dà errore se esiste.',
+            'Scrivere in una cartella che non esiste → `ENOENT`.',
+          ],
+          code: C('c-write'), output: C('c-write-out'),
+        },
+        {
+          type: 'code', part: 'FILE SYSTEM', title: 'Lavorare con le cartelle', icon: 'folder-tree', iconColor: 'text-cyan-400',
+          items: [
+            '`readdir` → array di nomi (con `withFileTypes` ottieni oggetti con `isDirectory()`).',
+            '`stat` → dimensione, date, tipo.',
+            '`rename` → rinomina **e** sposta.',
+            '`rm` con `recursive` → cancella cartelle intere. **Non c\'è cestino!**',
+          ],
+          code: C('c-dir'),
+        },
+        {
+          type: 'code', part: 'FILE SYSTEM', title: 'JSON come mini-database', icon: 'database', iconColor: 'text-cyan-400',
+          items: [
+            'Leggi → `JSON.parse` → modifica → `JSON.stringify` → scrivi.',
+            '`JSON.stringify(dati, null, 2)` → JSON indentato e leggibile.',
+            'Va benissimo per prototipi e piccoli strumenti.',
+            'Limiti: accessi contemporanei, file grandi → più avanti useremo un **database** vero.',
+          ],
+          code: C('c-json'), output: 'Ora ci sono 3 studenti', reveal: true,
+        },
+        {
+          type: 'code', part: 'FILE SYSTEM', title: 'Gli errori che vedrete (spesso)', icon: 'bug', iconColor: 'text-red-400',
+          items: [
+            '`ENOENT`: file o cartella non esiste (percorso sbagliato?).',
+            '`EEXIST`: esiste già (es. `mkdir` senza `recursive`).',
+            '`EISDIR` / `ENOTDIR`: hai scambiato file e cartelle.',
+            '`EACCES`: permessi insufficienti (ricordate `chmod`?).',
+            '`ERR_INVALID_ARG_TYPE`: hai passato un oggetto: serviva `JSON.stringify`!',
+          ],
+          code: C('c-errors'), output: C('c-errors-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'FILE SYSTEM', title: 'Il modulo `path`', icon: 'route', iconColor: 'text-purple-400',
+          items: [
+            'Mai concatenare percorsi a mano: Windows usa `\\`, Linux e macOS `/`.',
+            '`path.join` unisce e normalizza (`..`, `/` doppi).',
+            '`path.resolve` restituisce un percorso **assoluto**.',
+            '`basename`, `extname`, `dirname`, `parse` per scomporre.',
+          ],
+          code: C('c-path'),
+        },
+        {
+          type: 'code', part: 'FILE SYSTEM', title: '`__dirname` vs `process.cwd()`', icon: 'map-pin', iconColor: 'text-purple-400',
+          items: [
+            'I percorsi relativi di `fs` partono dalla cartella **da cui lanci** `node`.',
+            '`__dirname` = cartella **del file** in cui stai scrivendo.',
+            'Per i file del progetto usa `path.join(__dirname, …)`: funziona da qualunque cartella.',
+          ],
+          code: C('c-dirname'),
+        },
+
+        // ----------------------------------------------------------- events
+        {
+          type: 'code', part: 'EVENTI', title: '`EventEmitter`', icon: 'radio', iconColor: 'text-pink-400',
+          items: [
+            'Il pattern **publish/subscribe**: chi emette non sa chi ascolta.',
+            '`on(evento, fn)` → ascolta · `once` → solo la prima volta',
+            '`emit(evento, ...dati)` → avvisa tutti gli ascoltatori',
+            '`off(evento, fn)` → smetti di ascoltare',
+          ],
+          code: C('c-ee1'), output: C('c-ee1-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'EVENTI', title: 'Le tue classi con eventi', icon: 'boxes', iconColor: 'text-pink-400',
+          items: [
+            'Si estende `EventEmitter` con `class … extends`.',
+            '⚠️ `emit` è **sincrono**: gli ascoltatori vengono chiamati subito, in ordine.',
+            'Un evento `\'error\'` emesso **senza** ascoltatori fa crashare il processo!',
+          ],
+          code: C('c-ee2'), output: C('c-ee2-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'EVENTI', title: 'Gli eventi sono ovunque in Node', icon: 'network', iconColor: 'text-pink-400',
+          items: [
+            '`process` emette `exit`, `uncaughtException`, `SIGINT`…',
+            'Il server HTTP emette `request` per ogni richiesta.',
+            'Gli **stream** (file, rete) emettono `data`, `end`, `error`.',
+            'Domani li useremo per costruire un server web da zero.',
+          ],
+          code: C('c-ee-core'),
+        },
+
+        // ----------------------------------------------------------- chiusura
+        {
+          part: 'RIEPILOGO', title: 'Cosa portiamo a casa', icon: 'check-circle', iconColor: 'text-green-400',
+          items: [
+            '`package.json` descrive il progetto; `node_modules` si ricrea, il **lock** si salva.',
+            '`dependencies` vs `devDependencies`, semver `^` e `~`, `npm ci`.',
+            'Script npm + `nodemon` / `node --watch` per lavorare comodi.',
+            '`process.argv`, `process.env`, exit code.',
+            '`fs/promises` + `path.join(__dirname, …)` + JSON.',
+            '`EventEmitter`: `on`, `once`, `emit` (sincrono!).',
+          ],
+        },
+        {
+          type: 'custom', part: 'ORA TOCCA A VOI', title: 'Esercitazioni e laboratori', icon: 'flask-conical',
+          html: `<div class="grid md:grid-cols-2 gap-6 items-center">
+            <ul class="space-y-3 text-lg md:text-xl text-gray-300">
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Indovina l'output (8 snippet)</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Missione npm nel terminale simulato</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>6 laboratori con verifica automatica</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Missioni sul vostro PC + quiz</li>
+            </ul>
+            <div class="text-center">
+              <a href="modulo_2_ex.html" class="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold hover:bg-green-500 transition-colors">
+                <i data-lucide="flask-conical" class="w-6 h-6"></i> Apri le esercitazioni</a>
+              <p class="mt-6 text-gray-500 font-mono text-sm">Prossima lezione: HTTP e il modulo <code class="inline">http</code></p>
+            </div></div>`,
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>

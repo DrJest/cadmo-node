@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 3 · HTTP e il modulo http — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100">
+
+  <!-- Server della "Pizzeria API" usato dalla simulazione finale (gira nel browser) -->
+  <script type="text/plain" id="pizzeria-server">
+const http = require('http');
+
+let pizze = [
+  { id: 1, nome: 'Margherita', prezzo: 6.5, ingredienti: ['pomodoro', 'mozzarella', 'basilico'] },
+  { id: 2, nome: 'Marinara', prezzo: 5, ingredienti: ['pomodoro', 'aglio', 'origano'] },
+  { id: 3, nome: 'Diavola', prezzo: 8, ingredienti: ['pomodoro', 'mozzarella', 'salame piccante'] },
+  { id: 4, nome: 'Quattro formaggi', prezzo: 9.5, ingredienti: ['mozzarella', 'gorgonzola', 'fontina', 'parmigiano'] },
+  { id: 5, nome: 'Capricciosa', prezzo: 10, ingredienti: ['pomodoro', 'mozzarella', 'prosciutto', 'funghi', 'carciofi'] },
+];
+let prossimoId = 6;
+
+// Invia una risposta JSON (o vuota, per il 204) e scrive una riga di log
+function invia(req, res, status, dati, headers = {}) {
+  if (dati === undefined) {
+    res.writeHead(status, headers);
+    res.end();
+  } else {
+    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...headers });
+    res.end(JSON.stringify(dati));
+  }
+  console.log(`${req.method} ${req.url} → ${status}`);
+}
+
+function paginaHtml() {
+  const righe = pizze.map((p) => `<li><b>${p.nome}</b> — € ${p.prezzo.toFixed(2)}</li>`).join('');
+  return `<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8"><title>Pizzeria Node</title></head>
+<body style="font-family: sans-serif; padding: 16px">
+  <h1>🍕 Pizzeria Node</h1>
+  <p>Il nostro menù di oggi:</p>
+  <ul>${righe}</ul>
+  <p><small>I dati in formato JSON sono su <code>/api/pizze</code></small></p>
+</body></html>`;
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+  const parti = url.pathname.split('/').filter(Boolean); // es. ['api', 'pizze', '2']
+
+  // Pagina HTML
+  if (url.pathname === '/' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(paginaHtml());
+    console.log(`${req.method} ${req.url} → 200`);
+    return;
+  }
+
+  // Collezione: /api/pizze
+  if (parti.length === 2 && parti[0] === 'api' && parti[1] === 'pizze') {
+    if (req.method === 'GET') {
+      const max = url.searchParams.get('max');
+      if (max === null) return invia(req, res, 200, pizze);
+      const limite = Number(max);
+      if (max === '' || Number.isNaN(limite)) return invia(req, res, 400, { errore: 'Il parametro "max" deve essere un numero' });
+      return invia(req, res, 200, pizze.filter((p) => p.prezzo <= limite));
+    }
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      let dati;
+      try {
+        dati = JSON.parse(body);
+      } catch {
+        return invia(req, res, 400, { errore: 'Il body non è JSON valido' });
+      }
+      if (!dati || typeof dati.nome !== 'string' || !dati.nome.trim()) {
+        return invia(req, res, 400, { errore: 'Il campo "nome" è obbligatorio' });
+      }
+      if (typeof dati.prezzo !== 'number' || dati.prezzo <= 0) {
+        return invia(req, res, 400, { errore: 'Il campo "prezzo" deve essere un numero maggiore di 0' });
+      }
+      const nuova = {
+        id: prossimoId++,
+        nome: dati.nome.trim(),
+        prezzo: dati.prezzo,
+        ingredienti: Array.isArray(dati.ingredienti) ? dati.ingredienti : [],
+      };
+      pizze.push(nuova);
+      return invia(req, res, 201, nuova, { Location: `/api/pizze/${nuova.id}` });
+    }
+    return invia(req, res, 405, { errore: `Metodo ${req.method} non consentito` }, { Allow: 'GET, POST' });
+  }
+
+  // Singola risorsa: /api/pizze/:id
+  if (parti.length === 3 && parti[0] === 'api' && parti[1] === 'pizze') {
+    const id = Number(parti[2]);
+    const pizza = pizze.find((p) => p.id === id);
+    if (req.method === 'GET' || req.method === 'DELETE') {
+      if (!pizza) return invia(req, res, 404, { errore: `Pizza ${parti[2]} non trovata` });
+      if (req.method === 'GET') return invia(req, res, 200, pizza);
+      pizze = pizze.filter((p) => p.id !== id);
+      return invia(req, res, 204);
+    }
+    return invia(req, res, 405, { errore: `Metodo ${req.method} non consentito` }, { Allow: 'GET, DELETE' });
+  }
+
+  invia(req, res, 404, { errore: 'Risorsa non trovata', percorso: url.pathname });
+});
+
+server.listen(3000, () => console.log('🍕 Pizzeria API in ascolto su http://localhost:3000'));
+</script>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script>
+    const PIZZERIA_SERVER = document.getElementById('pizzeria-server').textContent.replace(/^\n/, '');
+    const pathOf = (req) => new URL('http://x' + req.path);
+    const PIZZERIA_MISSIONS = [
+      { text: 'Leggi il menù completo: `GET /api/pizze`', check: (req, res) => req.method === 'GET' && pathOf(req).pathname === '/api/pizze' && !pathOf(req).search && res.status === 200 },
+      { text: 'Chiedi solo la pizza con **id 2**', check: (req, res) => req.method === 'GET' && pathOf(req).pathname === '/api/pizze/2' && res.status === 200 },
+      { text: 'Trova le pizze che costano **al massimo 8 €** usando la query string `max`', check: (req, res) => req.method === 'GET' && pathOf(req).pathname === '/api/pizze' && Number(pathOf(req).searchParams.get('max')) === 8 && res.status === 200 },
+      { text: 'Aggiungi una pizza con `POST /api/pizze` (body JSON con `nome` e `prezzo`) e ottieni **201 Created**', check: (req, res) => req.method === 'POST' && res.status === 201 },
+      { text: 'Ottieni un **400 Bad Request** (es. JSON sbagliato o prezzo negativo)', check: (req, res) => res.status === 400 },
+      { text: 'Ottieni un **404 Not Found** chiedendo una pizza che non esiste', check: (req, res) => res.status === 404 && pathOf(req).pathname.startsWith('/api/pizze/') },
+      { text: 'Elimina una pizza con `DELETE` e ottieni **204 No Content**', check: (req, res) => req.method === 'DELETE' && res.status === 204 },
+      { text: 'Apri la pagina HTML (`GET /`) e guarda la tab **Anteprima**', check: (req, res) => req.method === 'GET' && pathOf(req).pathname === '/' && res.status === 200 && /text\/html/.test((res.headersObj || {})['content-type'] || '') },
+    ];
+
+    window.DECK = {
+      module: 'MODULO 3',
+      title: 'HTTP e il modulo http',
+      prompt: 'modulo-3',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover',
+          title: 'HTTP e il modulo `http`',
+          subtitle: 'Come parlano browser e server, e come costruire il nostro primo server web con Node.js — senza framework.',
+          icon: 'globe',
+          meta: ['3 ore', 'Lezione 3', 'Teoria + Lab nel browser'],
+        },
+        {
+          type: 'agenda',
+          part: 'ORGANIZZAZIONE',
+          title: 'Agenda di oggi',
+          icon: 'calendar-clock',
+          rows: [
+            ['Riscaldamento: cosa ricordiamo di npm, `fs` e `process`?', 'quiz'],
+            ['Il protocollo HTTP: URL, richiesta, risposta, metodi, status code, header', 'teoria'],
+            ['HTTP dal vivo: DevTools, `curl` e la Pizzeria API', 'demo'],
+            ['Il modulo `http`: primo server, `req` e `res`, JSON, routing', 'teoria'],
+            ['Pausa', 'pausa'],
+            ['Query string, body delle POST, file HTML, `node --watch`', 'teoria'],
+            ['Laboratori 1–5 nel browser (+ missioni sul PC)', 'lab'],
+            ['Quiz e anteprima: perché ci serve Express', 'quiz'],
+          ],
+        },
+        {
+          part: 'DOVE ERAVAMO',
+          title: 'Dal disco alla rete',
+          icon: 'route',
+          iconColor: 'text-cyan-400',
+          items: [
+            'Lezione 1: event loop, callback, Promise, `async/await`, moduli.',
+            'Lezione 2: `npm`, `package.json`, `process.argv`, `fs` e `path`, `EventEmitter`.',
+            'Finora i nostri programmi **partivano, facevano qualcosa e terminavano**.',
+            'Oggi scriviamo un programma che **resta acceso** e risponde a chi lo chiama dalla rete: un **server web**.',
+            'È il motivo per cui Node.js è nato (2009): server veloci grazie all\'I/O non bloccante.',
+          ],
+        },
+
+        /* ------------------------------------------------ IL PROTOCOLLO HTTP */
+        {
+          part: 'IL PROTOCOLLO HTTP',
+          title: 'Client e server',
+          icon: 'network',
+          iconColor: 'text-blue-400',
+          items: [
+            '**Client**: chi fa la richiesta (browser, app mobile, `curl`, un altro server).',
+            '**Server**: un programma in ascolto su una **porta** che risponde alle richieste.',
+            '**HTTP** (HyperText Transfer Protocol): le regole della conversazione. Testo semplice, leggibile da umani.',
+            'Il dialogo è sempre lo stesso: **1 richiesta → 1 risposta**. Il server non parla mai per primo.',
+            '`localhost` (127.0.0.1) = "questo computer". Porta tipica in sviluppo: **3000**.',
+          ],
+        },
+        {
+          type: 'code',
+          part: 'IL PROTOCOLLO HTTP',
+          title: 'Anatomia di un URL',
+          icon: 'link',
+          iconColor: 'text-blue-400',
+          items: [
+            '**protocollo**: `http:` o `https:` (cifrato)',
+            '**host**: il nome del server (risolto via DNS)',
+            '**porta**: se manca, 80 (http) o 443 (https)',
+            '**path**: quale risorsa vogliamo',
+            '**query string**: parametri `chiave=valore` dopo `?`, separati da `&`',
+            '**fragment** `#...`: resta nel browser, non arriva al server!',
+          ],
+          code: `const u = new URL('https://www.pizzeria.it:8080/api/pizze?max=8&ordina=prezzo#menu');
+
+console.log(u.protocol);              // protocollo
+console.log(u.hostname);              // host
+console.log(u.port);                  // porta
+console.log(u.pathname);              // path
+console.log(u.search);                // query string
+console.log(u.searchParams.get('max'));
+console.log(u.hash);                  // fragment`,
+          output: `https:
+www.pizzeria.it
+8080
+/api/pizze
+?max=8&ordina=prezzo
+8
+#menu`,
+          reveal: true,
+        },
+        {
+          type: 'code',
+          part: 'IL PROTOCOLLO HTTP',
+          title: 'Com\'è fatta una richiesta',
+          icon: 'arrow-up-right',
+          iconColor: 'text-blue-400',
+          lang: 'plaintext',
+          items: [
+            '**Request line**: metodo, path (+ query), versione.',
+            '**Header**: coppie `Nome: valore` con informazioni extra.',
+            'Una **riga vuota** separa gli header dal body.',
+            '**Body** (facoltativo): i dati inviati, es. un JSON con una POST.',
+          ],
+          code: `POST /api/pizze HTTP/1.1
+Host: localhost:3000
+User-Agent: curl/8.7.1
+Accept: */*
+Content-Type: application/json
+Content-Length: 32
+
+{"nome":"Bufalina","prezzo":8.5}`,
+        },
+        {
+          type: 'code',
+          part: 'IL PROTOCOLLO HTTP',
+          title: 'Com\'è fatta una risposta',
+          icon: 'arrow-down-left',
+          iconColor: 'text-blue-400',
+          lang: 'plaintext',
+          items: [
+            '**Status line**: versione, **status code** e messaggio.',
+            '**Header**: tipo di contenuto, lunghezza, data, cache…',
+            'Riga vuota, poi il **body**: HTML, JSON, un\'immagine…',
+            'Il `Content-Type` dice al client **come interpretare** il body.',
+          ],
+          code: `HTTP/1.1 201 Created
+Content-Type: application/json; charset=utf-8
+Location: /api/pizze/6
+Date: Mon, 12 Jan 2026 09:30:00 GMT
+Connection: keep-alive
+Content-Length: 56
+
+{"id":6,"nome":"Bufalina","prezzo":8.5,"ingredienti":[]}`,
+        },
+        {
+          type: 'compare',
+          part: 'IL PROTOCOLLO HTTP',
+          title: 'I metodi (verbi) HTTP',
+          icon: 'list-checks',
+          iconColor: 'text-blue-400',
+          columns: [
+            { title: 'Leggere', color: 'green', icon: 'eye', items: ['`GET`: ottieni una risorsa o un elenco', '`HEAD`: come GET ma senza body', 'Sono **sicuri**: non modificano nulla sul server', 'Niente body nella richiesta: i parametri vanno nella query string'] },
+            { title: 'Creare', color: 'yellow', icon: 'plus', items: ['`POST`: crea una nuova risorsa (es. un ordine)', 'I dati viaggiano nel **body**', '**Non idempotente**: ripetuta 2 volte crea 2 risorse', 'Risposta tipica: `201 Created`'] },
+            { title: 'Modificare / cancellare', color: 'red', icon: 'pencil', items: ['`PUT`: sostituisce **tutta** la risorsa', '`PATCH`: modifica **alcuni** campi', '`DELETE`: elimina la risorsa', 'PUT e DELETE sono **idempotenti**: ripeterli dà lo stesso risultato'] },
+          ],
+          footer: '**Idempotente** = fare la stessa richiesta 1 o 10 volte lascia il server nello stesso stato.',
+        },
+        {
+          type: 'compare',
+          part: 'IL PROTOCOLLO HTTP',
+          title: 'Gli status code',
+          icon: 'traffic-cone',
+          iconColor: 'text-yellow-400',
+          columns: [
+            { title: '2xx Successo', color: 'green', items: ['`200` OK', '`201` Created', '`204` No Content (body vuoto)'] },
+            { title: '3xx Redirect', color: 'blue', items: ['`301` Moved Permanently', '`302` Found (temporaneo)', '`304` Not Modified (usa la cache)'] },
+            { title: '4xx Errore del client', color: 'yellow', items: ['`400` Bad Request', '`401` Unauthorized (chi sei?)', '`403` Forbidden (non puoi)', '`404` Not Found', '`405` Method Not Allowed', '`409` Conflict', '`422` Unprocessable Content'] },
+            { title: '5xx Errore del server', color: 'red', items: ['`500` Internal Server Error', '`502` Bad Gateway', '`503` Service Unavailable'] },
+          ],
+          footer: 'Regola d\'oro: **4xx = hai sbagliato tu** (client), **5xx = ho sbagliato io** (server).',
+        },
+        {
+          part: 'IL PROTOCOLLO HTTP',
+          title: 'Header da conoscere',
+          icon: 'tags',
+          iconColor: 'text-purple-400',
+          items: [
+            '`Content-Type`: formato del body (`text/html`, `application/json`, `text/plain`…).',
+            '`Content-Length`: lunghezza del body in **byte** (non in caratteri!).',
+            '`Accept`: formati che il client è disposto a ricevere.',
+            '`Authorization`: le credenziali, es. `Bearer <token>` (lo useremo con il login).',
+            '`Location`: dove si trova la risorsa appena creata (con `201`) o dove andare (con `3xx`).',
+            '`Cache-Control`: per quanto il client può riutilizzare la risposta senza richiederla.',
+            'I nomi degli header **non distinguono maiuscole/minuscole**: in Node li trovi tutti minuscoli.',
+          ],
+        },
+        {
+          type: 'code',
+          part: 'IL PROTOCOLLO HTTP',
+          title: 'JSON: la lingua delle API',
+          icon: 'braces',
+          iconColor: 'text-purple-400',
+          items: [
+            'Le API moderne si scambiano dati in **JSON** (`application/json`).',
+            'Sulla rete viaggia **testo**: `JSON.stringify()` per inviare, `JSON.parse()` per ricevere.',
+            'Chiavi tra **doppi apici**, niente funzioni, niente `undefined`, niente commenti.',
+            '`JSON.parse` di un testo non valido **lancia un\'eccezione**: va sempre protetto con `try/catch`.',
+          ],
+          code: `const pizza = { id: 1, nome: 'Margherita', prezzo: 6.5, piccante: false };
+
+const testo = JSON.stringify(pizza);
+console.log(testo, typeof testo);
+
+const diNuovoOggetto = JSON.parse(testo);
+console.log(diNuovoOggetto.nome);
+
+try {
+  JSON.parse("{ nome: 'Margherita' }");
+} catch (err) {
+  console.log('JSON non valido:', err.name);
+}`,
+          output: `{"id":1,"nome":"Margherita","prezzo":6.5,"piccante":false} string
+Margherita
+JSON non valido: SyntaxError`,
+          reveal: true,
+        },
+        {
+          part: 'IL PROTOCOLLO HTTP',
+          title: 'HTTP non ha memoria',
+          icon: 'brain-circuit',
+          iconColor: 'text-pink-400',
+          items: [
+            'HTTP è **stateless**: ogni richiesta è indipendente, il server non "si ricorda" di te.',
+            'Se servono informazioni (chi è l\'utente? cosa c\'è nel carrello?) vanno inviate **in ogni richiesta**.',
+            'Le soluzioni le vedremo più avanti: **cookie e sessioni**, **token JWT** nell\'header `Authorization`.',
+            'Vantaggio: un server stateless è semplice da **scalare** (più copie dietro un bilanciatore).',
+          ],
+        },
+        {
+          type: 'compare',
+          part: 'HTTP DAL VIVO',
+          title: 'Gli strumenti del mestiere',
+          icon: 'wrench',
+          iconColor: 'text-orange-400',
+          columns: [
+            { title: 'DevTools del browser', color: 'blue', icon: 'monitor-smartphone', items: ['`F12` → tab **Network**', 'Vedi ogni richiesta: metodo, status, header, tempi', 'Clicca una riga → Headers / Response', 'Il browser fa solo GET dalla barra degli indirizzi'] },
+            { title: 'curl (terminale)', color: 'green', icon: 'terminal', items: ['Preinstallato su Linux, macOS e Windows 10+', '`-i` mostra gli header della risposta', '`-X POST` sceglie il metodo', '`-H` aggiunge un header, `-d` invia un body'] },
+            { title: 'Client grafici', color: 'purple', icon: 'app-window', items: ['**Bruno** (open source, offline)', '**Postman**', '**Thunder Client** / **REST Client** in VS Code', 'Salvano le richieste in collezioni riutilizzabili'] },
+          ],
+        },
+        {
+          type: 'code',
+          part: 'HTTP DAL VIVO',
+          title: '`curl` in pratica',
+          icon: 'terminal',
+          iconColor: 'text-green-400',
+          lang: 'bash',
+          code: `# GET semplice (solo il body)
+curl http://localhost:3000/api/pizze
+
+# -i: mostra anche status line e header della risposta
+curl -i http://localhost:3000/api/pizze/2
+
+# query string (tra apici, altrimenti la shell interpreta & e ?)
+curl "http://localhost:3000/api/pizze?max=8"
+
+# POST con body JSON
+curl -i -X POST http://localhost:3000/api/pizze \\
+     -H "Content-Type: application/json" \\
+     -d '{"nome":"Bufalina","prezzo":8.5}'
+
+# DELETE
+curl -i -X DELETE http://localhost:3000/api/pizze/1`,
+          items: [
+            'Su **Windows PowerShell** usa `curl.exe` (perché `curl` è un alias di un altro comando).',
+            'Con `-v` vedi anche la **richiesta** inviata: utilissimo per il debug.',
+          ],
+        },
+
+        /* ------------------------------------------------ IL MODULO HTTP */
+        {
+          type: 'code',
+          part: 'IL MODULO HTTP',
+          title: 'Il primo server',
+          icon: 'server',
+          iconColor: 'text-green-400',
+          file: 'server.js',
+          items: [
+            '`http` è un modulo **core**: niente da installare.',
+            '`createServer(callback)`: la callback viene chiamata **a ogni richiesta**.',
+            '`req` = la richiesta in arrivo, `res` = la risposta da costruire.',
+            '`listen(3000)` apre la porta: da qui il processo **non termina più** (finché non premi `Ctrl+C`).',
+            'Prova: `node server.js` e apri `http://localhost:3000` nel browser.',
+          ],
+          code: `const http = require('http');
+
+const server = http.createServer((req, res) => {
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.end('Ciao dal server Node! 👋');
+});
+
+server.listen(3000, () => {
+  console.log('Server in ascolto su http://localhost:3000');
+});`,
+        },
+        {
+          part: 'IL MODULO HTTP',
+          title: 'Cosa succede dietro le quinte',
+          icon: 'refresh-ccw',
+          iconColor: 'text-green-400',
+          items: [
+            '`listen()` registra il server presso il sistema operativo (tramite libuv) e **torna subito**.',
+            'Lo script finisce, ma l\'**event loop resta vivo**: c\'è un server in ascolto.',
+            'Ogni richiesta che arriva diventa un **evento** `request`: Node chiama la nostra callback.',
+            'Mentre una richiesta aspetta I/O (file, database…) il server **ne serve altre**: niente thread per ogni utente.',
+            'Per questo **non bisogna mai bloccare** la callback con calcoli lunghi o `readFileSync` su file grandi.',
+          ],
+        },
+        {
+          type: 'code',
+          part: 'IL MODULO HTTP',
+          title: 'L\'oggetto `req`',
+          icon: 'arrow-up-right',
+          iconColor: 'text-green-400',
+          items: [
+            '`req.method`: il metodo, in maiuscolo.',
+            '`req.url`: path **più** query string (niente protocollo né host!).',
+            '`req.headers`: oggetto con gli header, nomi **minuscoli**.',
+            '`req` è anche uno **stream**: il body arriva a pezzi (lo vediamo tra poco).',
+          ],
+          code: `const server = http.createServer((req, res) => {
+  console.log(req.method);
+  console.log(req.url);
+  console.log(req.headers['user-agent']);
+  console.log(req.headers['content-type']);
+  res.end('ok');
+});
+
+// richiesta: curl "http://localhost:3000/api/pizze?max=8"`,
+          output: `GET
+/api/pizze?max=8
+curl/8.7.1
+undefined`,
+          reveal: true,
+        },
+        {
+          type: 'code',
+          part: 'IL MODULO HTTP',
+          title: 'L\'oggetto `res`',
+          icon: 'arrow-down-left',
+          iconColor: 'text-green-400',
+          items: [
+            '**Stile 1**: `res.statusCode` + `res.setHeader()`, poi `res.end()`.',
+            '**Stile 2**: `res.writeHead(status, { header })` in un colpo solo.',
+            '`res.write()` può inviare il body a pezzi; `res.end()` **chiude** la risposta. Va chiamata **sempre**, una volta sola!',
+            'Il body deve essere una **stringa** o un **Buffer**: `res.end(42)` → `TypeError [ERR_INVALID_ARG_TYPE]`.',
+          ],
+          code: `// Stile 1
+res.statusCode = 404;
+res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+res.end('Pagina non trovata');
+
+// Stile 2 (equivalente)
+res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+res.end('Pagina non trovata');
+
+// A pezzi
+res.write('Prima parte, ');
+res.write('seconda parte, ');
+res.end('fine!');`,
+        },
+        {
+          type: 'code',
+          part: 'IL MODULO HTTP',
+          title: 'Errore classico: header già inviati',
+          icon: 'bug',
+          iconColor: 'text-red-400',
+          items: [
+            'Dopo `res.end()` (o `writeHead`/`write`) gli header sono **già partiti** verso il client.',
+            'Modificarli dopo genera `ERR_HTTP_HEADERS_SENT`… e l\'eccezione non gestita **fa crashare il server**!',
+            'Causa tipica: due `res.end()` in rami diversi, dimenticando il `return`.',
+            'Lo ritroverete identico in Express: impariamo a riconoscerlo ora.',
+          ],
+          code: `const server = http.createServer((req, res) => {
+  if (req.url === '/') {
+    res.end('Home');          // manca il return!
+  }
+  res.setHeader('Content-Type', 'text/plain');
+  res.end('Non trovato');
+});`,
+          output: `/progetto/server.js:5
+  res.setHeader('Content-Type', 'text/plain');
+      ^
+
+Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client
+    at Server.<anonymous> (/progetto/server.js:5:7) {
+  code: 'ERR_HTTP_HEADERS_SENT'
+}
+
+Node.js v24.11.0`,
+          reveal: true,
+        },
+        {
+          type: 'code',
+          part: 'IL MODULO HTTP',
+          title: 'Rispondere in JSON',
+          icon: 'braces',
+          iconColor: 'text-purple-400',
+          items: [
+            'Imposta `Content-Type: application/json` e invia `JSON.stringify(dati)`.',
+            'Conviene una **funzione di supporto**: la useremo in tutti i laboratori.',
+            'Nota lo **spread** `...headers` per aggiungere header extra (es. `Location`).',
+          ],
+          code: `function inviaJson(res, status, dati, headers = {}) {
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    ...headers,
+  });
+  res.end(JSON.stringify(dati));
+}
+
+const pizze = [
+  { id: 1, nome: 'Margherita', prezzo: 6.5 },
+  { id: 2, nome: 'Marinara', prezzo: 5 },
+];
+
+const server = http.createServer((req, res) => {
+  inviaJson(res, 200, pizze);
+});`,
+        },
+        {
+          type: 'code',
+          part: 'IL MODULO HTTP',
+          title: 'Routing "a mano"',
+          icon: 'signpost',
+          iconColor: 'text-yellow-400',
+          items: [
+            '**Routing** = scegliere cosa fare in base a **metodo + percorso**.',
+            'Con il modulo `http` lo facciamo noi con `if` / `switch`.',
+            'Ricordati il `return` (o `else`) dopo ogni risposta!',
+            'Ultimo ramo: **404**, per tutto ciò che non conosciamo.',
+          ],
+          code: `const server = http.createServer((req, res) => {
+  const { method, url } = req;
+
+  if (method === 'GET' && url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end('<h1>Benvenuti in pizzeria!</h1>');
+  }
+
+  if (method === 'GET' && url === '/api/pizze') {
+    return inviaJson(res, 200, pizze);
+  }
+
+  if (method === 'POST' && url === '/api/pizze') {
+    // ... creazione (tra poco!)
+  }
+
+  inviaJson(res, 404, { errore: 'Risorsa non trovata' });
+});`,
+        },
+        {
+          type: 'code',
+          part: 'IL MODULO HTTP',
+          title: 'Parametri nel percorso',
+          icon: 'split',
+          iconColor: 'text-yellow-400',
+          items: [
+            '`/api/pizze/2`: l\'id fa parte del **path** (parametro di percorso).',
+            'Lo ricaviamo spezzando il path con `split(\'/\')`.',
+            'Ciò che arriva dall\'URL è **sempre una stringa**: converti con `Number()`.',
+            'Risorsa inesistente → **404**. Metodo non supportato → **405** con l\'header `Allow`.',
+          ],
+          code: `const parti = req.url.split('/').filter(Boolean);
+// '/api/pizze/2' → ['api', 'pizze', '2']
+
+if (parti.length === 3 && parti[0] === 'api' && parti[1] === 'pizze') {
+  if (req.method !== 'GET') {
+    return inviaJson(res, 405, { errore: 'Metodo non consentito' }, { Allow: 'GET' });
+  }
+  const id = Number(parti[2]);
+  const pizza = pizze.find((p) => p.id === id);
+  if (!pizza) {
+    return inviaJson(res, 404, { errore: \`Pizza \${id} non trovata\` });
+  }
+  return inviaJson(res, 200, pizza);
+}`,
+        },
+        {
+          type: 'code',
+          part: 'IL MODULO HTTP',
+          title: 'La query string',
+          icon: 'search',
+          iconColor: 'text-cyan-400',
+          items: [
+            '`req.url` contiene anche `?max=8`: confrontarlo con `===` non basta più!',
+            'Soluzione: `new URL(req.url, \'http://localhost\')` (serve una base perché `req.url` è relativo).',
+            '`url.pathname` → solo il percorso; `url.searchParams.get()` → un parametro (o `null`).',
+            'Gli spazi e i caratteri speciali vengono **decodificati** per noi (`%20` → spazio).',
+          ],
+          code: `// richiesta: GET /saluta?nome=Maria%20Rossi&lingua=it
+const url = new URL(req.url, 'http://localhost');
+
+console.log(url.pathname);
+console.log(url.searchParams.get('nome'));
+console.log(url.searchParams.get('lingua'));
+console.log(url.searchParams.get('eta'));`,
+          output: `/saluta
+Maria Rossi
+it
+null`,
+          reveal: true,
+        },
+        {
+          type: 'code',
+          part: 'IL MODULO HTTP',
+          title: 'Leggere il body di una POST',
+          icon: 'download',
+          iconColor: 'text-cyan-400',
+          items: [
+            'Il body **non è** in `req.body`: arriva a pezzi (chunk), perché `req` è uno **stream**.',
+            'Ascoltiamo gli eventi `data` (un pezzo) ed `end` (finito): `req` è un `EventEmitter`!',
+            'Conviene incapsulare tutto in una **Promise**, così poi usiamo `await`.',
+          ],
+          code: `function leggiBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  if (req.method === 'POST' && req.url === '/api/pizze') {
+    const testo = await leggiBody(req);
+    console.log('Ricevuto:', testo);
+    // ...
+  }
+});`,
+        },
+        {
+          type: 'code',
+          part: 'IL MODULO HTTP',
+          title: '`for await` e la validazione',
+          icon: 'shield-check',
+          iconColor: 'text-cyan-400',
+          items: [
+            'Variante moderna: `for await (const chunk of req)` legge lo stream pezzo per pezzo.',
+            '**Mai fidarsi del client**: il JSON potrebbe essere rotto o mancare dei campi.',
+            'JSON non valido o dati sbagliati → **400 Bad Request** con un messaggio chiaro.',
+            'Risorsa creata → **201 Created** + header `Location`.',
+          ],
+          code: `let body = '';
+for await (const chunk of req) body += chunk;
+
+let dati;
+try {
+  dati = JSON.parse(body);
+} catch {
+  return inviaJson(res, 400, { errore: 'Il body non è JSON valido' });
+}
+
+if (typeof dati.nome !== 'string' || typeof dati.prezzo !== 'number') {
+  return inviaJson(res, 400, { errore: 'Servono nome (testo) e prezzo (numero)' });
+}
+
+const nuova = { id: prossimoId++, nome: dati.nome, prezzo: dati.prezzo };
+pizze.push(nuova);
+inviaJson(res, 201, nuova, { Location: \`/api/pizze/\${nuova.id}\` });`,
+        },
+        {
+          type: 'code',
+          part: 'IL MODULO HTTP',
+          title: 'Servire un file HTML',
+          icon: 'file-code-2',
+          iconColor: 'text-orange-400',
+          items: [
+            'Uniamo quello che sappiamo: `fs.promises.readFile` + `path.join(__dirname, ...)`.',
+            'Il `Content-Type` giusto fa la differenza: con `text/plain` il browser mostrerebbe i tag!',
+            'Per file grandi (video, download) meglio uno **stream**: `fs.createReadStream(file).pipe(res)`.',
+            'Servire **tutti** i file statici (CSS, immagini, JS) a mano è noioso… Express lo fa in una riga.',
+          ],
+          code: `const fs = require('fs/promises');
+const path = require('path');
+
+const server = http.createServer(async (req, res) => {
+  if (req.method === 'GET' && req.url === '/') {
+    try {
+      const file = path.join(__dirname, 'public', 'index.html');
+      const html = await fs.readFile(file, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(html);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('Errore interno del server');
+    }
+  }
+  // ...
+});`,
+        },
+        {
+          type: 'code',
+          part: 'FLUSSO DI LAVORO',
+          title: 'Sviluppare comodi: `--watch`',
+          icon: 'eye',
+          iconColor: 'text-green-400',
+          lang: 'json',
+          file: 'package.json',
+          items: [
+            'Il server resta acceso: ogni modifica al codice richiede **riavviarlo** (`Ctrl+C`, poi di nuovo `node`).',
+            '`node --watch server.js` lo riavvia **da solo** a ogni salvataggio (come `nodemon`, ma integrato).',
+            'Mettiamolo in uno **script npm**: `npm run dev`.',
+            'Per la produzione si usa `npm start`, senza watch.',
+          ],
+          code: `{
+  "name": "pizzeria",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js"
+  }
+}`,
+        },
+        {
+          type: 'compare',
+          part: 'VERSO EXPRESS',
+          title: 'I limiti del modulo `http` "nudo"',
+          icon: 'construction',
+          iconColor: 'text-yellow-400',
+          columns: [
+            { title: 'Quello che abbiamo fatto a mano', color: 'red', icon: 'hand', items: ['Routing con catene di `if`', 'Estrarre i parametri con `split(\'/\')`', 'Parsing della query string', 'Leggere e parsare il body', 'Impostare `Content-Type` ogni volta', 'Servire file statici uno per uno', 'Gestire gli errori in ogni ramo'] },
+            {
+              title: 'Con Express (lezione 4)', color: 'green', icon: 'sparkles',
+              items: ['Routing dichiarativo e parametri pronti', '`req.query`, `req.params`, `req.body`', '`res.json()`, `res.status()`', '`express.static()` per i file', 'Middleware ed errori centralizzati'],
+              code: `app.get('/api/pizze/:id', (req, res) => {
+  const pizza = pizze.find((p) => p.id === Number(req.params.id));
+  if (!pizza) return res.status(404).json({ errore: 'Non trovata' });
+  res.json(pizza);
+});`,
+            },
+          ],
+          footer: 'Express è costruito **sopra** il modulo `http`: `req` e `res` sono gli stessi oggetti, arricchiti. Quello che avete imparato oggi resta valido!',
+        },
+        {
+          part: 'RIEPILOGO',
+          title: 'Cosa portiamo a casa',
+          icon: 'check-circle-2',
+          iconColor: 'text-green-400',
+          items: [
+            'HTTP = **richiesta** (metodo, URL, header, body) → **risposta** (status, header, body).',
+            'Metodi: `GET` legge, `POST` crea, `PUT/PATCH` modificano, `DELETE` elimina.',
+            'Status: **2xx** ok, **3xx** vai altrove, **4xx** errore del client, **5xx** errore del server.',
+            '`http.createServer((req, res) => {...}).listen(3000)`: una callback per ogni richiesta.',
+            '`new URL(req.url, base)` per path e query; il body si legge come **stream**.',
+            'Sempre **una** `res.end()` per richiesta, con il `Content-Type` giusto. E mai fidarsi dell\'input!',
+          ],
+        },
+        {
+          type: 'custom',
+          part: 'SIMULAZIONE',
+          title: 'Pizzeria API: mettiti alla prova',
+          icon: 'pizza',
+          iconColor: 'text-orange-400',
+          html: '<p class="text-gray-400 mb-4">Un server Node.js vero sta girando qui nel browser. Usa il client HTTP per completare le missioni: scegli il metodo, scrivi l\'URL, aggiungi un body JSON quando serve e osserva status code, header e log del server.</p><div class="pizzeria"></div>',
+          mount: (el) => {
+            NodeLab.inspector(el.querySelector('.pizzeria'), {
+              id: 'm3-pizzeria-slide',
+              files: { 'server.js': PIZZERIA_SERVER },
+              entry: 'server.js',
+              port: 3000,
+              missions: PIZZERIA_MISSIONS,
+              presets: [
+                { method: 'GET', path: '/api/pizze' },
+                { label: 'POST (esempio)', method: 'POST', path: '/api/pizze', body: '{\n  "nome": "Bufalina",\n  "prezzo": 8.5\n}', send: false },
+              ],
+            });
+          },
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>

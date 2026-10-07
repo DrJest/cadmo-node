@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corso Node.js &amp; Express CADMO - Homepage</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <div class="font-mono text-sm text-gray-400 hidden sm:block">
+          studente@nodelab:~$ npm start
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24 animate-fade-in">
+    <div class="text-center max-w-3xl mx-auto">
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-800 border border-gray-700 text-sm text-gray-300 font-mono mb-6">
+        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+        Corso di 80 Ore
+      </div>
+      <h1 class="text-4xl md:text-6xl font-extrabold text-white tracking-tight mb-6">
+        Da Zero a <span class="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600">Backend Developer</span>
+      </h1>
+      <p class="text-xl text-gray-400 mb-8">
+        Un percorso pratico per costruire server, API REST e applicazioni web con Node.js ed Express:
+        dall'event loop ai database, dall'autenticazione al deploy. Con simulazioni e laboratori da fare direttamente nel browser.
+      </p>
+      <div class="flex flex-wrap justify-center gap-3">
+        <a href="programma.html"
+          class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-green-500 text-white font-bold hover:bg-green-600 transition-colors">
+          Programma completo <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </a>
+        <a href="#moduli"
+          class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gray-800 border border-gray-700 text-gray-200 font-bold hover:border-green-500 transition-colors">
+          <i data-lucide="layout-grid" class="w-4 h-4"></i> Vai ai moduli
+        </a>
+      </div>
+    </div>
+  </header>
+
+
+  <!-- Moduli -->
+  <main id="moduli" class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 scroll-mt-20">
+    <div class="flex items-center gap-3 mb-6">
+      <i data-lucide="layers" class="w-6 h-6 text-green-400"></i>
+      <h2 class="text-2xl font-bold text-white">I moduli del corso</h2>
+      <span class="ml-auto font-mono text-sm text-gray-500">18 moduli · 80 ore</span>
+    </div>
+    <div id="modules-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4 text-gray-500 text-sm font-mono">
+      <div>
+        <p>Struttura del corso progettata per CADMO.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-green-500"></span>
+        System Online
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // status: 'done' (svolta), 'ready' (slide pronte), 'soon' (in preparazione)
+    const MODULES = [
+      { n: 1, title: 'Node.js e il modello asincrono', icon: 'play-circle', color: 'green', hours: '4 Ore', status: 'done',
+        desc: 'Installazione (LTS, nvm), REPL, V8 e libuv, event loop, callback, Promise, async/await e moduli CommonJS/ESM.',
+        links: [['modulo_1.html', 'Apri slide', 'presentation']] },
+      { n: 2, title: 'npm, process e file system', icon: 'package', color: 'blue', hours: '4 Ore', status: 'ready',
+        desc: 'package.json, dipendenze, semver, scripts, npx e nodemon; process.argv/env; fs, path, JSON come mini-database ed EventEmitter.',
+        links: [['modulo_2.html', 'Apri slide', 'presentation'], ['modulo_2_ex.html', 'Esercizi & Lab', 'flask-conical']] },
+      { n: 3, title: 'Il protocollo HTTP e il modulo http', icon: 'globe', color: 'cyan', hours: '3 Ore', status: 'ready',
+        desc: 'Client/server, URL, metodi, status code e header; http.createServer, routing manuale, query string, body POST e file statici.',
+        links: [['modulo_3.html', 'Apri slide', 'presentation'], ['modulo_3_ex.html', 'Esercizi & Lab', 'flask-conical']] },
+      { n: 4, title: 'Express: le basi', icon: 'zap', color: 'yellow', hours: '4 Ore', desc: 'Express 5, routing, req.params/query/body, res.json/status/redirect, express.json, express.static ed express.Router.' },
+      { n: 5, title: 'Middleware', icon: 'git-merge', color: 'purple', hours: '4 Ore', desc: 'Pipeline req → res, next(), logging con morgan, CORS, middleware custom, 404 e gestione centralizzata degli errori.' },
+      { n: 6, title: 'API REST e CRUD', icon: 'server', color: 'orange', hours: '5 Ore', desc: 'Principi REST, risorse e verbi, status code corretti, paginazione e filtri, versionamento, CRUD in memoria e su file JSON.' },
+      { n: 7, title: 'Validazione, errori e configurazione', icon: 'shield-check', color: 'red', hours: '4 Ore', desc: 'Validazione input con zod, classi di errore, error handler, variabili d\'ambiente e architettura routes/controllers/services.' },
+      { n: 8, title: 'Template engine e form', icon: 'layout-template', color: 'pink', hours: '3 Ore', desc: 'Rendering lato server con EJS, layout e partials, form POST urlencoded, pattern PRG e file statici.' },
+      { n: 9, title: 'Database relazionali: SQL e SQLite', icon: 'database', color: 'emerald', hours: '7 Ore', desc: 'Modello relazionale, SQL, node:sqlite / better-sqlite3, query parametrizzate e SQL injection, migrazioni e seed.' },
+      { n: 10, title: 'ORM con Prisma', icon: 'boxes', color: 'indigo', hours: '3 Ore', desc: 'Schema, migrazioni, Prisma Client, relazioni 1-N e N-N, transazioni.' },
+      { n: 11, title: 'MongoDB e Mongoose', icon: 'leaf', color: 'lime', hours: '6 Ore', desc: 'NoSQL documentale, Atlas e Compass, CRUD, schemi e validazione, relazioni con populate, aggregazioni di base.' },
+      { n: 12, title: 'Autenticazione e autorizzazione', icon: 'key-round', color: 'amber', hours: '7 Ore', desc: 'Hashing delle password, sessioni e cookie, JWT (access/refresh), middleware di protezione, ruoli e permessi.' },
+      { n: 13, title: 'Sicurezza delle API', icon: 'lock', color: 'rose', hours: '3 Ore', desc: 'OWASP API Top 10, helmet, CORS, rate limiting, sanitizzazione input, gestione dei segreti, npm audit e supply chain.' },
+      { n: 14, title: 'Upload, stream e API esterne', icon: 'upload-cloud', color: 'sky', hours: '3 Ore', desc: 'Upload con multer, stream e pipe, download, fetch verso API di terze parti e caching semplice.' },
+      { n: 15, title: 'Real-time: WebSocket e Socket.IO', icon: 'radio', color: 'fuchsia', hours: '3 Ore', desc: 'Il protocollo WebSocket, Socket.IO, eventi e stanze: una chat in tempo reale.' },
+      { n: 16, title: 'Testing', icon: 'test-tube', color: 'teal', hours: '5 Ore', desc: 'node:test e assert, test unitari, test di integrazione con supertest, mock, coverage e cenni di TDD.' },
+      { n: 17, title: 'Deploy e produzione', icon: 'rocket', color: 'violet', hours: '4 Ore', desc: 'Configurazione per la produzione, logging, PM2, Docker e compose, deploy su cloud, HTTPS e cenni di CI.' },
+      { n: 18, title: 'Project work finale e verifica', icon: 'trophy', color: 'green', hours: '8 Ore', desc: 'Progetto di gruppo: API REST con database e autenticazione + frontend semplice, presentazione e verifica finale.' },
+    ];
+
+    const BADGE = {
+      done: '<span class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-gray-100 bg-gray-600 rounded-full">Svolta</span>',
+      ready: '<span class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-green-900 bg-green-400 rounded-full">Slide Pronte</span>',
+      soon: '<span class="px-3 py-1 text-xs font-bold uppercase tracking-wider text-gray-400 bg-gray-800 border border-gray-700 rounded-full">In preparazione</span>',
+    };
+
+    document.getElementById('modules-grid').innerHTML = MODULES.map((m, i) => {
+      const c = m.color;
+      const status = m.status || 'soon';
+      const active = status !== 'soon';
+      const delay = ['delay-100', 'delay-200', 'delay-300'][Math.min(2, Math.floor(i / 2))];
+      const links = (m.links || []).map(([href, label, icon]) => `
+        <a href="${href}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-${c}-500/10 text-${c}-400 border border-${c}-500/30 font-semibold transition-all hover:bg-${c}-500 hover:text-white hover:border-${c}-500">
+          <i data-lucide="${icon}" class="w-4 h-4"></i> ${label}
+        </a>`).join('');
+      return `
+      <div class="group relative bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 transition-all duration-300 animate-fade-in ${delay} ${active ? `hover:border-${c}-500 hover:-translate-y-1` : 'opacity-60'}">
+        <div class="absolute top-6 right-6">${BADGE[status]}</div>
+        <div class="w-12 h-12 bg-gray-900 border border-gray-700 rounded-lg flex items-center justify-center mb-6 ${active ? `group-hover:border-${c}-500` : ''} transition-colors">
+          <i data-lucide="${m.icon}" class="w-6 h-6 text-${c}-400"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white mb-2 pr-32 ${active ? `group-hover:text-${c}-400` : ''} transition-colors">Modulo ${m.n}: ${m.title}</h3>
+        <p class="text-gray-400 mb-4 line-clamp-2">${m.desc}</p>
+        <div class="flex items-center text-sm text-gray-500 font-mono">
+          <i data-lucide="clock" class="w-4 h-4 mr-2"></i> ${m.hours}
+        </div>
+        ${links ? `<div class="mt-6 flex flex-wrap gap-2">${links}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Programma del corso Node.js &amp; Express - CADMO NodeLab</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+  <style>
+    @media print {
+      .print-card { background: #fff !important; border-color: #ccc !important; break-inside: avoid; }
+      .print-card * { color: #000 !important; }
+      table, th, td { color: #000 !important; border-color: #ccc !important; background: #fff !important; }
+      h1, h2, h3, p, li, span { color: #000 !important; }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <a href="./" class="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Home
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="bg-gray-950 border-b border-gray-800 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center animate-fade-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-900/30 border border-green-500/30 text-xs text-green-400 font-mono mb-4 uppercase tracking-wider">
+        <i data-lucide="file-text" class="w-4 h-4"></i> Programma didattico
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4">Programma del corso Node.js &amp; Express (80 ore)</h1>
+      <p class="text-gray-400 text-lg">Sviluppo backend con JavaScript: server, API REST, database, sicurezza, test e deploy.</p>
+      <button onclick="window.print()" class="no-print mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-green-500/10 text-green-400 border border-green-500/30 font-semibold transition-all hover:bg-green-500 hover:text-white">
+        <i data-lucide="printer" class="w-4 h-4"></i> Stampa / PDF
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-14">
+
+    <!-- Presentazione -->
+    <section class="animate-fade-in">
+      <div class="flex items-center gap-3 mb-4 border-b border-gray-800 pb-2">
+        <i data-lucide="info" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">Presentazione</h2>
+      </div>
+      <div class="text-gray-300 space-y-3 leading-relaxed">
+        <p>Il corso accompagna i partecipanti dalla prima installazione di Node.js fino alla pubblicazione online di un'applicazione backend completa. Si parte dai fondamenti del runtime (event loop, programmazione asincrona, moduli), si passa al protocollo HTTP e al framework <strong class="text-white">Express</strong>, per arrivare a database relazionali e NoSQL, autenticazione, sicurezza, test automatici e deploy.</p>
+        <p>L'approccio è <strong class="text-white">fortemente pratico</strong>: ogni modulo alterna brevi momenti di teoria a simulazioni interattive e laboratori di codice, e si conclude con un project work di gruppo.</p>
+      </div>
+    </section>
+
+    <!-- Obiettivi -->
+    <section>
+      <div class="flex items-center gap-3 mb-4 border-b border-gray-800 pb-2">
+        <i data-lucide="target" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">Obiettivi formativi</h2>
+      </div>
+      <p class="text-gray-400 mb-4">Al termine del corso il partecipante sarà in grado di:</p>
+      <ul class="space-y-2 text-gray-300">
+        <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>comprendere il modello di esecuzione di Node.js e scrivere codice asincrono corretto (callback, Promise, async/await);</li>
+        <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>gestire progetti e dipendenze con npm e organizzare il codice in moduli;</li>
+        <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>conoscere il protocollo HTTP e progettare API REST coerenti, validate e documentate;</li>
+        <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>sviluppare applicazioni con Express usando routing, middleware e gestione centralizzata degli errori;</li>
+        <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>persistere i dati su database relazionali (SQL, SQLite, Prisma) e documentali (MongoDB);</li>
+        <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>implementare autenticazione e autorizzazione e applicare le principali misure di sicurezza;</li>
+        <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>scrivere test automatici e pubblicare un'applicazione in produzione (Docker, cloud).</li>
+      </ul>
+    </section>
+
+    <!-- Prerequisiti, metodologia, strumenti -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="print-card bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+        <h3 class="text-lg font-bold text-green-400 mb-3 flex items-center gap-2"><i data-lucide="list-checks" class="w-5 h-5"></i>Prerequisiti</h3>
+        <ul class="text-gray-300 text-sm space-y-2">
+          <li>JavaScript di base: variabili, funzioni, array, oggetti, cicli e condizioni.</li>
+          <li>Uso del terminale e della riga di comando (vedi il <a class="text-green-400 underline hover:text-green-300" href="https://drjest.github.io/cadmo/" target="_blank" rel="noopener">corso Linux</a>).</li>
+          <li>Nozioni minime di HTML.</li>
+        </ul>
+      </div>
+      <div class="print-card bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+        <h3 class="text-lg font-bold text-blue-400 mb-3 flex items-center gap-2"><i data-lucide="graduation-cap" class="w-5 h-5"></i>Metodologia</h3>
+        <ul class="text-gray-300 text-sm space-y-2">
+          <li>Slide interattive per ogni lezione.</li>
+          <li>Simulazioni nel browser con un runtime Node.js simulato (terminale, npm, client HTTP).</li>
+          <li>Laboratori di codice con verifica automatica.</li>
+          <li>Missioni da svolgere sul proprio PC.</li>
+          <li>Quiz di fine modulo e project work finale.</li>
+        </ul>
+      </div>
+      <div class="print-card bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+        <h3 class="text-lg font-bold text-yellow-400 mb-3 flex items-center gap-2"><i data-lucide="wrench" class="w-5 h-5"></i>Strumenti</h3>
+        <ul class="text-gray-300 text-sm space-y-2">
+          <li>Node.js LTS (24) e npm</li>
+          <li>Visual Studio Code, Git</li>
+          <li>Client HTTP: Bruno, Postman o Thunder Client</li>
+          <li>DevTools del browser</li>
+          <li>In seguito: SQLite, MongoDB, Docker</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Tabella riepilogativa -->
+    <section>
+      <div class="flex items-center gap-3 mb-4 border-b border-gray-800 pb-2">
+        <i data-lucide="table" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">Quadro dei moduli</h2>
+      </div>
+      <div class="overflow-x-auto rounded-xl border border-gray-700">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-800 text-gray-300">
+            <tr><th class="text-left px-4 py-2 font-semibold w-16">#</th><th class="text-left px-4 py-2 font-semibold">Modulo</th><th class="text-right px-4 py-2 font-semibold w-24">Ore</th></tr>
+          </thead>
+          <tbody id="summary-body" class="divide-y divide-gray-800"></tbody>
+          <tfoot class="bg-gray-800/70">
+            <tr><td></td><td class="px-4 py-2 font-bold text-white">Totale</td><td id="summary-total" class="px-4 py-2 text-right font-mono font-bold text-green-400"></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- Dettaglio moduli -->
+    <section>
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="book-open" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">Contenuti e obiettivi per modulo</h2>
+      </div>
+      <div id="modules-detail" class="space-y-5"></div>
+    </section>
+
+    <!-- Valutazione -->
+    <section>
+      <div class="flex items-center gap-3 mb-4 border-b border-gray-800 pb-2">
+        <i data-lucide="award" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">Valutazione</h2>
+      </div>
+      <p class="text-gray-400 mb-4">Pesi indicativi, da confermare con la direzione del corso:</p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="print-card bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center"><div class="text-3xl font-extrabold text-green-400">15%</div><div class="text-sm text-gray-300 mt-1">Quiz di fine modulo</div></div>
+        <div class="print-card bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center"><div class="text-3xl font-extrabold text-blue-400">25%</div><div class="text-sm text-gray-300 mt-1">Laboratori ed esercitazioni</div></div>
+        <div class="print-card bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center"><div class="text-3xl font-extrabold text-yellow-400">40%</div><div class="text-sm text-gray-300 mt-1">Project work finale</div></div>
+        <div class="print-card bg-gray-800/50 border border-gray-700 rounded-xl p-4 text-center"><div class="text-3xl font-extrabold text-purple-400">20%</div><div class="text-sm text-gray-300 mt-1">Verifica finale</div></div>
+      </div>
+    </section>
+
+    <!-- Calendario -->
+    <section>
+      <div class="flex items-center gap-3 mb-4 border-b border-gray-800 pb-2">
+        <i data-lucide="calendar-days" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">Prime lezioni</h2>
+      </div>
+      <div class="overflow-x-auto rounded-xl border border-gray-700">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-800 text-gray-300">
+            <tr><th class="text-left px-4 py-2">Lezione</th><th class="text-left px-4 py-2">Ore</th><th class="text-left px-4 py-2">Argomento</th></tr>
+          </thead>
+          <tbody class="divide-y divide-gray-800 text-gray-300">
+            <tr><td class="px-4 py-2 font-mono">1</td><td class="px-4 py-2">4</td><td class="px-4 py-2">Modulo 1 — Node.js e il modello asincrono <span class="text-xs text-gray-500">(svolta)</span></td></tr>
+            <tr><td class="px-4 py-2 font-mono">2</td><td class="px-4 py-2">4</td><td class="px-4 py-2">Modulo 2 — npm, process e file system</td></tr>
+            <tr><td class="px-4 py-2 font-mono">3</td><td class="px-4 py-2">3</td><td class="px-4 py-2">Modulo 3 — Il protocollo HTTP e il modulo http</td></tr>
+            <tr><td class="px-4 py-2 font-mono text-gray-500">…</td><td class="px-4 py-2 text-gray-500" colspan="2">Le lezioni successive sono da definire.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm font-mono">
+      studente@nodelab:~$ cat programma.md
+    </div>
+  </footer>
+
+  <script>
+    const MODULES = [
+      { n: 1, t: 'Node.js e il modello asincrono', h: 4, c: 'Installazione della versione LTS e gestione delle versioni con nvm, REPL, architettura (V8 e libuv), event loop, callback, Promise, async/await, moduli CommonJS ed ES Modules (core, locali, npm).',
+        o: ['spiegare cosa succede quando Node esegue codice asincrono', 'prevedere l\'ordine di esecuzione di timer, microtask e codice sincrono', 'scrivere funzioni asincrone con Promise e async/await', 'importare ed esportare moduli'] },
+      { n: 2, t: 'npm, process e file system', h: 4, c: 'package.json, dependencies e devDependencies, semver, package-lock, scripts, npx, nodemon e node --watch; process.argv, process.env, codici di uscita; fs (sincrono, callback, promises), path, JSON come mini-database; EventEmitter.',
+        o: ['creare e configurare un progetto npm', 'scrivere piccoli programmi a riga di comando con argomenti', 'leggere e scrivere file in modo asincrono', 'usare e creare eventi con EventEmitter'] },
+      { n: 3, t: 'Il protocollo HTTP e il modulo http', h: 3, c: 'Modello client/server, anatomia di un URL, metodi, status code, header, JSON; http.createServer, routing manuale, query string, lettura del body delle POST, file statici; i limiti dell\'approccio "a mano" e perché serve Express.',
+        o: ['descrivere una richiesta e una risposta HTTP', 'creare un server con il modulo http', 'gestire rotte, query string e body JSON', 'scegliere lo status code corretto'] },
+      { n: 4, t: 'Express: le basi', h: 4, c: 'Installazione di Express 5, app.get/post, routing, req.params, req.query e req.body, res.json/status/send/redirect, express.json, express.static, express.Router, struttura del progetto.',
+        o: ['avviare un\'applicazione Express', 'definire rotte con parametri', 'servire file statici', 'organizzare le rotte con Router'] },
+      { n: 5, t: 'Middleware', h: 4, c: 'La pipeline req → res, next(), middleware applicativi e di router, logging con morgan, CORS, middleware personalizzati, gestione delle 404 e degli errori in modo centralizzato (anche asincroni, Express 5).',
+        o: ['spiegare il flusso dei middleware', 'scrivere middleware personalizzati', 'centralizzare la gestione degli errori'] },
+      { n: 6, t: 'API REST e CRUD', h: 5, c: 'Principi REST, risorse e verbi, status code corretti, paginazione, filtri e ordinamento, versionamento, client HTTP (Postman, Bruno, REST Client), CRUD in memoria e su file JSON.',
+        o: ['progettare endpoint REST coerenti', 'implementare un CRUD completo', 'testare le API con un client HTTP'] },
+      { n: 7, t: 'Validazione, errori e configurazione', h: 4, c: 'Validazione dell\'input (zod / express-validator), classi di errore, error handler, variabili d\'ambiente (.env, node --env-file), architettura a livelli (routes, controllers, services).',
+        o: ['validare i dati in ingresso', 'restituire errori chiari e coerenti', 'separare configurazione e codice', 'strutturare il progetto a livelli'] },
+      { n: 8, t: 'Template engine e form', h: 3, c: 'Rendering lato server con EJS, layout e partials, form POST urlencoded, pattern Post/Redirect/Get, file statici.',
+        o: ['generare pagine HTML dinamiche', 'gestire l\'invio di form', 'applicare il pattern PRG'] },
+      { n: 9, t: 'Database relazionali: SQL e SQLite', h: 7, c: 'Modello relazionale, SQL (CREATE, INSERT, SELECT, JOIN, UPDATE, DELETE), node:sqlite / better-sqlite3, query parametrizzate e SQL injection, repository pattern, migrazioni e seed, cenni a PostgreSQL.',
+        o: ['progettare tabelle e relazioni', 'scrivere query SQL, anche con JOIN', 'collegare Express a un database in sicurezza', 'gestire migrazioni e dati di esempio'] },
+      { n: 10, t: 'ORM con Prisma', h: 3, c: 'Schema, migrazioni, Prisma Client, relazioni 1-N e N-N, transazioni.',
+        o: ['descrivere il modello dati con uno schema', 'eseguire query tipizzate con un ORM', 'gestire relazioni e transazioni'] },
+      { n: 11, t: 'MongoDB e Mongoose', h: 6, c: 'Database NoSQL documentali, MongoDB Atlas e Compass, CRUD, schemi e validazione con Mongoose, relazioni e populate, aggregazioni di base.',
+        o: ['confrontare modello relazionale e documentale', 'modellare dati con Mongoose', 'eseguire query e aggregazioni di base'] },
+      { n: 12, t: 'Autenticazione e autorizzazione', h: 7, c: 'Hashing delle password (bcrypt/argon2), sessioni e cookie, JWT (access e refresh token), middleware di protezione, ruoli e permessi, registrazione, login e logout.',
+        o: ['salvare le password in modo sicuro', 'implementare login con sessioni o JWT', 'proteggere le rotte in base al ruolo'] },
+      { n: 13, t: 'Sicurezza delle API', h: 3, c: 'OWASP API Security Top 10, helmet, CORS, rate limiting, sanitizzazione dell\'input, gestione dei segreti, npm audit e sicurezza della supply chain.',
+        o: ['riconoscere le vulnerabilità più comuni', 'applicare le principali contromisure', 'verificare le dipendenze del progetto'] },
+      { n: 14, t: 'Upload, stream e API esterne', h: 3, c: 'Upload di file con multer, stream e pipe, download, fetch verso API di terze parti, caching semplice.',
+        o: ['gestire upload e download di file', 'usare gli stream per dati di grandi dimensioni', 'integrare servizi esterni'] },
+      { n: 15, t: 'Real-time: WebSocket e Socket.IO', h: 3, c: 'Il protocollo WebSocket, Socket.IO, eventi e stanze, una chat in tempo reale.',
+        o: ['distinguere HTTP e WebSocket', 'realizzare una comunicazione bidirezionale', 'gestire stanze ed eventi'] },
+      { n: 16, t: 'Testing', h: 5, c: 'node:test e assert, test unitari, test di integrazione con supertest, mock, coverage, cenni di TDD.',
+        o: ['scrivere test unitari', 'testare le API end-to-end', 'misurare la copertura dei test'] },
+      { n: 17, t: 'Deploy e produzione', h: 4, c: 'Configurazione per la produzione, logging, PM2, Docker (Dockerfile e compose), deploy su cloud (Render/Railway), reverse proxy e HTTPS, cenni di CI con GitHub Actions.',
+        o: ['preparare un\'app per la produzione', 'containerizzare un progetto con Docker', 'pubblicare un\'applicazione online'] },
+      { n: 18, t: 'Project work finale e verifica', h: 8, c: 'Progetto in gruppo: API REST completa con database e autenticazione, più un frontend semplice. Presentazione del lavoro e verifica finale.',
+        o: ['progettare e sviluppare un backend completo in team', 'presentare e motivare le scelte tecniche', 'dimostrare le competenze acquisite'] },
+    ];
+
+    document.getElementById('summary-body').innerHTML = MODULES.map((m) => `
+      <tr class="text-gray-300"><td class="px-4 py-2 font-mono text-gray-500">${m.n}</td><td class="px-4 py-2"><a href="#m${m.n}" class="hover:text-green-400">${m.t}</a></td><td class="px-4 py-2 text-right font-mono">${m.h}</td></tr>`).join('');
+    document.getElementById('summary-total').textContent = MODULES.reduce((s, m) => s + m.h, 0);
+
+    document.getElementById('modules-detail').innerHTML = MODULES.map((m) => `
+      <article id="m${m.n}" class="print-card bg-gray-800/50 border border-gray-700 rounded-2xl p-6 scroll-mt-20">
+        <div class="flex items-start justify-between gap-4 mb-3">
+          <h3 class="text-xl font-bold text-white">Modulo ${m.n}: ${m.t}</h3>
+          <span class="shrink-0 px-3 py-1 rounded-full bg-gray-900 border border-gray-700 text-sm font-mono text-green-400">${m.h} ore</span>
+        </div>
+        <p class="text-gray-300 mb-4">${m.c}</p>
+        <p class="text-sm font-semibold text-green-400 mb-2">Sarai in grado di…</p>
+        <ul class="space-y-1 text-gray-300 text-sm">${m.o.map((o) => `<li class="flex gap-2"><span class="text-green-500">✓</span><span>${o}</span></li>`).join('')}</ul>
+      </article>`).join('');
+
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

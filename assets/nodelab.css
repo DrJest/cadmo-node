@@ -1,0 +1,94 @@
+/* Stili condivisi NodeLab (si appoggiano a Tailwind via CDN) */
+
+.animate-fade-in { animation: fadeIn 0.45s ease-out forwards; opacity: 0; }
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #111827; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+
+/* codice inline nelle slide e nelle pagine */
+.prose-code code:not(pre code),
+code.inline {
+  background: #0b1220;
+  border: 1px solid #1f2937;
+  color: #86efac;
+  padding: 0.05em 0.35em;
+  border-radius: 0.35em;
+  font-size: 0.9em;
+}
+
+/* blocchi di codice evidenziati */
+pre.code {
+  background: #0b1220 !important;
+  border: 1px solid #1f2937;
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  overflow: auto;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+pre.code code.hljs { background: transparent !important; padding: 0 !important; }
+pre.code.small { font-size: 0.82rem; }
+
+/* terminale / output */
+.term {
+  background: #030712;
+  border: 1px solid #1f2937;
+  border-radius: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.term-out { white-space: pre-wrap; word-break: break-word; }
+.term-out .stderr { color: #fca5a5; }
+.term-out .info { color: #93c5fd; }
+.term-out .dim { color: #6b7280; }
+.term-out .ok { color: #4ade80; }
+.term-out .cmd { color: #e5e7eb; }
+.term-out .prompt { color: #4ade80; }
+
+/* soluzioni a scomparsa (come nel corso Linux) */
+.solution-container { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out, opacity 0.4s ease-out; opacity: 0; }
+.solution-container.open { max-height: 2000px; opacity: 1; }
+
+/* CodeMirror dentro i laboratori */
+.lab-editor .CodeMirror {
+  height: 340px;
+  font-size: 14px;
+  line-height: 1.5;
+  background: #0b1220;
+  border-radius: 0 0 0.75rem 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.lab-editor .CodeMirror-gutters { background: #0b1220; border-right: 1px solid #1f2937; }
+.lab-editor textarea.fallback {
+  width: 100%; height: 340px; background: #0b1220; color: #e5e7eb; padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px;
+  border: 0; outline: none; resize: vertical; border-radius: 0 0 0.75rem 0.75rem; tab-size: 2;
+}
+
+/* slide */
+.slide-items li { line-height: 1.45; }
+.slide-items strong { color: #fff; }
+.slide-root pre.code { max-height: 58vh; }
+
+/* chip del gioco "indovina l'output" */
+.chip { user-select: none; }
+
+kbd {
+  background: #1f2937; border: 1px solid #374151; border-bottom-width: 2px;
+  border-radius: 0.3rem; padding: 0 0.35rem; font-size: 0.85em; font-family: ui-monospace, monospace;
+}
+
+@media print {
+  nav, footer, .no-print { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+}

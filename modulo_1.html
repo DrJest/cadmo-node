@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 1 · Node.js e il modello asincrono — NodeLab</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Evidenziazione del codice -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100">
+  <script src="assets/widgets.js"></script>
+  <script>
+    // Schema dell'architettura di Node.js (slide custom)
+    const ARCH_HTML = `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+        <div class="bg-gray-900/70 border border-yellow-500/40 rounded-xl p-5">
+          <div class="text-yellow-300 font-bold text-xl mb-2">Il tuo codice JS</div>
+          <div class="text-gray-400">app.js, i tuoi moduli, i pacchetti npm</div>
+        </div>
+        <div class="bg-gray-900/70 border border-green-500/40 rounded-xl p-5">
+          <div class="text-green-300 font-bold text-xl mb-2">API di Node.js</div>
+          <div class="text-gray-400"><code class="inline">fs</code> <code class="inline">http</code> <code class="inline">path</code> <code class="inline">events</code> <code class="inline">crypto</code>…</div>
+        </div>
+        <div class="bg-gray-900/70 border border-gray-600 rounded-xl p-5">
+          <div class="text-gray-200 font-bold text-xl mb-2">Sistema operativo</div>
+          <div class="text-gray-400">file, rete, timer, processi</div>
+        </div>
+      </div>
+      <div class="flex justify-center my-3 text-gray-500"><i data-lucide="arrow-down-up" class="w-6 h-6"></i></div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-900/70 border border-blue-500/40 rounded-xl p-5">
+          <div class="text-blue-300 font-bold text-xl mb-3 flex items-center gap-2"><i data-lucide="cpu" class="w-5 h-5"></i>V8 (di Google, lo stesso di Chrome)</div>
+          <ul class="text-gray-300 space-y-1.5 text-lg">
+            <li>• Esegue il JavaScript (lo compila in codice macchina)</li>
+            <li>• <strong>Call stack</strong>: le funzioni in esecuzione</li>
+            <li>• <strong>Heap</strong>: la memoria degli oggetti</li>
+          </ul>
+        </div>
+        <div class="bg-gray-900/70 border border-purple-500/40 rounded-xl p-5">
+          <div class="text-purple-300 font-bold text-xl mb-3 flex items-center gap-2"><i data-lucide="refresh-cw" class="w-5 h-5"></i>libuv (scritta in C)</div>
+          <ul class="text-gray-300 space-y-1.5 text-lg">
+            <li>• L'<strong>event loop</strong></li>
+            <li>• I/O asincrono di file e rete</li>
+            <li>• <strong>Thread pool</strong> (4 thread) per i lavori pesanti</li>
+          </ul>
+        </div>
+      </div>`;
+
+    // Schema delle fasi dell'event loop (slide custom)
+    const PHASES_HTML = `
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div class="space-y-2">
+          ${[
+            ['timers', 'callback di setTimeout e setInterval scaduti', 'text-blue-300 border-blue-500/40'],
+            ['pending callbacks', 'alcune callback di sistema rimandate', 'text-gray-300 border-gray-600'],
+            ['poll', 'attende e gestisce l\'I/O (file, rete): il cuore del loop', 'text-green-300 border-green-500/40'],
+            ['check', 'callback di setImmediate', 'text-cyan-300 border-cyan-500/40'],
+            ['close callbacks', 'chiusure, es. socket.on(\'close\')', 'text-gray-300 border-gray-600'],
+          ].map(([n, d, c], i) => `
+            <div class="flex items-center gap-3 bg-gray-900/70 border ${c.split(' ')[1]} rounded-lg px-4 py-2.5">
+              <span class="font-mono text-gray-500 w-5">${i + 1}</span>
+              <span class="font-mono font-bold ${c.split(' ')[0]} w-44 shrink-0">${n}</span>
+              <span class="text-gray-300">${d}</span>
+            </div>`).join('<div class="text-center text-gray-600 leading-none">↓</div>')}
+          <div class="text-center text-gray-500 text-sm font-mono pt-1">↻ si ricomincia finché c'è lavoro da fare</div>
+        </div>
+        <div class="bg-gray-900/70 border border-pink-500/40 rounded-xl p-5">
+          <div class="text-pink-300 font-bold text-xl mb-3 flex items-center gap-2"><i data-lucide="zap" class="w-5 h-5"></i>Microtask: hanno la precedenza</div>
+          <p class="text-gray-300 text-lg mb-3">Dopo <strong>ogni</strong> callback (e dopo lo script principale) Node svuota due code speciali, prima di passare oltre:</p>
+          <ol class="text-gray-300 text-lg space-y-2">
+            <li>1. <code class="inline">process.nextTick()</code> — la più prioritaria</li>
+            <li>2. Promise: <code class="inline">.then()</code>, <code class="inline">.catch()</code>, codice dopo <code class="inline">await</code></li>
+          </ol>
+          <p class="text-gray-400 mt-4">Ordine da ricordare: <span class="font-mono text-white">sincrono → nextTick → Promise → timers → … → check</span></p>
+        </div>
+      </div>`;
+
+    window.DECK = {
+      module: 'MODULO 1',
+      title: 'Node.js e il modello asincrono',
+      prompt: 'modulo-1',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover',
+          title: 'Node.js e il modello asincrono',
+          subtitle: 'Cos\'è Node.js, come si installa, come "pensa" (event loop) e come si organizza il codice in moduli.',
+          icon: 'hexagon',
+          meta: ['4 ore', 'Lezione 1'],
+        },
+        {
+          type: 'agenda',
+          part: 'LEZIONE 1',
+          title: 'La scaletta di oggi',
+          icon: 'calendar-clock',
+          rows: [
+            ['Cos\'è Node.js, perché usarlo, installazione e primo script', 'teoria'],
+            ['Single thread, I/O non bloccante e **event loop**', 'teoria'],
+            ['Pausa', 'pausa'],
+            ['Callback, convenzione error-first e callback hell', 'teoria'],
+            ['**Promise** e **async/await**', 'demo'],
+            ['Moduli: CommonJS, ES Modules, core / locali / npm', 'demo'],
+          ],
+        },
+
+        // ------------------------------------------------ INTRODUZIONE
+        {
+          part: 'INTRODUZIONE',
+          title: 'Cos\'è Node.js?',
+          icon: 'hexagon',
+          iconColor: 'text-green-400',
+          items: [
+            'Un **runtime**: un ambiente che esegue JavaScript **fuori dal browser**.',
+            'Creato da **Ryan Dahl** nel **2009**, oggi gestito dalla OpenJS Foundation.',
+            'Motore **V8** (lo stesso di Chrome) + libreria **libuv** per l\'I/O asincrono.',
+            'Non è un linguaggio e non è un framework: è la "macchina" che fa girare il JS sul server.',
+            'Lo usano Netflix, PayPal, LinkedIn, Uber, Trello… e moltissimi strumenti per sviluppatori (npm, VS Code, Vite).',
+          ],
+        },
+        {
+          type: 'compare',
+          part: 'INTRODUZIONE',
+          title: 'Browser vs Node.js',
+          icon: 'scale',
+          iconColor: 'text-blue-400',
+          columns: [
+            {
+              title: 'JavaScript nel browser',
+              color: 'blue',
+              icon: 'globe',
+              items: [
+                'Ha `window` e `document` (il DOM)',
+                'Gestisce click, pagine, interfacce',
+                'Sandbox: non può leggere i file del PC',
+                'Versione decisa dal browser dell\'utente',
+              ],
+            },
+            {
+              title: 'JavaScript in Node.js',
+              color: 'green',
+              icon: 'server',
+              items: [
+                'Niente DOM: `document` non esiste!',
+                'Legge e scrive file (`fs`), apre porte di rete (`http`)',
+                'Accede al processo e al sistema (`process`, `os`)',
+                'Versione decisa da noi, sul nostro server',
+              ],
+            },
+          ],
+          footer: 'In comune: il linguaggio e l\'oggetto globale `globalThis` (in Node c\'è anche l\'alias `global`).',
+        },
+        {
+          part: 'INTRODUZIONE',
+          title: 'Perché Node.js?',
+          icon: 'rocket',
+          iconColor: 'text-orange-400',
+          items: [
+            '**I/O non bloccante**: mentre aspetta un file o un database, serve altre richieste.',
+            'Ottimo per API, applicazioni real-time (chat, notifiche), microservizi.',
+            '**Un solo linguaggio** per frontend e backend: JavaScript ovunque.',
+            '**npm**: il registro di pacchetti più grande al mondo (milioni di librerie pronte).',
+            'Meno adatto a calcoli pesanti sulla CPU (video encoding, machine learning…).',
+          ],
+        },
+
+        // ------------------------------------------------ INSTALLAZIONE
+        {
+          type: 'compare',
+          part: 'INSTALLAZIONE',
+          title: 'Versioni: LTS vs Current',
+          icon: 'git-branch',
+          iconColor: 'text-purple-400',
+          columns: [
+            {
+              title: 'LTS — Long Term Support',
+              color: 'green',
+              icon: 'shield-check',
+              items: [
+                'Versioni **pari** (20, 22, 24…)',
+                'Stabili e supportate per circa 30 mesi',
+                'Oggi: **Node 24** (LTS attiva)',
+                'Quella da usare in produzione e nel corso',
+              ],
+            },
+            {
+              title: 'Current',
+              color: 'yellow',
+              icon: 'flask-conical',
+              items: [
+                'L\'ultima versione uscita, con le novità',
+                'Le versioni **dispari** non diventano mai LTS',
+                'Utile per provare funzionalità nuove',
+                'Sconsigliata per progetti reali',
+              ],
+            },
+          ],
+          footer: 'Regola semplice: scarica sempre la versione **LTS** indicata su **nodejs.org**.',
+        },
+        {
+          type: 'code',
+          part: 'INSTALLAZIONE',
+          title: 'Installare Node.js',
+          icon: 'download',
+          iconColor: 'text-green-400',
+          items: [
+            '**Installer** da nodejs.org (Windows / macOS): il modo più semplice.',
+            '**Version manager**: `nvm` (macOS/Linux), `nvm-windows` o `fnm`. Permettono di avere più versioni e cambiarle al volo.',
+            'Con Node arriva anche **npm**, il gestore di pacchetti.',
+            'Verifica sempre l\'installazione dal terminale.',
+          ],
+          lang: 'bash',
+          code: `# con nvm (macOS / Linux)
+nvm install --lts
+nvm use --lts
+
+# verifica: entrambi devono rispondere con un numero di versione
+node -v
+npm -v`,
+          output: `v24.11.0
+11.6.2`,
+        },
+        {
+          type: 'code',
+          part: 'INSTALLAZIONE',
+          title: 'Il REPL e il primo script',
+          icon: 'terminal',
+          iconColor: 'text-green-400',
+          items: [
+            '`node` senza argomenti apre il **REPL**: Read, Eval, Print, Loop.',
+            'Utile per provare al volo un\'espressione. Si esce con `.exit` o Ctrl+D.',
+            'Per eseguire un file: `node nomefile.js`.',
+            'Il file si scrive con un editor (useremo **VS Code**).',
+          ],
+          lang: 'bash',
+          code: `$ node
+Welcome to Node.js v24.11.0.
+> 2 + 3
+5
+> 'ciao'.toUpperCase()
+'CIAO'
+> .exit
+
+$ echo "console.log('Ciao da Node.js!')" > app.js
+$ node app.js`,
+          output: 'Ciao da Node.js!',
+        },
+
+        // ------------------------------------------------ MODELLO DI ESECUZIONE
+        {
+          part: 'MODELLO DI ESECUZIONE',
+          title: 'Un solo thread',
+          icon: 'layers',
+          iconColor: 'text-yellow-400',
+          items: [
+            'Il tuo JavaScript gira su **un solo thread**: fa una cosa alla volta.',
+            'La **call stack** è la pila delle funzioni in esecuzione: l\'ultima entrata è la prima a uscire.',
+            'Se una funzione impiega 5 secondi, per 5 secondi **tutto il resto è fermo**.',
+            'Allora come fa Node a servire migliaia di utenti? **Non aspetta**: delega l\'attesa.',
+          ],
+        },
+        {
+          type: 'compare',
+          part: 'MODELLO DI ESECUZIONE',
+          title: 'Bloccante vs non bloccante',
+          icon: 'utensils',
+          iconColor: 'text-orange-400',
+          columns: [
+            {
+              title: 'Cameriere "bloccante"',
+              color: 'red',
+              icon: 'hourglass',
+              items: [
+                'Prende l\'ordinazione del tavolo 1',
+                'Va in cucina e **aspetta** che il piatto sia pronto',
+                'Solo dopo passa al tavolo 2',
+                'Con 50 tavoli… disastro',
+              ],
+            },
+            {
+              title: 'Cameriere "non bloccante" (Node)',
+              color: 'green',
+              icon: 'zap',
+              items: [
+                'Prende l\'ordinazione e la lascia alla cucina',
+                'Intanto serve gli altri tavoli',
+                'Quando la cucina chiama ("piatto pronto!") lo porta',
+                'Un solo cameriere, tanti tavoli',
+              ],
+            },
+          ],
+          footer: 'Il cameriere è il **thread JavaScript**, la cucina è **il sistema operativo / libuv**, il "piatto pronto" è una **callback**.',
+        },
+        {
+          type: 'custom',
+          part: 'MODELLO DI ESECUZIONE',
+          title: 'L\'architettura di Node.js',
+          icon: 'boxes',
+          iconColor: 'text-blue-400',
+          html: ARCH_HTML,
+        },
+        {
+          type: 'custom',
+          part: 'EVENT LOOP',
+          title: 'Le fasi dell\'event loop',
+          icon: 'refresh-cw',
+          iconColor: 'text-green-400',
+          html: PHASES_HTML,
+        },
+        {
+          type: 'custom',
+          part: 'EVENT LOOP',
+          title: 'L\'event loop passo passo',
+          icon: 'footprints',
+          iconColor: 'text-green-400',
+          html: '<div class="ev-demo"></div>',
+          mount(el) {
+            EventLoopViz.mount(el.querySelector('.ev-demo'), {
+              code: [
+                "console.log('A');",
+                "setTimeout(() => console.log('B'), 0);",
+                "Promise.resolve().then(() => console.log('C'));",
+                "process.nextTick(() => console.log('D'));",
+                "console.log('E');",
+              ],
+              steps: [
+                { line: 0, stack: [], out: [], note: 'Lanciamo `node app.js`. Tutte le code sono vuote. Premi **Passo successivo**.' },
+                { line: 0, stack: ['(script principale)'], out: [], note: 'Node esegue il file dall\'alto in basso: lo script principale è sulla **call stack**.' },
+                { line: 1, stack: ['(script principale)', "console.log('A')"], out: ['A'], note: 'Riga 1: codice **sincrono**, eseguito subito. Stampa `A`.' },
+                { line: 2, stack: ['(script principale)', 'setTimeout(…)'], timers: ["() => console.log('B')"], out: ['A'], note: 'Riga 2: `setTimeout` **non aspetta**. Affida il timer a libuv; dopo 0 ms la callback è pronta nella **coda timers**.' },
+                { line: 3, stack: ['(script principale)', 'Promise.resolve().then(…)'], timers: ["() => console.log('B')"], micro: ["() => console.log('C')"], out: ['A'], note: 'Riga 3: la Promise è già risolta, quindi la callback del `.then` va nella **coda dei microtask**.' },
+                { line: 4, stack: ['(script principale)', 'process.nextTick(…)'], timers: ["() => console.log('B')"], micro: ["() => console.log('C')"], ticks: ["() => console.log('D')"], out: ['A'], note: 'Riga 4: `process.nextTick` mette la callback nella sua coda speciale, la **più prioritaria** di tutte.' },
+                { line: 5, stack: ['(script principale)', "console.log('E')"], timers: ["() => console.log('B')"], micro: ["() => console.log('C')"], ticks: ["() => console.log('D')"], out: ['A', 'E'], note: 'Riga 5: altro codice sincrono. Stampa `E`.' },
+                { stack: [], timers: ["() => console.log('B')"], micro: ["() => console.log('C')"], ticks: ["() => console.log('D')"], out: ['A', 'E'], note: 'Lo script è finito e lo stack è **vuoto**. Prima di entrare nell\'event loop Node svuota i microtask: **prima nextTick, poi le Promise**.' },
+                { stack: ["() => console.log('D')"], timers: ["() => console.log('B')"], micro: ["() => console.log('C')"], out: ['A', 'E', 'D'], note: 'Si svuota la coda **nextTick**: stampa `D`.' },
+                { stack: ["() => console.log('C')"], timers: ["() => console.log('B')"], out: ['A', 'E', 'D', 'C'], note: 'Poi la coda delle **Promise**: stampa `C`.' },
+                { stack: ["() => console.log('B')"], out: ['A', 'E', 'D', 'C', 'B'], phase: 'timers', note: 'Ora parte l\'event loop. Fase **timers**: il timer è scaduto, la sua callback va sullo stack e stampa `B`.' },
+                { stack: [], out: ['A', 'E', 'D', 'C', 'B'], note: 'Nessun timer e nessun I/O in sospeso: il processo **termina**. Output finale: `A E D C B`.' },
+              ],
+            });
+          },
+        },
+        {
+          type: 'code',
+          part: 'EVENT LOOP',
+          title: 'Indovina l\'output',
+          icon: 'help-circle',
+          iconColor: 'text-yellow-400',
+          items: [
+            'Prima di guardare la soluzione, scrivi l\'ordine sul quaderno.',
+            'Ricorda la priorità: **sincrono** → **nextTick** → **Promise** → **timers**.',
+          ],
+          file: 'indovina.js',
+          code: `console.log('1');
+setTimeout(() => console.log('2'), 0);
+Promise.resolve().then(() => console.log('3'));
+process.nextTick(() => console.log('4'));
+console.log('5');`,
+          output: `1
+5
+4
+3
+2`,
+          reveal: true,
+        },
+        {
+          type: 'code',
+          part: 'EVENT LOOP',
+          title: 'Non bloccare l\'event loop!',
+          icon: 'alert-triangle',
+          iconColor: 'text-red-400',
+          items: [
+            'Un ciclo pesante sul thread principale **ferma tutto il server**.',
+            'Durante quei secondi nessun altro utente riceve risposta.',
+            'Nei server usa le versioni **asincrone** (`fs.readFile`, non `fs.readFileSync`).',
+            'Le funzioni `...Sync` vanno bene solo all\'avvio o negli script.',
+          ],
+          file: 'server-lento.js',
+          code: `const http = require('node:http');
+
+http.createServer((req, res) => {
+  if (req.url === '/lento') {
+    // ❌ 3 secondi di CPU: blocca TUTTE le richieste
+    const fine = Date.now() + 3000;
+    while (Date.now() < fine) {}
+  }
+  res.end('Ciao!');
+}).listen(3000);`,
+        },
+
+        // ------------------------------------------------ CALLBACK
+        {
+          type: 'code',
+          part: 'CALLBACK',
+          title: 'Le callback',
+          icon: 'corner-down-right',
+          iconColor: 'text-purple-400',
+          items: [
+            'Una **callback** è una funzione passata come argomento a un\'altra funzione, che la chiamerà "più tardi".',
+            '**Sincrona**: viene chiamata subito (es. `array.map`).',
+            '**Asincrona**: viene chiamata quando un evento è pronto (timer, file, rete).',
+          ],
+          file: 'callback.js',
+          code: `const numeri = [1, 2, 3];
+const doppi = numeri.map((n) => n * 2); // callback sincrona
+console.log(doppi);
+
+setTimeout(() => console.log('dopo 1 secondo'), 1000); // asincrona
+console.log('fine script');`,
+          output: `[ 2, 4, 6 ]
+fine script
+dopo 1 secondo`,
+        },
+        {
+          type: 'code',
+          part: 'CALLBACK',
+          title: 'La convenzione error-first',
+          icon: 'shield-alert',
+          iconColor: 'text-red-400',
+          items: [
+            'Nelle API di Node la callback riceve **prima l\'errore**, poi il risultato: `(err, data)`.',
+            'Se tutto va bene `err` è `null`.',
+            'Controlla **sempre** `err` per primo e usa `return` per non proseguire.',
+          ],
+          file: 'leggi.js',
+          code: `const fs = require('node:fs');
+
+fs.readFile('non-esiste.txt', 'utf8', (err, data) => {
+  if (err) {
+    console.error('Errore:', err.message);
+    return;
+  }
+  console.log(data);
+});`,
+          output: `Errore: ENOENT: no such file or directory, open 'non-esiste.txt'`,
+        },
+        {
+          type: 'code',
+          part: 'CALLBACK',
+          title: 'Callback hell',
+          icon: 'flame',
+          iconColor: 'text-orange-400',
+          items: [
+            'Operazioni in sequenza = callback **dentro** callback.',
+            'Il codice si sposta sempre più a destra: la "piramide della sventura".',
+            'Difficile da leggere, da modificare e da gestire negli errori.',
+            'Soluzione: **Promise** e **async/await**.',
+          ],
+          file: 'piramide.js',
+          code: `leggiUtente(id, (err, utente) => {
+  if (err) return gestisci(err);
+  leggiOrdini(utente, (err, ordini) => {
+    if (err) return gestisci(err);
+    calcolaTotale(ordini, (err, totale) => {
+      if (err) return gestisci(err);
+      inviaEmail(utente, totale, (err) => {
+        if (err) return gestisci(err);
+        console.log('Fatto!'); // 😵
+      });
+    });
+  });
+});`,
+        },
+
+        // ------------------------------------------------ PROMISE
+        {
+          type: 'code',
+          part: 'PROMISE',
+          title: 'Le Promise',
+          icon: 'handshake',
+          iconColor: 'text-blue-400',
+          items: [
+            'Una **Promise** è un oggetto che rappresenta un risultato **futuro**.',
+            'Tre stati: **pending** (in attesa), **fulfilled** (risolta), **rejected** (rifiutata).',
+            'Si crea con `new Promise((resolve, reject) => { ... })`.',
+            'Lo stato cambia una volta sola.',
+          ],
+          file: 'promise.js',
+          code: `const attendi = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+console.log('inizio');
+attendi(500).then(() => console.log('passati 500 ms'));
+console.log('la Promise è partita, intanto continuo');`,
+          output: `inizio
+la Promise è partita, intanto continuo
+passati 500 ms`,
+        },
+        {
+          type: 'code',
+          part: 'PROMISE',
+          title: 'then, catch, finally',
+          icon: 'link',
+          iconColor: 'text-blue-400',
+          items: [
+            '`.then()` riceve il valore e **restituisce una nuova Promise**: si possono concatenare.',
+            'Un errore (o un `throw`) salta direttamente al primo `.catch()`.',
+            '`.finally()` viene eseguito sempre, sia in caso di successo che di errore.',
+          ],
+          file: 'catena.js',
+          code: `Promise.resolve(2)
+  .then((n) => n * 10)
+  .then((n) => {
+    console.log('valore:', n);
+    throw new Error('qualcosa è andato storto');
+  })
+  .then(() => console.log('questa non viene eseguita'))
+  .catch((err) => console.log('catch:', err.message))
+  .finally(() => console.log('finally: sempre eseguito'));`,
+          output: `valore: 20
+catch: qualcosa è andato storto
+finally: sempre eseguito`,
+        },
+        {
+          type: 'code',
+          part: 'PROMISE',
+          title: 'Combinare più Promise',
+          icon: 'git-merge',
+          iconColor: 'text-blue-400',
+          items: [
+            '`Promise.all`: aspetta **tutte**; fallisce al primo errore.',
+            '`Promise.allSettled`: aspetta tutte e riporta l\'esito di ognuna.',
+            '`Promise.race`: vince la **prima che termina** (bene o male).',
+            '`Promise.any`: vince la **prima che ha successo**.',
+          ],
+          file: 'combinare.js',
+          small: true,
+          code: `const ok = (ms, v) => new Promise((res) => setTimeout(() => res(v), ms));
+const ko = (ms, e) => new Promise((_, rej) => setTimeout(() => rej(e), ms));
+
+async function main() {
+  console.log(await Promise.all([ok(100, 'a'), ok(200, 'b')]));
+  console.log(await Promise.allSettled([ok(100, 'a'), ko(50, 'ko')]));
+  console.log(await Promise.race([ok(100, 'lento'), ok(50, 'veloce')]));
+  console.log(await Promise.any([ko(10, 'ko'), ok(80, 'primo ok')]));
+}
+main();`,
+          output: `[ 'a', 'b' ]
+[
+  { status: 'fulfilled', value: 'a' },
+  { status: 'rejected', reason: 'ko' }
+]
+veloce
+primo ok`,
+        },
+        {
+          type: 'code',
+          part: 'PROMISE',
+          title: 'Dalle callback alle Promise',
+          icon: 'repeat',
+          iconColor: 'text-blue-400',
+          items: [
+            '`util.promisify` trasforma una funzione error-first in una che restituisce una Promise.',
+            'Molti moduli core offrono già la versione a Promise: `node:fs/promises`, `node:timers/promises`.',
+            'Nel codice moderno si usano quasi sempre queste.',
+          ],
+          file: 'promisify.js',
+          code: `const util = require('node:util');
+const fs = require('node:fs');
+
+// 1) promisify di una funzione con callback
+const readFileP = util.promisify(fs.readFile);
+readFileP('dati.txt', 'utf8').then(console.log);
+
+// 2) meglio: l'API a Promise già pronta
+const fsp = require('node:fs/promises');
+fsp.readFile('dati.txt', 'utf8').then(console.log);`,
+        },
+
+        // ------------------------------------------------ ASYNC / AWAIT
+        {
+          type: 'code',
+          part: 'ASYNC / AWAIT',
+          title: 'async / await',
+          icon: 'timer',
+          iconColor: 'text-cyan-400',
+          items: [
+            '`async` davanti a una funzione: restituisce **sempre una Promise**.',
+            '`await` (solo dentro funzioni `async`) mette in pausa **quella funzione** finché la Promise non è risolta.',
+            'Il resto del programma intanto continua: l\'event loop non si blocca.',
+            'Codice asincrono che si legge come se fosse sincrono.',
+          ],
+          file: 'async.js',
+          code: `async function saluta() {
+  return 'ciao';
+}
+
+console.log(saluta());
+saluta().then((v) => console.log(v));`,
+          output: `Promise { 'ciao' }
+ciao`,
+        },
+        {
+          type: 'code',
+          part: 'ASYNC / AWAIT',
+          title: 'Gestire gli errori: try / catch',
+          icon: 'life-buoy',
+          iconColor: 'text-cyan-400',
+          items: [
+            'Con `await` una Promise rifiutata diventa un\'eccezione.',
+            'Si gestisce con il classico `try { } catch (err) { }`.',
+            'Una Promise rifiutata e non gestita fa **terminare il processo** (unhandled rejection).',
+          ],
+          file: 'config.js',
+          code: `const fs = require('node:fs/promises');
+
+async function leggiConfig() {
+  try {
+    const testo = await fs.readFile('config.json', 'utf8');
+    return JSON.parse(testo);
+  } catch (err) {
+    console.error('Config non trovata:', err.code);
+    return {};
+  }
+}
+
+leggiConfig().then((cfg) => console.log('config:', cfg));`,
+          output: `Config non trovata: ENOENT
+config: {}`,
+        },
+        {
+          type: 'code',
+          part: 'ASYNC / AWAIT',
+          title: 'Sequenziale vs parallelo',
+          icon: 'gauge',
+          iconColor: 'text-cyan-400',
+          items: [
+            '`await` in un ciclo: le operazioni partono **una dopo l\'altra** (tempi sommati).',
+            '`Promise.all`: partono **tutte insieme** (vale il tempo della più lenta).',
+            'Usa il sequenziale solo se ogni passo dipende dal precedente.',
+          ],
+          file: 'tempi.js',
+          small: true,
+          code: `const attendi = (ms) => new Promise((r) => setTimeout(r, ms));
+const durata = (t) => Math.round((Date.now() - t) / 100) * 100 + ' ms';
+
+async function main() {
+  let t = Date.now();
+  for (const ms of [100, 200, 300]) await attendi(ms); // uno dopo l'altro
+  console.log('sequenziale:', durata(t));
+
+  t = Date.now();
+  await Promise.all([100, 200, 300].map(attendi)); // tutti insieme
+  console.log('parallelo:', durata(t));
+}
+main();`,
+          output: `sequenziale: 600 ms
+parallelo: 300 ms`,
+        },
+        {
+          type: 'code',
+          part: 'ASYNC / AWAIT',
+          title: 'Top-level await',
+          icon: 'arrow-up-to-line',
+          iconColor: 'text-cyan-400',
+          items: [
+            'Negli **ES Modules** (file `.mjs` o `"type": "module"`) puoi usare `await` anche fuori da una funzione.',
+            'Nei file CommonJS no: serve una funzione `async` (es. `main()`).',
+          ],
+          file: 'leggi.mjs',
+          code: `import { readFile } from 'node:fs/promises';
+
+const testo = await readFile('appunti.txt', 'utf8');
+console.log(testo.length, 'caratteri');`,
+        },
+
+        // ------------------------------------------------ MODULI
+        {
+          part: 'MODULI',
+          title: 'Perché i moduli?',
+          icon: 'puzzle',
+          iconColor: 'text-pink-400',
+          items: [
+            'Un unico file da 3000 righe è impossibile da gestire.',
+            'Un **modulo** è un file che **esporta** qualcosa (funzioni, oggetti, classi) e può **importare** altri moduli.',
+            'Ogni modulo ha il suo **scope**: le variabili non esportate restano private.',
+            'In Node esistono due sistemi: **CommonJS** (storico) ed **ES Modules** (standard JavaScript).',
+          ],
+        },
+        {
+          type: 'compare',
+          part: 'MODULI',
+          title: 'CommonJS: require e module.exports',
+          icon: 'package',
+          iconColor: 'text-pink-400',
+          columns: [
+            {
+              title: 'math.js (esporta)',
+              color: 'pink',
+              file: 'math.js',
+              code: `function somma(a, b) {
+  return a + b;
+}
+const PI = 3.14;
+
+module.exports = { somma, PI };
+// oppure, una alla volta:
+// exports.somma = somma;`,
+            },
+            {
+              title: 'app.js (importa)',
+              color: 'green',
+              file: 'app.js',
+              code: `const { somma, PI } = require('./math');
+
+console.log(somma(2, 3)); // 5
+console.log(PI);          // 3.14`,
+              items: ['`require` è sincrono e mette il modulo in **cache**', 'Il default in Node per i file `.js`'],
+            },
+          ],
+        },
+        {
+          type: 'compare',
+          part: 'MODULI',
+          title: 'ES Modules: import ed export',
+          icon: 'package-open',
+          iconColor: 'text-pink-400',
+          columns: [
+            {
+              title: 'math.mjs',
+              color: 'pink',
+              file: 'math.mjs',
+              code: `export function somma(a, b) {
+  return a + b;
+}
+
+export default function quadrato(n) {
+  return n * n;
+}`,
+            },
+            {
+              title: 'app.mjs',
+              color: 'green',
+              file: 'app.mjs',
+              code: `import quadrato, { somma } from './math.mjs';
+
+console.log(somma(2, 3), quadrato(4)); // 5 16
+// al posto di __dirname:
+console.log(import.meta.dirname);`,
+              items: ['Si attivano con estensione `.mjs` o `"type": "module"` nel package.json', 'L\'estensione nel percorso è **obbligatoria**'],
+            },
+          ],
+        },
+        {
+          type: 'code',
+          part: 'MODULI',
+          title: 'Tre tipi di moduli',
+          icon: 'folder-tree',
+          iconColor: 'text-pink-400',
+          items: [
+            '**Core**: inclusi in Node. Meglio con il prefisso `node:`.',
+            '**Locali**: i tuoi file. Iniziano con `./` o `../`.',
+            '**npm**: installati in `node_modules` con `npm install`. Solo il nome del pacchetto.',
+            'Come capisce Node? Se c\'è `./` o `../` è un file; altrimenti cerca prima tra i core, poi in `node_modules` (salendo di cartella in cartella).',
+          ],
+          file: 'app.js',
+          code: `// 1) core
+const fs = require('node:fs');
+const path = require('node:path');
+
+// 2) locale (estensione .js facoltativa in CommonJS)
+const { somma } = require('./utils/math');
+
+// 3) pacchetto npm (dopo: npm install express)
+const express = require('express');`,
+        },
+        {
+          type: 'code',
+          part: 'MODULI',
+          title: 'npm in breve',
+          icon: 'package-plus',
+          iconColor: 'text-red-400',
+          items: [
+            '`npm init -y` crea il **package.json**: la carta d\'identità del progetto.',
+            '`npm install express` scarica il pacchetto in **node_modules** e lo annota nelle `dependencies`.',
+            '`node_modules` non si condivide (né su Git): si ricrea con `npm install`.',
+            'Domani lo vediamo **in profondità**, con un simulatore.',
+          ],
+          lang: 'bash',
+          code: `mkdir mio-progetto && cd mio-progetto
+npm init -y
+npm install express
+ls
+# node_modules  package-lock.json  package.json`,
+        },
+
+        // ------------------------------------------------ CHIUSURA
+        {
+          part: 'RIEPILOGO',
+          title: 'Cosa ci portiamo a casa',
+          icon: 'check-circle-2',
+          iconColor: 'text-green-400',
+          items: [
+            'Node.js = JavaScript sul server: **V8 + libuv**. Usiamo sempre la **LTS**.',
+            'Un solo thread, ma I/O **non bloccante** grazie all\'**event loop**.',
+            'Ordine: sincrono → `nextTick` → Promise → timers → I/O → `setImmediate`.',
+            'Callback (error-first) → **Promise** → **async/await** con `try/catch`.',
+            'Moduli: `require`/`module.exports` (CommonJS) o `import`/`export` (ESM); core, locali, npm.',
+          ],
+        },
+        {
+          part: 'PROSSIMA LEZIONE',
+          title: 'Lezione 2',
+          icon: 'calendar-arrow-up',
+          iconColor: 'text-blue-400',
+          items: [
+            '**npm in profondità**: package.json, dipendenze, versioni (semver), scripts, npx, nodemon.',
+            '**process**: argomenti da riga di comando, variabili d\'ambiente, codici di uscita.',
+            '**File system**: `fs` e `path`, leggere e scrivere file JSON.',
+            '**EventEmitter**: il modello a eventi di Node.',
+            'Con **simulazioni ed esercizi nel browser**: portate il PC! 💻',
+          ],
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esercitazioni Modulo 3 · HTTP e il modulo http — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <div class="flex items-center gap-4">
+          <a href="modulo_3.html" class="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2 hidden sm:flex">
+            <i data-lucide="presentation" class="w-4 h-4"></i> Slide
+          </a>
+          <a href="./" class="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Home
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="bg-gray-950 border-b border-gray-800 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center animate-fade-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-900/30 border border-cyan-500/30 text-xs text-cyan-400 font-mono mb-4 uppercase tracking-wider">
+        <i data-lucide="globe" class="w-4 h-4"></i> HTTP e server web
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4">Esercitazioni Modulo 3</h1>
+      <p class="text-gray-400 text-lg">Il protocollo HTTP, il client HTTP e il primo server con il modulo <code class="inline">http</code>:
+        routing, JSON, query string e body delle POST. Tutto gira <strong class="text-white">qui nel browser</strong>, ma il codice è Node.js vero.</p>
+      <div class="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 border border-gray-700 font-mono text-sm text-gray-400">
+        <i data-lucide="trophy" class="w-4 h-4 text-yellow-400"></i>
+        <span data-lab-progress="m3-lab1,m3-lab2,m3-lab3,m3-lab4,m3-lab5"></span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
+
+    <!-- PARTE 1: GUIDA RAPIDA -->
+    <section class="animate-fade-in delay-100">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="book-open" class="w-6 h-6 text-cyan-400"></i>
+        <h2 class="text-2xl font-bold text-white">1. Guida rapida: il modulo <code>http</code></h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-green-400 mb-2">Server minimo</h3>
+          <p class="text-gray-400 text-sm mb-3">Una callback per ogni richiesta; <code class="inline">listen</code> tiene acceso il processo.</p>
+          <pre class="code small"><code class="language-javascript">const http = require('http');
+
+const server = http.createServer((req, res) =&gt; {
+  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Ciao!');
+});
+
+server.listen(3000, () =&gt; console.log('http://localhost:3000'));</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-purple-400 mb-2">Rispondere in JSON</h3>
+          <p class="text-gray-400 text-sm mb-3">Header giusto + <code class="inline">JSON.stringify</code>. Una sola <code class="inline">res.end()</code> per richiesta!</p>
+          <pre class="code small"><code class="language-javascript">function inviaJson(res, status, dati, headers = {}) {
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    ...headers,
+  });
+  res.end(JSON.stringify(dati));
+}
+
+inviaJson(res, 201, nuovo, { Location: '/api/libri/4' });</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-yellow-400 mb-2">Routing e query string</h3>
+          <p class="text-gray-400 text-sm mb-3"><code class="inline">req.url</code> include la query: usa <code class="inline">new URL()</code> per separarle.</p>
+          <pre class="code small"><code class="language-javascript">const url = new URL(req.url, 'http://localhost');
+const parti = url.pathname.split('/').filter(Boolean);
+
+if (req.method === 'GET' &amp;&amp; url.pathname === '/saluta') {
+  const nome = url.searchParams.get('nome'); // null se manca
+  return inviaJson(res, 200, { messaggio: `Ciao ${nome}!` });
+}
+inviaJson(res, 404, { errore: 'Non trovato' }); // ultimo ramo</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-cyan-400 mb-2">Body di una POST</h3>
+          <p class="text-gray-400 text-sm mb-3">Il body arriva a pezzi: leggilo tutto, poi <code class="inline">JSON.parse</code> dentro <code class="inline">try/catch</code>.</p>
+          <pre class="code small"><code class="language-javascript">const server = http.createServer(async (req, res) =&gt; {
+  let body = '';
+  for await (const chunk of req) body += chunk;
+
+  let dati;
+  try {
+    dati = JSON.parse(body);
+  } catch {
+    return inviaJson(res, 400, { errore: 'JSON non valido' });
+  }
+  // ... usa dati
+});</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 md:col-span-2 flex flex-col md:flex-row gap-6 items-center">
+          <div class="flex-1">
+            <h3 class="text-lg font-bold text-red-400 mb-2">Status code da avere sotto mano</h3>
+            <p class="text-gray-400 text-sm">Scegli il codice che descrive <em>davvero</em> l'esito: il client (e chi lo programma) ti ringrazierà.</p>
+          </div>
+          <div class="flex-1 w-full grid grid-cols-2 gap-2 font-mono text-sm">
+            <span class="px-2 py-1 rounded bg-green-500/10 border border-green-500/30 text-green-300">200 OK</span>
+            <span class="px-2 py-1 rounded bg-green-500/10 border border-green-500/30 text-green-300">201 Created</span>
+            <span class="px-2 py-1 rounded bg-green-500/10 border border-green-500/30 text-green-300">204 No Content</span>
+            <span class="px-2 py-1 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-300">400 Bad Request</span>
+            <span class="px-2 py-1 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-300">404 Not Found</span>
+            <span class="px-2 py-1 rounded bg-yellow-500/10 border border-yellow-500/30 text-yellow-300">405 Method Not Allowed</span>
+            <span class="px-2 py-1 rounded bg-red-500/10 border border-red-500/30 text-red-300">500 Internal Server Error</span>
+            <span class="px-2 py-1 rounded bg-blue-500/10 border border-blue-500/30 text-blue-300">301/302 Redirect</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PARTE 2: HTTP INSPECTOR -->
+    <section class="animate-fade-in delay-200">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="pizza" class="w-6 h-6 text-orange-400"></i>
+        <h2 class="text-2xl font-bold text-white">2. HTTP Inspector: la Pizzeria API</h2>
+      </div>
+      <p class="text-gray-400 mb-6">Prima di scrivere un server, impariamo a <strong class="text-white">usarne</strong> uno. Qui sotto gira una piccola API già pronta
+        (scritta solo con il modulo <code class="inline">http</code>). Con il client HTTP completa le missioni: scegli il metodo, scrivi l'URL,
+        aggiungi un body JSON quando serve e osserva status code, header e il log del server. Endpoint disponibili:
+        <code class="inline">GET /</code>, <code class="inline">GET /api/pizze</code> (con <code class="inline">?max=</code>),
+        <code class="inline">GET /api/pizze/:id</code>, <code class="inline">POST /api/pizze</code>, <code class="inline">DELETE /api/pizze/:id</code>.</p>
+      <div id="pizzeria"></div>
+      <button onclick="toggleSolution('sol-pizzeria')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700">
+        <i data-lucide="eye" class="w-4 h-4"></i> Mostra le richieste delle missioni
+      </button>
+      <div id="sol-pizzeria" class="solution-container mt-4">
+        <div class="bg-gray-950 p-4 rounded-xl border border-green-900/50 font-mono text-sm text-gray-300 space-y-1">
+          <div><span class="text-green-500">1.</span> GET http://localhost:3000/api/pizze</div>
+          <div><span class="text-green-500">2.</span> GET http://localhost:3000/api/pizze/2</div>
+          <div><span class="text-green-500">3.</span> GET http://localhost:3000/api/pizze?max=8</div>
+          <div><span class="text-green-500">4.</span> POST http://localhost:3000/api/pizze &nbsp;<span class="text-gray-500">body:</span> {"nome": "Bufalina", "prezzo": 8.5}</div>
+          <div><span class="text-green-500">5.</span> POST http://localhost:3000/api/pizze &nbsp;<span class="text-gray-500">body:</span> {"nome": "Bufalina", "prezzo": -3} <span class="text-gray-500"># oppure un JSON rotto</span></div>
+          <div><span class="text-green-500">6.</span> GET http://localhost:3000/api/pizze/99</div>
+          <div><span class="text-green-500">7.</span> DELETE http://localhost:3000/api/pizze/1</div>
+          <div><span class="text-green-500">8.</span> GET http://localhost:3000/ <span class="text-gray-500"># poi clicca la tab "Anteprima"</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PARTE 3: LABORATORI -->
+    <section class="animate-fade-in delay-200">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-conical" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">3. Laboratori nel browser</h2>
+      </div>
+      <p class="text-gray-400 mb-6">Scrivi il codice nell'editor, premi <strong class="text-white">▶ Esegui</strong> per avviare il server e provalo con il client HTTP
+        che compare sotto. Quando sei convinto, premi <strong class="text-white">Verifica</strong>: i test faranno richieste vere al tuo server.
+        Il codice viene salvato automaticamente nel browser.</p>
+      <div class="space-y-10">
+        <article id="lab1"></article>
+        <article id="lab2"></article>
+        <article id="lab3"></article>
+        <article id="lab4"></article>
+        <article id="lab5"></article>
+      </div>
+    </section>
+
+    <!-- PARTE 4: MISSIONI SUL PC -->
+    <section class="animate-fade-in delay-300">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="laptop" class="w-6 h-6 text-emerald-400"></i>
+        <h2 class="text-2xl font-bold text-white">4. Missioni sul tuo PC</h2>
+      </div>
+      <p class="text-gray-400 mb-6">Ora tutto per davvero: terminale, VS Code, browser e <code class="inline">curl</code>.
+        Su Windows PowerShell scrivi <code class="inline">curl.exe</code> invece di <code class="inline">curl</code>.</p>
+
+      <div class="space-y-6">
+        <article class="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-emerald-900/50 flex items-center justify-center border border-emerald-500/30"><i data-lucide="folder-plus" class="w-5 h-5 text-emerald-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione 1: Il cantiere</h3>
+              <p class="text-sm text-emerald-400 font-mono">Focus: progetto, script npm, node --watch</p>
+            </div>
+          </div>
+          <div class="text-gray-300 space-y-2 mb-6 ml-2">
+            <p>1. Crea la cartella <code class="inline">pizzeria</code>, entraci e inizializza il progetto con <code class="inline">npm init -y</code>.</p>
+            <p>2. Crea <code class="inline">server.js</code> con il server minimo della guida rapida.</p>
+            <p>3. Aggiungi gli script <code class="inline">"dev": "node --watch server.js"</code> e <code class="inline">"start": "node server.js"</code> (con <code class="inline">npm pkg set</code> o modificando il file).</p>
+            <p>4. Avvia con <code class="inline">npm run dev</code>, cambia il testo della risposta, salva e osserva il riavvio automatico.</p>
+          </div>
+          <button onclick="toggleSolution('sol-pc1')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela Soluzione</button>
+          <div id="sol-pc1" class="solution-container mt-4">
+            <div class="bg-gray-950 p-4 rounded-xl border border-green-900/50 font-mono text-sm text-gray-300">
+              <span class="text-green-500">$</span> mkdir pizzeria<br>
+              <span class="text-green-500">$</span> cd pizzeria<br>
+              <span class="text-green-500">$</span> npm init -y<br>
+              <span class="text-green-500">$</span> code server.js <span class="text-gray-600"># incolla il server minimo e salva</span><br>
+              <span class="text-green-500">$</span> npm pkg set scripts.dev="node --watch server.js" scripts.start="node server.js"<br>
+              <span class="text-green-500">$</span> npm run dev<br>
+              <span class="text-gray-600"># apri http://localhost:3000, modifica server.js, salva: Node riavvia da solo</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-blue-900/50 flex items-center justify-center border border-blue-500/30"><i data-lucide="radar" class="w-5 h-5 text-blue-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione 2: L'investigatore di rete</h3>
+              <p class="text-sm text-blue-400 font-mono">Focus: DevTools e curl</p>
+            </div>
+          </div>
+          <div class="text-gray-300 space-y-2 mb-6 ml-2">
+            <p>1. Copia nel tuo <code class="inline">server.js</code> la soluzione del <strong>Laboratorio 5</strong> (Biblioteca) e avvialo.</p>
+            <p>2. Apri <code class="inline">http://localhost:3000/api/libri</code> nel browser, premi <kbd>F12</kbd> → tab <strong>Network</strong> e ricarica: individua metodo, status, <code class="inline">Content-Type</code> e dimensione.</p>
+            <p>3. Dal terminale ripeti la stessa richiesta con <code class="inline">curl -i</code> e confronta gli header.</p>
+            <p>4. Crea un libro con <code class="inline">curl</code> (POST + header + body JSON) e leggi l'header <code class="inline">Location</code> della risposta.</p>
+            <p>5. Prova a inviare un JSON rotto e un libro senza autore: che status ottieni?</p>
+          </div>
+          <button onclick="toggleSolution('sol-pc2')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela Soluzione</button>
+          <div id="sol-pc2" class="solution-container mt-4">
+            <div class="bg-gray-950 p-4 rounded-xl border border-green-900/50 font-mono text-sm text-gray-300">
+              <span class="text-green-500">$</span> curl -i http://localhost:3000/api/libri<br>
+              <span class="text-green-500">$</span> curl -i -X POST http://localhost:3000/api/libri -H "Content-Type: application/json" -d '{"titolo":"Se una notte d\'inverno un viaggiatore","autore":"Italo Calvino"}'<br>
+              <span class="text-gray-600"># HTTP/1.1 201 Created ... Location: /api/libri/4</span><br>
+              <span class="text-green-500">$</span> curl -i -X POST http://localhost:3000/api/libri -d 'questo non è json'<br>
+              <span class="text-gray-600"># HTTP/1.1 400 Bad Request</span><br>
+              <span class="text-green-500">$</span> curl -i -X POST http://localhost:3000/api/libri -H "Content-Type: application/json" -d '{"titolo":"Senza autore"}'<br>
+              <span class="text-gray-600"># HTTP/1.1 400 Bad Request</span><br>
+              <span class="text-gray-600"># Su PowerShell: curl.exe ... e per il body usa le virgolette doppie con escape: -d "{\"titolo\":\"X\",\"autore\":\"Y\"}"</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-red-900/50 flex items-center justify-center border border-red-500/30"><i data-lucide="flame" class="w-5 h-5 text-red-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione 3: Rompi il server (apposta)</h3>
+              <p class="text-sm text-red-400 font-mono">Focus: leggere i crash</p>
+            </div>
+          </div>
+          <div class="text-gray-300 space-y-2 mb-6 ml-2">
+            <p>1. Nella route <code class="inline">GET /</code> aggiungi una <code class="inline">res.setHeader('X-Test', '1')</code> <strong>dopo</strong> la <code class="inline">res.end()</code>. Fai la richiesta: cosa succede al server? Leggi con calma lo stack trace (file, riga, colonna).</p>
+            <p>2. Ripristina, poi aggiungi una route <code class="inline">GET /boom</code> che esegue <code class="inline">JSON.parse('{rotto')</code> <strong>senza</strong> try/catch. Visitala: il server si spegne. Le altre richieste ora funzionano?</p>
+            <p>3. Con <code class="inline">npm run dev</code> (watch) il server ripartirà solo quando salvi il file: in produzione invece servirebbe un "process manager". Correggi entrambi gli errori.</p>
+            <p>4. Domanda: perché in una route è <em>meglio</em> rispondere <code class="inline">500</code> con un <code class="inline">try/catch</code> invece di lasciare che il processo crashi?</p>
+          </div>
+          <button onclick="toggleSolution('sol-pc3')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela Soluzione</button>
+          <div id="sol-pc3" class="solution-container mt-4">
+            <div class="bg-gray-950 p-4 rounded-xl border border-green-900/50 font-mono text-sm text-gray-300">
+              <span class="text-gray-600">// 1. Errore: Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client</span><br>
+              <span class="text-gray-600">//    Il processo termina: TUTTI gli utenti restano senza servizio.</span><br>
+              <span class="text-gray-600">// 2. SyntaxError non gestito → crash. Le richieste successive: "Connection refused".</span><br>
+              <span class="text-gray-600">// Correzione per /boom:</span><br>
+              try {<br>
+              &nbsp;&nbsp;const dati = JSON.parse('{rotto');<br>
+              &nbsp;&nbsp;inviaJson(res, 200, dati);<br>
+              } catch (err) {<br>
+              &nbsp;&nbsp;console.error(err);<br>
+              &nbsp;&nbsp;inviaJson(res, 500, { errore: 'Errore interno del server' });<br>
+              }<br>
+              <span class="text-gray-600">// 4. Un server è condiviso da tutti: un errore su UNA richiesta non deve spegnerlo per tutti gli altri.</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- PARTE 5: QUIZ -->
+    <section class="animate-fade-in delay-300">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="check-square" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">5. Quiz di verifica: HTTP e modulo http</h2>
+      </div>
+      <div id="quiz"></div>
+    </section>
+  </main>
+
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm font-mono">
+      studente@nodelab:~/modulo-3$ exit
+    </div>
+  </footer>
+
+  <!-- ====================== Codice dei laboratori (testo semplice) ====================== -->
+<!-- Server della Pizzeria API (identico a quello delle slide) -->
+  <script type="text/plain" id="pizzeria-server">
+const http = require('http');
+
+let pizze = [
+  { id: 1, nome: 'Margherita', prezzo: 6.5, ingredienti: ['pomodoro', 'mozzarella', 'basilico'] },
+  { id: 2, nome: 'Marinara', prezzo: 5, ingredienti: ['pomodoro', 'aglio', 'origano'] },
+  { id: 3, nome: 'Diavola', prezzo: 8, ingredienti: ['pomodoro', 'mozzarella', 'salame piccante'] },
+  { id: 4, nome: 'Quattro formaggi', prezzo: 9.5, ingredienti: ['mozzarella', 'gorgonzola', 'fontina', 'parmigiano'] },
+  { id: 5, nome: 'Capricciosa', prezzo: 10, ingredienti: ['pomodoro', 'mozzarella', 'prosciutto', 'funghi', 'carciofi'] },
+];
+let prossimoId = 6;
+
+// Invia una risposta JSON (o vuota, per il 204) e scrive una riga di log
+function invia(req, res, status, dati, headers = {}) {
+  if (dati === undefined) {
+    res.writeHead(status, headers);
+    res.end();
+  } else {
+    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...headers });
+    res.end(JSON.stringify(dati));
+  }
+  console.log(`${req.method} ${req.url} → ${status}`);
+}
+
+function paginaHtml() {
+  const righe = pizze.map((p) => `<li><b>${p.nome}</b> — € ${p.prezzo.toFixed(2)}</li>`).join('');
+  return `<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8"><title>Pizzeria Node</title></head>
+<body style="font-family: sans-serif; padding: 16px">
+  <h1>🍕 Pizzeria Node</h1>
+  <p>Il nostro menù di oggi:</p>
+  <ul>${righe}</ul>
+  <p><small>I dati in formato JSON sono su <code>/api/pizze</code></small></p>
+</body></html>`;
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+  const parti = url.pathname.split('/').filter(Boolean); // es. ['api', 'pizze', '2']
+
+  // Pagina HTML
+  if (url.pathname === '/' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(paginaHtml());
+    console.log(`${req.method} ${req.url} → 200`);
+    return;
+  }
+
+  // Collezione: /api/pizze
+  if (parti.length === 2 && parti[0] === 'api' && parti[1] === 'pizze') {
+    if (req.method === 'GET') {
+      const max = url.searchParams.get('max');
+      if (max === null) return invia(req, res, 200, pizze);
+      const limite = Number(max);
+      if (max === '' || Number.isNaN(limite)) return invia(req, res, 400, { errore: 'Il parametro "max" deve essere un numero' });
+      return invia(req, res, 200, pizze.filter((p) => p.prezzo <= limite));
+    }
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      let dati;
+      try {
+        dati = JSON.parse(body);
+      } catch {
+        return invia(req, res, 400, { errore: 'Il body non è JSON valido' });
+      }
+      if (!dati || typeof dati.nome !== 'string' || !dati.nome.trim()) {
+        return invia(req, res, 400, { errore: 'Il campo "nome" è obbligatorio' });
+      }
+      if (typeof dati.prezzo !== 'number' || dati.prezzo <= 0) {
+        return invia(req, res, 400, { errore: 'Il campo "prezzo" deve essere un numero maggiore di 0' });
+      }
+      const nuova = {
+        id: prossimoId++,
+        nome: dati.nome.trim(),
+        prezzo: dati.prezzo,
+        ingredienti: Array.isArray(dati.ingredienti) ? dati.ingredienti : [],
+      };
+      pizze.push(nuova);
+      return invia(req, res, 201, nuova, { Location: `/api/pizze/${nuova.id}` });
+    }
+    return invia(req, res, 405, { errore: `Metodo ${req.method} non consentito` }, { Allow: 'GET, POST' });
+  }
+
+  // Singola risorsa: /api/pizze/:id
+  if (parti.length === 3 && parti[0] === 'api' && parti[1] === 'pizze') {
+    const id = Number(parti[2]);
+    const pizza = pizze.find((p) => p.id === id);
+    if (req.method === 'GET' || req.method === 'DELETE') {
+      if (!pizza) return invia(req, res, 404, { errore: `Pizza ${parti[2]} non trovata` });
+      if (req.method === 'GET') return invia(req, res, 200, pizza);
+      pizze = pizze.filter((p) => p.id !== id);
+      return invia(req, res, 204);
+    }
+    return invia(req, res, 405, { errore: `Metodo ${req.method} non consentito` }, { Allow: 'GET, DELETE' });
+  }
+
+  invia(req, res, 404, { errore: 'Risorsa non trovata', percorso: url.pathname });
+});
+
+server.listen(3000, () => console.log('🍕 Pizzeria API in ascolto su http://localhost:3000'));
+</script>
+
+<script type="text/plain" id="l1-start">
+const http = require('http');
+
+const server = http.createServer((req, res) => {
+  // TODO 1: imposta lo status 200 e l'header
+  //         Content-Type: text/plain; charset=utf-8
+  // TODO 2: termina la risposta con il testo: Ciao dal server Node!
+});
+
+// TODO 3: metti il server in ascolto sulla porta 3000 e, nella callback,
+//         stampa: Server in ascolto su http://localhost:3000
+</script>
+<script type="text/plain" id="l1-sol">
+const http = require('http');
+
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Ciao dal server Node!');
+});
+
+server.listen(3000, () => {
+  console.log('Server in ascolto su http://localhost:3000');
+});
+</script>
+
+<script type="text/plain" id="l2-start">
+const http = require('http');
+
+const server = http.createServer((req, res) => {
+  console.log(req.method, req.url);
+
+  if (req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end('<h1>Benvenuti al centralino!</h1><p>Prova /about e /api/ora</p>');
+  }
+  // TODO 1: /about → 200, text/plain, testo: Centralino Node.js v1.0
+  // TODO 2: /api/ora → 200, application/json, { "ora": "<data e ora in formato ISO>" }
+  //         suggerimento: new Date().toISOString()
+  // TODO 3: qualsiasi altro percorso → 404, application/json, { "errore": "Non trovato" }
+  else {
+    res.end('TODO');
+  }
+});
+
+server.listen(3000, () => console.log('Centralino attivo su http://localhost:3000'));
+</script>
+<script type="text/plain" id="l2-sol">
+const http = require('http');
+
+function inviaJson(res, status, dati) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(dati));
+}
+
+const server = http.createServer((req, res) => {
+  console.log(req.method, req.url);
+
+  if (req.url === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end('<h1>Benvenuti al centralino!</h1><p>Prova /about e /api/ora</p>');
+  } else if (req.url === '/about') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Centralino Node.js v1.0');
+  } else if (req.url === '/api/ora') {
+    inviaJson(res, 200, { ora: new Date().toISOString() });
+  } else {
+    inviaJson(res, 404, { errore: 'Non trovato' });
+  }
+});
+
+server.listen(3000, () => console.log('Centralino attivo su http://localhost:3000'));
+</script>
+
+<script type="text/plain" id="l3-start">
+const http = require('http');
+
+function inviaJson(res, status, dati) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(dati));
+}
+
+const server = http.createServer((req, res) => {
+  console.log(req.method, req.url); // attenzione: req.url contiene anche la query string!
+
+  // TODO 1: crea un oggetto URL a partire da req.url
+  //         const url = new URL(req.url, 'http://localhost');
+  // TODO 2: se url.pathname è '/saluta' leggi il parametro "nome"
+  //         con url.searchParams.get('nome'):
+  //         - se c'è            → 200 { messaggio: 'Ciao <nome>!' }
+  //         - se manca o è vuoto → 400 { errore: 'Parametro "nome" mancante' }
+  // TODO 3: tutti gli altri percorsi → 404 { errore: 'Non trovato' }
+
+  inviaJson(res, 404, { errore: 'Non trovato' });
+});
+
+server.listen(3000, () => console.log('Server dei saluti su http://localhost:3000'));
+</script>
+<script type="text/plain" id="l3-sol">
+const http = require('http');
+
+function inviaJson(res, status, dati) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(dati));
+}
+
+const server = http.createServer((req, res) => {
+  console.log(req.method, req.url);
+  const url = new URL(req.url, 'http://localhost');
+
+  if (url.pathname === '/saluta') {
+    const nome = url.searchParams.get('nome');
+    if (!nome) {
+      return inviaJson(res, 400, { errore: 'Parametro "nome" mancante' });
+    }
+    return inviaJson(res, 200, { messaggio: `Ciao ${nome}!` });
+  }
+
+  inviaJson(res, 404, { errore: 'Non trovato' });
+});
+
+server.listen(3000, () => console.log('Server dei saluti su http://localhost:3000'));
+</script>
+
+<script type="text/plain" id="l4-start">
+const http = require('http');
+
+function inviaJson(res, status, dati, headers = {}) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...headers });
+  res.end(JSON.stringify(dati));
+}
+
+// Legge tutto il body della richiesta e lo restituisce come stringa
+function leggiBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  if (req.url !== '/api/somma') {
+    return inviaJson(res, 404, { errore: 'Non trovato' });
+  }
+
+  // TODO 1: se il metodo NON è POST → 405 { errore: ... } con l'header Allow: POST
+  // TODO 2: leggi il body:  const testo = await leggiBody(req);
+  // TODO 3: trasformalo in oggetto con JSON.parse dentro un try/catch
+  //         (se fallisce → 400 { errore: 'JSON non valido' })
+  // TODO 4: se a o b non sono numeri (typeof ... !== 'number') → 400
+  // TODO 5: rispondi 200 { risultato: a + b }
+
+  inviaJson(res, 501, { errore: 'Non ancora implementato' });
+});
+
+server.listen(3000, () => console.log('Calcolatrice su http://localhost:3000'));
+</script>
+<script type="text/plain" id="l4-sol">
+const http = require('http');
+
+function inviaJson(res, status, dati, headers = {}) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...headers });
+  res.end(JSON.stringify(dati));
+}
+
+function leggiBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  if (req.url !== '/api/somma') {
+    return inviaJson(res, 404, { errore: 'Non trovato' });
+  }
+  if (req.method !== 'POST') {
+    return inviaJson(res, 405, { errore: `Metodo ${req.method} non consentito` }, { Allow: 'POST' });
+  }
+
+  const testo = await leggiBody(req);
+  let dati;
+  try {
+    dati = JSON.parse(testo);
+  } catch {
+    return inviaJson(res, 400, { errore: 'JSON non valido' });
+  }
+
+  if (!dati || typeof dati.a !== 'number' || typeof dati.b !== 'number') {
+    return inviaJson(res, 400, { errore: 'Servono due numeri: a e b' });
+  }
+
+  inviaJson(res, 200, { risultato: dati.a + dati.b });
+});
+
+server.listen(3000, () => console.log('Calcolatrice su http://localhost:3000'));
+</script>
+
+<script type="text/plain" id="l5-start">
+const http = require('http');
+
+let libri = [
+  { id: 1, titolo: 'Il nome della rosa', autore: 'Umberto Eco' },
+  { id: 2, titolo: 'Il barone rampante', autore: 'Italo Calvino' },
+  { id: 3, titolo: 'La coscienza di Zeno', autore: 'Italo Svevo' },
+];
+let prossimoId = 4;
+
+function inviaJson(res, status, dati, headers = {}) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...headers });
+  res.end(JSON.stringify(dati));
+}
+
+async function leggiBody(req) {
+  let body = '';
+  for await (const chunk of req) body += chunk;
+  return body;
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+  const parti = url.pathname.split('/').filter(Boolean); // '/api/libri/2' → ['api', 'libri', '2']
+  console.log(req.method, url.pathname);
+
+  // GET /api/libri → elenco completo (già fatto!)
+  if (req.method === 'GET' && url.pathname === '/api/libri') {
+    return inviaJson(res, 200, libri);
+  }
+
+  // TODO 1: GET /api/libri/:id → 200 con il libro, oppure 404 { errore }
+  // TODO 2: POST /api/libri → leggi e valida il body:
+  //         titolo e autore devono essere stringhe non vuote (altrimenti 400),
+  //         anche un JSON non valido → 400.
+  //         Crea il libro con id = prossimoId++ e rispondi 201
+  //         con l'header Location: /api/libri/<id> e il libro nel body.
+  // TODO 3: DELETE /api/libri/:id → 204 (body vuoto) oppure 404
+
+  inviaJson(res, 404, { errore: 'Risorsa non trovata' });
+});
+
+server.listen(3000, () => console.log('📚 Biblioteca su http://localhost:3000'));
+</script>
+<script type="text/plain" id="l5-sol">
+const http = require('http');
+
+let libri = [
+  { id: 1, titolo: 'Il nome della rosa', autore: 'Umberto Eco' },
+  { id: 2, titolo: 'Il barone rampante', autore: 'Italo Calvino' },
+  { id: 3, titolo: 'La coscienza di Zeno', autore: 'Italo Svevo' },
+];
+let prossimoId = 4;
+
+function inviaJson(res, status, dati, headers = {}) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', ...headers });
+  res.end(JSON.stringify(dati));
+}
+
+async function leggiBody(req) {
+  let body = '';
+  for await (const chunk of req) body += chunk;
+  return body;
+}
+
+const testoValido = (x) => typeof x === 'string' && x.trim() !== '';
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+  const parti = url.pathname.split('/').filter(Boolean);
+  console.log(req.method, url.pathname);
+
+  if (url.pathname === '/api/libri') {
+    if (req.method === 'GET') return inviaJson(res, 200, libri);
+    if (req.method === 'POST') {
+      let dati;
+      try {
+        dati = JSON.parse(await leggiBody(req));
+      } catch {
+        return inviaJson(res, 400, { errore: 'JSON non valido' });
+      }
+      if (!dati || !testoValido(dati.titolo) || !testoValido(dati.autore)) {
+        return inviaJson(res, 400, { errore: 'Titolo e autore sono obbligatori' });
+      }
+      const libro = { id: prossimoId++, titolo: dati.titolo.trim(), autore: dati.autore.trim() };
+      libri.push(libro);
+      return inviaJson(res, 201, libro, { Location: `/api/libri/${libro.id}` });
+    }
+  }
+
+  if (parti.length === 3 && parti[0] === 'api' && parti[1] === 'libri') {
+    const id = Number(parti[2]);
+    const libro = libri.find((l) => l.id === id);
+    if (req.method === 'GET') {
+      if (!libro) return inviaJson(res, 404, { errore: `Libro ${parti[2]} non trovato` });
+      return inviaJson(res, 200, libro);
+    }
+    if (req.method === 'DELETE') {
+      if (!libro) return inviaJson(res, 404, { errore: `Libro ${parti[2]} non trovato` });
+      libri = libri.filter((l) => l.id !== id);
+      res.writeHead(204);
+      return res.end();
+    }
+  }
+
+  inviaJson(res, 404, { errore: 'Risorsa non trovata' });
+});
+
+server.listen(3000, () => console.log('📚 Biblioteca su http://localhost:3000'));
+</script>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script>
+    const code = (id) => document.getElementById(id).textContent.replace(/^\n/, '').replace(/\s+$/, '') + '\n';
+    const SRV = { port: 3000 };
+
+    /* ---------------------------------------------------------------- Pizzeria */
+    const pathOf = (req) => new URL('http://x' + req.path);
+    const PIZZERIA_MISSIONS = [
+      { text: 'Leggi il menù completo: `GET /api/pizze`', check: (req, res) => req.method === 'GET' && pathOf(req).pathname === '/api/pizze' && !pathOf(req).search && res.status === 200 },
+      { text: 'Chiedi solo la pizza con **id 2**', check: (req, res) => req.method === 'GET' && pathOf(req).pathname === '/api/pizze/2' && res.status === 200 },
+      { text: 'Trova le pizze che costano **al massimo 8 €** usando la query string `max`', check: (req, res) => req.method === 'GET' && pathOf(req).pathname === '/api/pizze' && Number(pathOf(req).searchParams.get('max')) === 8 && res.status === 200 },
+      { text: 'Aggiungi una pizza con `POST /api/pizze` (body JSON con `nome` e `prezzo`) e ottieni **201 Created**', check: (req, res) => req.method === 'POST' && res.status === 201 },
+      { text: 'Ottieni un **400 Bad Request** (es. JSON sbagliato o prezzo negativo)', check: (req, res) => res.status === 400 },
+      { text: 'Ottieni un **404 Not Found** chiedendo una pizza che non esiste', check: (req, res) => res.status === 404 && pathOf(req).pathname.startsWith('/api/pizze/') },
+      { text: 'Elimina una pizza con `DELETE` e ottieni **204 No Content**', check: (req, res) => req.method === 'DELETE' && res.status === 204 },
+      { text: 'Apri la pagina HTML (`GET /`) e guarda la tab **Anteprima**', check: (req, res) => req.method === 'GET' && pathOf(req).pathname === '/' && res.status === 200 && /text\/html/.test((res.headersObj || {})['content-type'] || '') },
+    ];
+    NodeLab.inspector(document.getElementById('pizzeria'), {
+      id: 'm3-pizzeria-ex',
+      files: { 'server.js': code('pizzeria-server') },
+      entry: 'server.js',
+      port: 3000,
+      missions: PIZZERIA_MISSIONS,
+      presets: [
+        { method: 'GET', path: '/api/pizze' },
+        { label: 'POST (esempio)', method: 'POST', path: '/api/pizze', body: '{\n  "nome": "Bufalina",\n  "prezzo": 8.5\n}', send: false },
+      ],
+    });
+
+    /* ---------------------------------------------------------------- Lab 1 */
+    const LABS = [];
+    LABS.push(['lab1', {
+      id: 'm3-lab1',
+      title: 'Laboratorio 1: Ciao, server!',
+      focus: 'createServer, writeHead, end, listen',
+      icon: 'server',
+      color: 'green',
+      level: 'base',
+      intro: 'Il tuo primo server web: a <em>qualsiasi</em> richiesta risponde con un saluto in testo semplice.',
+      tasks: [
+        'Rispondi con status **200** e header `Content-Type: text/plain; charset=utf-8`.',
+        'Il body deve essere esattamente: `Ciao dal server Node!`',
+        'Metti il server in ascolto sulla porta **3000** e, nella callback di `listen`, stampa `Server in ascolto su http://localhost:3000`.',
+        'Premi ▶ Esegui e prova la richiesta `GET /` con il client HTTP.',
+      ],
+      files: { 'server.js': code('l1-start') },
+      server: Object.assign({}, SRV, { presets: [{ method: 'GET', path: '/' }, { method: 'GET', path: '/qualsiasi/cosa' }] }),
+      hints: [
+        'Per header e status in un colpo solo: `res.writeHead(200, { \'Content-Type\': \'text/plain; charset=utf-8\' })`.',
+        '`res.end(\'testo\')` invia il body e chiude la risposta.',
+        '`server.listen(3000, () => console.log(...))`: la callback parte quando il server è pronto.',
+      ],
+      solution: { 'server.js': code('l1-sol') },
+      tests: [
+        { name: 'Il server è in ascolto sulla porta 3000', check: async (ctx) => { ctx.assert(ctx.ports.includes(3000), 'Nessun server in ascolto sulla porta 3000: hai chiamato server.listen(3000)?'); } },
+        { name: 'All\'avvio stampa "Server in ascolto su http://localhost:3000"', check: async (ctx) => { ctx.assert(ctx.lines.some((l) => l.includes('Server in ascolto su http://localhost:3000')), 'Messaggio di avvio non trovato nel terminale: stampalo nella callback di listen().'); } },
+        { name: 'GET / risponde 200 con "Ciao dal server Node!"', check: async (ctx) => { const r = await ctx.request('GET', '/'); ctx.equal(r.status, 200, 'Status code sbagliato'); ctx.equal(r.body, 'Ciao dal server Node!', 'Testo della risposta sbagliato'); } },
+        { name: 'Content-Type: text/plain con charset utf-8', check: async (ctx) => { const r = await ctx.request('GET', '/'); const ct = r.headers['content-type'] || ''; ctx.assert(ct.includes('text/plain') && ct.toLowerCase().includes('utf-8'), `Content-Type ricevuto: "${ct || '(nessuno)'}"`); } },
+        { name: 'Risponde anche su altri percorsi (es. /pippo)', check: async (ctx) => { const r = await ctx.request('GET', '/pippo'); ctx.equal(r.status, 200, 'Status code per /pippo'); } },
+      ],
+    }]);
+
+    /* ---------------------------------------------------------------- Lab 2 */
+    LABS.push(['lab2', {
+      id: 'm3-lab2',
+      title: 'Laboratorio 2: Il centralino',
+      focus: 'routing con if/else, Content-Type, 404',
+      icon: 'signpost',
+      color: 'yellow',
+      level: 'base',
+      intro: 'Un solo server, più "uffici": in base al percorso rispondi con HTML, testo o JSON. La home è già pronta.',
+      tasks: [
+        '`GET /about` → **200**, `text/plain`, testo `Centralino Node.js v1.0`.',
+        '`GET /api/ora` → **200**, `application/json`, body `{ "ora": "..." }` con data e ora in formato ISO.',
+        'Qualsiasi altro percorso → **404**, `application/json`, body `{ "errore": "Non trovato" }`.',
+        'Guarda il terminale: ogni richiesta viene registrata dal `console.log`.',
+      ],
+      files: { 'server.js': code('l2-start') },
+      server: Object.assign({}, SRV, { presets: [{ method: 'GET', path: '/' }, { method: 'GET', path: '/about' }, { method: 'GET', path: '/api/ora' }, { method: 'GET', path: '/boh' }] }),
+      hints: [
+        'Continua la catena: `if (...) { ... } else if (req.url === \'/about\') { ... } else if ...`',
+        'Per il JSON: `res.writeHead(200, { \'Content-Type\': \'application/json; charset=utf-8\' })` e `res.end(JSON.stringify({ ora: new Date().toISOString() }))`.',
+        'L\'ultimo `else` è il 404: ricorda di passare `404` a `writeHead`.',
+      ],
+      solution: { 'server.js': code('l2-sol') },
+      tests: [
+        { name: 'GET / risponde 200 con HTML', check: async (ctx) => { const r = await ctx.request('GET', '/'); ctx.equal(r.status, 200, 'Status code di /'); ctx.assert((r.headers['content-type'] || '').includes('text/html'), 'La home deve avere Content-Type text/html'); } },
+        { name: 'GET /about → 200 text/plain "Centralino Node.js v1.0"', check: async (ctx) => { const r = await ctx.request('GET', '/about'); ctx.equal(r.status, 200, 'Status code di /about'); ctx.assert((r.headers['content-type'] || '').includes('text/plain'), `Content-Type di /about: "${r.headers['content-type'] || '(nessuno)'}"`); ctx.equal(r.body, 'Centralino Node.js v1.0', 'Testo di /about'); } },
+        { name: 'GET /api/ora → 200 JSON con { ora } in formato ISO', check: async (ctx) => { const r = await ctx.request('GET', '/api/ora'); ctx.equal(r.status, 200, 'Status code di /api/ora'); ctx.assert((r.headers['content-type'] || '').includes('application/json'), 'Content-Type di /api/ora deve essere application/json'); const d = r.json(); ctx.assert(typeof d.ora === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(d.ora) && !Number.isNaN(Date.parse(d.ora)), `"ora" non è una data ISO: ${JSON.stringify(d.ora)}`); ctx.assert(Math.abs(Date.parse(d.ora) - Date.now()) < 60000, 'L\'ora restituita non è quella attuale'); } },
+        { name: 'Percorso sconosciuto → 404 JSON { errore: "Non trovato" }', check: async (ctx) => { const r = await ctx.request('GET', '/non-esiste'); ctx.equal(r.status, 404, 'Status code per un percorso sconosciuto'); ctx.assert((r.headers['content-type'] || '').includes('application/json'), 'Il 404 deve essere in JSON'); ctx.equal(r.json(), { errore: 'Non trovato' }, 'Body del 404'); } },
+      ],
+    }]);
+
+    /* ---------------------------------------------------------------- Lab 3 */
+    LABS.push(['lab3', {
+      id: 'm3-lab3',
+      title: 'Laboratorio 3: Il saluto',
+      focus: 'new URL, searchParams, 400',
+      icon: 'search',
+      color: 'cyan',
+      level: 'medio',
+      intro: 'Il client passa il nome nella <strong>query string</strong>: <code class="inline">/saluta?nome=Anna</code>. Attenzione: <code class="inline">req.url</code> contiene anche la parte dopo <code class="inline">?</code>!',
+      tasks: [
+        '`GET /saluta?nome=Anna` → **200** `{ "messaggio": "Ciao Anna!" }`.',
+        'Funziona anche con gli spazi: `/saluta?nome=Maria%20Rossi` → `Ciao Maria Rossi!`.',
+        'Se `nome` manca o è vuoto → **400** `{ "errore": "..." }`.',
+        'Ogni altro percorso → **404** `{ "errore": "Non trovato" }`.',
+      ],
+      files: { 'server.js': code('l3-start') },
+      server: Object.assign({}, SRV, { presets: [{ method: 'GET', path: '/saluta?nome=Anna' }, { method: 'GET', path: '/saluta?nome=Maria%20Rossi' }, { method: 'GET', path: '/saluta' }] }),
+      hints: [
+        '`const url = new URL(req.url, \'http://localhost\');` poi confronta `url.pathname` (non `req.url`!).',
+        '`url.searchParams.get(\'nome\')` restituisce `null` se il parametro manca e `\'\'` se è vuoto: `if (!nome)` copre entrambi i casi.',
+        'Per il messaggio usa un template literal (stringa tra backtick) con `${nome}` al suo interno.',
+      ],
+      solution: { 'server.js': code('l3-sol') },
+      tests: [
+        { name: '/saluta?nome=Anna → 200 { messaggio: "Ciao Anna!" }', check: async (ctx) => { const r = await ctx.request('GET', '/saluta?nome=Anna'); ctx.equal(r.status, 200, 'Status code'); ctx.equal(r.json(), { messaggio: 'Ciao Anna!' }, 'Body della risposta'); } },
+        { name: 'Gestisce gli spazi: /saluta?nome=Maria%20Rossi', check: async (ctx) => { const r = await ctx.request('GET', '/saluta?nome=Maria%20Rossi'); ctx.equal(r.status, 200, 'Status code'); ctx.equal(r.json().messaggio, 'Ciao Maria Rossi!', 'Messaggio'); } },
+        { name: 'Senza nome → 400 con un campo "errore"', check: async (ctx) => { const r = await ctx.request('GET', '/saluta'); ctx.equal(r.status, 400, 'Status code per /saluta senza nome'); ctx.assert(typeof r.json().errore === 'string', 'Il body deve contenere { errore: "..." }'); } },
+        { name: 'Nome vuoto (/saluta?nome=) → 400', check: async (ctx) => { const r = await ctx.request('GET', '/saluta?nome='); ctx.equal(r.status, 400, 'Status code per nome vuoto'); } },
+        { name: 'Altri percorsi → 404', check: async (ctx) => { const r = await ctx.request('GET', '/ciao?nome=Anna'); ctx.equal(r.status, 404, 'Status code per /ciao'); } },
+      ],
+    }]);
+
+    /* ---------------------------------------------------------------- Lab 4 */
+    LABS.push(['lab4', {
+      id: 'm3-lab4',
+      title: 'Laboratorio 4: La calcolatrice',
+      focus: 'body delle POST, JSON.parse, 400 e 405',
+      icon: 'calculator',
+      color: 'purple',
+      level: 'medio',
+      intro: 'Il client invia due numeri in JSON con una <code class="inline">POST</code> e il server risponde con la somma. Ma attenzione: <strong>mai fidarsi del client</strong>!',
+      tasks: [
+        '`POST /api/somma` con body `{ "a": 2, "b": 3 }` → **200** `{ "risultato": 5 }`.',
+        'Body che non è JSON valido → **400** `{ "errore": "..." }` (e il server **non** deve crashare).',
+        '`a` o `b` mancanti o non numerici (anche `"2"` come stringa!) → **400**.',
+        'Un metodo diverso da POST su `/api/somma` → **405** con l\'header `Allow: POST`.',
+      ],
+      files: { 'server.js': code('l4-start') },
+      server: Object.assign({}, SRV, {
+        presets: [
+          { label: 'POST 2 + 3', method: 'POST', path: '/api/somma', body: '{ "a": 2, "b": 3 }' },
+          { label: 'POST JSON rotto', method: 'POST', path: '/api/somma', body: '{ a: 2, b: 3 }' },
+          { label: 'POST con stringa', method: 'POST', path: '/api/somma', body: '{ "a": "2", "b": 3 }' },
+          { method: 'GET', path: '/api/somma' },
+        ],
+      }),
+      hints: [
+        'La funzione `leggiBody(req)` è già pronta e restituisce una Promise: `const testo = await leggiBody(req);` (la callback del server è già `async`).',
+        '`try { dati = JSON.parse(testo); } catch { return inviaJson(res, 400, { errore: \'JSON non valido\' }); }`',
+        '`inviaJson` accetta un quarto argomento per gli header extra: `inviaJson(res, 405, {...}, { Allow: \'POST\' })`.',
+      ],
+      solution: { 'server.js': code('l4-sol') },
+      tests: [
+        { name: 'POST { a: 2, b: 3 } → 200 { risultato: 5 }', check: async (ctx) => { const r = await ctx.request('POST', '/api/somma', { body: { a: 2, b: 3 } }); ctx.equal(r.status, 200, 'Status code'); ctx.equal(r.json(), { risultato: 5 }, 'Body della risposta'); } },
+        { name: 'Funziona con negativi e decimali (-1.5 + 4)', check: async (ctx) => { const r = await ctx.request('POST', '/api/somma', { body: { a: -1.5, b: 4 } }); ctx.equal(r.json().risultato, 2.5, 'Risultato'); } },
+        { name: 'JSON non valido → 400 (e il server resta acceso)', check: async (ctx) => { const r = await ctx.request('POST', '/api/somma', { body: '{ a: 2, b: 3 }', headers: { 'content-type': 'application/json' } }); ctx.equal(r.status, 400, 'Status code per JSON non valido'); ctx.assert(typeof r.json().errore === 'string', 'Il body deve contenere { errore: "..." }'); const r2 = await ctx.request('POST', '/api/somma', { body: { a: 1, b: 1 } }); ctx.equal(r2.status, 200, 'Dopo un JSON rotto il server deve continuare a funzionare'); } },
+        { name: 'Numeri mancanti o come stringhe → 400', check: async (ctx) => { const r1 = await ctx.request('POST', '/api/somma', { body: { a: '2', b: 3 } }); ctx.equal(r1.status, 400, 'Con a = "2" (stringa)'); const r2 = await ctx.request('POST', '/api/somma', { body: { a: 1 } }); ctx.equal(r2.status, 400, 'Senza b'); } },
+        { name: 'GET /api/somma → 405 con header Allow: POST', check: async (ctx) => { const r = await ctx.request('GET', '/api/somma'); ctx.equal(r.status, 405, 'Status code per GET'); ctx.assert((r.headers.allow || '').includes('POST'), `Header Allow ricevuto: "${r.headers.allow || '(nessuno)'}"`); } },
+        { name: 'Altri percorsi → 404', check: async (ctx) => { const r = await ctx.request('POST', '/api/sottrai', { body: { a: 1, b: 1 } }); ctx.equal(r.status, 404, 'Status code per /api/sottrai'); } },
+      ],
+    }]);
+
+    /* ---------------------------------------------------------------- Lab 5 */
+    LABS.push(['lab5', {
+      id: 'm3-lab5',
+      title: 'Laboratorio 5: La biblioteca in memoria',
+      focus: 'mini API REST: GET, POST, DELETE, parametri nel path',
+      icon: 'library',
+      color: 'red',
+      level: 'boss',
+      intro: 'La sfida finale: una piccola API per gestire i libri, senza framework. I dati stanno in un array (quindi si azzerano a ogni riavvio: il database arriverà più avanti). L\'elenco completo è già fatto.',
+      tasks: [
+        '`GET /api/libri/:id` → **200** con il libro, oppure **404** `{ "errore": "..." }` se non esiste.',
+        '`POST /api/libri` con `{ "titolo": "...", "autore": "..." }` → **201**, il libro creato (con `id`) nel body e l\'header `Location: /api/libri/<id>`.',
+        'Titolo o autore mancanti/vuoti, oppure JSON non valido → **400**.',
+        '`DELETE /api/libri/:id` → **204** con body vuoto, oppure **404**.',
+      ],
+      files: { 'server.js': code('l5-start') },
+      server: Object.assign({}, SRV, {
+        presets: [
+          { method: 'GET', path: '/api/libri' },
+          { method: 'GET', path: '/api/libri/2' },
+          { method: 'GET', path: '/api/libri/99' },
+          { label: 'POST nuovo libro', method: 'POST', path: '/api/libri', body: '{\n  "titolo": "Il sentiero dei nidi di ragno",\n  "autore": "Italo Calvino"\n}' },
+          { method: 'DELETE', path: '/api/libri/1' },
+        ],
+      }),
+      hints: [
+        'Per riconoscere `/api/libri/:id` usa l\'array `parti`: `parti.length === 3 && parti[0] === \'api\' && parti[1] === \'libri\'`, poi `const id = Number(parti[2])`.',
+        'Per trovare il libro: `libri.find((l) => l.id === id)`; per eliminarlo: `libri = libri.filter((l) => l.id !== id)`.',
+        'Per il 204 non usare `inviaJson`: `res.writeHead(204); res.end();`',
+        'Per la Location passa a `inviaJson` un quarto argomento: `{ Location: \'/api/libri/\' + libro.id }`.',
+      ],
+      solution: { 'server.js': code('l5-sol') },
+      tests: [
+        { name: 'GET /api/libri → 200 con i 3 libri iniziali', check: async (ctx) => { const r = await ctx.request('GET', '/api/libri'); ctx.equal(r.status, 200, 'Status code'); ctx.equal(r.json().length, 3, 'Numero di libri'); } },
+        { name: 'GET /api/libri/2 → 200 con "Il barone rampante"', check: async (ctx) => { const r = await ctx.request('GET', '/api/libri/2'); ctx.equal(r.status, 200, 'Status code'); ctx.equal(r.json(), { id: 2, titolo: 'Il barone rampante', autore: 'Italo Calvino' }, 'Libro restituito'); } },
+        { name: 'GET /api/libri/99 → 404 con { errore }', check: async (ctx) => { const r = await ctx.request('GET', '/api/libri/99'); ctx.equal(r.status, 404, 'Status code per un id inesistente'); ctx.assert(typeof r.json().errore === 'string', 'Il body deve contenere { errore: "..." }'); } },
+        { name: 'POST valido → 201 + Location + libro con id 4 (e poi è nell\'elenco)', check: async (ctx) => { const r = await ctx.request('POST', '/api/libri', { body: { titolo: 'Lessico famigliare', autore: 'Natalia Ginzburg' } }); ctx.equal(r.status, 201, 'Status code della creazione'); ctx.equal(r.headers.location, '/api/libri/4', 'Header Location'); const l = r.json(); ctx.equal(l.id, 4, 'id del nuovo libro'); ctx.equal(l.titolo, 'Lessico famigliare', 'Titolo del nuovo libro'); const lista = await ctx.request('GET', '/api/libri'); ctx.equal(lista.json().length, 4, 'Dopo la POST l\'elenco deve avere 4 libri'); } },
+        { name: 'POST senza autore o con JSON rotto → 400', check: async (ctx) => { const r1 = await ctx.request('POST', '/api/libri', { body: { titolo: 'Senza autore' } }); ctx.equal(r1.status, 400, 'Status code senza autore'); const r2 = await ctx.request('POST', '/api/libri', { body: { titolo: '   ', autore: 'Qualcuno' } }); ctx.equal(r2.status, 400, 'Status code con titolo vuoto'); const r3 = await ctx.request('POST', '/api/libri', { body: 'non sono json', headers: { 'content-type': 'application/json' } }); ctx.equal(r3.status, 400, 'Status code con JSON non valido'); const lista = await ctx.request('GET', '/api/libri'); ctx.equal(lista.json().length, 3, 'Le POST non valide non devono aggiungere libri'); } },
+        { name: 'DELETE /api/libri/1 → 204 vuoto, poi GET /api/libri/1 → 404', check: async (ctx) => { const r = await ctx.request('DELETE', '/api/libri/1'); ctx.equal(r.status, 204, 'Status code della DELETE'); ctx.equal(r.body, '', 'Il 204 deve avere il body vuoto'); const g = await ctx.request('GET', '/api/libri/1'); ctx.equal(g.status, 404, 'Il libro eliminato non deve più esistere'); } },
+        { name: 'DELETE di un id inesistente → 404', check: async (ctx) => { const r = await ctx.request('DELETE', '/api/libri/99'); ctx.equal(r.status, 404, 'Status code'); } },
+      ],
+    }]);
+
+    for (const [elId, cfg] of LABS) NodeLab.mount(document.getElementById(elId), cfg);
+
+    /* ---------------------------------------------------------------- Quiz */
+    Quiz.mount(document.getElementById('quiz'), [
+      {
+        question: 'In `http://localhost:3000/api/pizze?max=8#menu`, quale parte **non** arriva mai al server?',
+        options: ['`/api/pizze`', '`?max=8`', '`#menu`', '`:3000`'],
+        correct: 2,
+        explanation: 'Il fragment (`#...`) resta nel browser: serve a spostarsi all\'interno della pagina. Al server arrivano path e query string (`req.url` = `/api/pizze?max=8`).',
+      },
+      {
+        question: 'Un client invia un JSON con un campo obbligatorio mancante. Quale status code è più corretto?',
+        options: ['`200 OK` con un messaggio di errore nel body', '`400 Bad Request`', '`404 Not Found`', '`500 Internal Server Error`'],
+        correct: 1,
+        explanation: 'L\'errore è del client (dati non validi): serve un 4xx, e il più adatto è `400` (o `422`). `500` significa che ha sbagliato il server; `200` con un errore nel body confonde i client.',
+      },
+      {
+        question: 'Quale metodo HTTP **non** è idempotente?',
+        options: ['`GET`', '`PUT`', '`DELETE`', '`POST`'],
+        correct: 3,
+        explanation: 'Ripetere la stessa `POST` crea una nuova risorsa ogni volta. `GET`, `PUT` e `DELETE` ripetuti lasciano il server nello stesso stato.',
+      },
+      {
+        question: 'Con una richiesta a `/saluta?nome=Anna`, quanto vale `req.url` nel server?',
+        options: ['`http://localhost:3000/saluta?nome=Anna`', '`/saluta`', '`/saluta?nome=Anna`', '`{ nome: \'Anna\' }`'],
+        correct: 2,
+        explanation: '`req.url` contiene path e query string, senza protocollo e host. Per separarli si usa `new URL(req.url, \'http://localhost\')`: `pathname` e `searchParams`.',
+      },
+      {
+        question: 'Che cosa c\'è di sbagliato in questo server quando riceve una richiesta a `/`?',
+        code: `http.createServer((req, res) => {
+  if (req.url === '/') {
+    res.end('Home');
+  }
+  res.end('Non trovato');
+}).listen(3000);`,
+        options: ['Il client riceve "Home" e tutto funziona', 'Il client riceve "HomeNon trovato"', 'Il client riceve "Non trovato"', 'Il client riceve "Home" ma la seconda `end()` è un errore: manca un `return`'],
+        correct: 3,
+        explanation: 'La prima `res.end()` chiude la risposta; la seconda viene ignorata (o dà errore se nel frattempo modifichi gli header, come con `setHeader` → `ERR_HTTP_HEADERS_SENT`). In ogni caso è un bug: dopo aver risposto serve un `return`.',
+      },
+      {
+        question: 'Perché per leggere il body di una POST usiamo `req.on(\'data\')` / `for await` invece di `req.body`?',
+        options: ['Perché `req.body` esiste solo con le richieste GET', 'Perché `req` è uno stream: il body arriva a pezzi e va raccolto', 'Perché il body è sempre già un oggetto JavaScript', 'Perché il body arriva prima degli header'],
+        correct: 1,
+        explanation: '`IncomingMessage` è uno stream leggibile (ed `EventEmitter`): i dati arrivano in chunk. Il modulo `http` non riempie `req.body`: sarà Express (con `express.json()`) a farlo per noi.',
+      },
+      {
+        question: 'Hai appena creato una risorsa con una POST. Cosa è buona pratica restituire?',
+        options: ['`200` e un body vuoto', '`201 Created`, la risorsa nel body e l\'header `Location`', '`204 No Content`', '`302` verso la home'],
+        correct: 1,
+        explanation: '`201 Created` comunica che qualcosa è stato creato; l\'header `Location` dice dove trovarlo (es. `/api/libri/4`) e nel body si restituisce di solito la risorsa con il suo `id`.',
+      },
+      {
+        question: 'Cosa succede se nella callback del server viene lanciata un\'eccezione non gestita (es. `JSON.parse` di un testo non valido senza try/catch)?',
+        options: ['Node risponde automaticamente 500 e continua', 'Viene ignorata', 'Il processo va in crash e il server smette di rispondere a **tutti**', 'Solo quella richiesta va in timeout'],
+        correct: 2,
+        explanation: 'Con il modulo `http` un\'eccezione non gestita fa terminare il processo: tutti gli utenti restano senza servizio. Per questo si usano `try/catch` e risposte `400`/`500`.',
+      },
+      {
+        question: 'A cosa serve l\'header `Content-Type` nella risposta?',
+        options: ['A indicare la lunghezza del body', 'A dire al client in che formato è il body (HTML, JSON, testo…)', 'A scegliere il metodo HTTP', 'A cifrare la risposta'],
+        correct: 1,
+        explanation: 'Il browser decide come trattare il body in base al `Content-Type`: con `text/html` disegna la pagina, con `text/plain` mostra il testo così com\'è, con `application/json` sa che deve fare il parsing.',
+      },
+      {
+        question: 'Quale comando `curl` invia correttamente un JSON con una POST e mostra anche gli header della risposta?',
+        options: [
+          '`curl http://localhost:3000/api/pizze {"nome":"X"}`',
+          '`curl -i -X POST http://localhost:3000/api/pizze -H "Content-Type: application/json" -d \'{"nome":"X","prezzo":7}\'`',
+          '`curl -POST http://localhost:3000/api/pizze --json`',
+          '`curl -h http://localhost:3000/api/pizze -d nome=X`',
+        ],
+        correct: 1,
+        explanation: '`-i` mostra status line e header, `-X POST` sceglie il metodo, `-H` imposta il `Content-Type` e `-d` invia il body.',
+      },
+    ], { id: 'm3' });
+
+    if (window.hljs) document.querySelectorAll('main section pre code:not(.hljs)').forEach((el) => hljs.highlightElement(el));
+    if (window.lucide) lucide.createIcons();
+    NodeLab.refreshProgress();
+  </script>
+</body>
+
+</html>
