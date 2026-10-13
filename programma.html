@@ -171,8 +171,9 @@
           </thead>
           <tbody class="divide-y divide-gray-800 text-gray-300">
             <tr><td class="px-4 py-2 font-mono">1</td><td class="px-4 py-2">4</td><td class="px-4 py-2">Modulo 1 — Node.js e il modello asincrono <span class="text-xs text-gray-500">(svolta)</span></td></tr>
-            <tr><td class="px-4 py-2 font-mono">2</td><td class="px-4 py-2">4</td><td class="px-4 py-2">Modulo 2 — npm, process e file system</td></tr>
-            <tr><td class="px-4 py-2 font-mono">3</td><td class="px-4 py-2">3</td><td class="px-4 py-2">Modulo 3 — Il protocollo HTTP e il modulo http</td></tr>
+            <tr><td class="px-4 py-2 font-mono">2</td><td class="px-4 py-2">4</td><td class="px-4 py-2">Modulo 2 — npm, process e file system <span class="text-xs text-gray-500">(svolta)</span></td></tr>
+            <tr><td class="px-4 py-2 font-mono">3</td><td class="px-4 py-2">3</td><td class="px-4 py-2">Modulo 3 — Il protocollo HTTP e il modulo http <span class="text-xs text-gray-500">(svolta)</span></td></tr>
+            <tr><td class="px-4 py-2 font-mono">4</td><td class="px-4 py-2">2</td><td class="px-4 py-2">Modulo 4 — Express: le basi</td></tr>
             <tr><td class="px-4 py-2 font-mono text-gray-500">…</td><td class="px-4 py-2 text-gray-500" colspan="2">Le lezioni successive sono da definire.</td></tr>
           </tbody>
         </table>
@@ -195,10 +196,10 @@
         o: ['creare e configurare un progetto npm', 'scrivere piccoli programmi a riga di comando con argomenti', 'leggere e scrivere file in modo asincrono', 'usare e creare eventi con EventEmitter'] },
       { n: 3, t: 'Il protocollo HTTP e il modulo http', h: 3, c: 'Modello client/server, anatomia di un URL, metodi, status code, header, JSON; http.createServer, routing manuale, query string, lettura del body delle POST, file statici; i limiti dell\'approccio "a mano" e perché serve Express.',
         o: ['descrivere una richiesta e una risposta HTTP', 'creare un server con il modulo http', 'gestire rotte, query string e body JSON', 'scegliere lo status code corretto'] },
-      { n: 4, t: 'Express: le basi', h: 4, c: 'Installazione di Express 5, app.get/post, routing, req.params, req.query e req.body, res.json/status/send/redirect, express.json, express.static, express.Router, struttura del progetto.',
-        o: ['avviare un\'applicazione Express', 'definire rotte con parametri', 'servire file statici', 'organizzare le rotte con Router'] },
-      { n: 5, t: 'Middleware', h: 4, c: 'La pipeline req → res, next(), middleware applicativi e di router, logging con morgan, CORS, middleware personalizzati, gestione delle 404 e degli errori in modo centralizzato (anche asincroni, Express 5).',
-        o: ['spiegare il flusso dei middleware', 'scrivere middleware personalizzati', 'centralizzare la gestione degli errori'] },
+      { n: 4, t: 'Express: le basi', h: 2, c: 'Da http a Express 5: installazione, app.get/post/put/delete, ordine delle rotte, req.params, req.query, req.body con express.json, res.status/json/send/sendStatus, le 404 automatiche.',
+        o: ['avviare un\'applicazione Express', 'definire rotte con parametri e query string', 'leggere un body JSON e rispondere con lo status code corretto'] },
+      { n: 5, t: 'Middleware, file statici e Router', h: 6, c: 'express.static e file statici, express.Router e struttura del progetto; la pipeline req → res, next(), middleware applicativi e di router, logging con morgan, CORS, middleware personalizzati, gestione delle 404 e degli errori in modo centralizzato (anche asincroni, Express 5).',
+        o: ['servire file statici', 'organizzare le rotte con Router', 'spiegare il flusso dei middleware', 'scrivere middleware personalizzati', 'centralizzare la gestione degli errori'] },
       { n: 6, t: 'API REST e CRUD', h: 5, c: 'Principi REST, risorse e verbi, status code corretti, paginazione, filtri e ordinamento, versionamento, client HTTP (Postman, Bruno, REST Client), CRUD in memoria e su file JSON.',
         o: ['progettare endpoint REST coerenti', 'implementare un CRUD completo', 'testare le API con un client HTTP'] },
       { n: 7, t: 'Validazione, errori e configurazione', h: 4, c: 'Validazione dell\'input (zod / express-validator), classi di errore, error handler, variabili d\'ambiente (.env, node --env-file), architettura a livelli (routes, controllers, services).',

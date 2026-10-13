@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esercitazioni Modulo 4 — CADMO NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white prose-code">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <div class="flex items-center gap-5 text-sm">
+          <a href="modulo_4.html" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="presentation" class="w-4 h-4"></i><span class="hidden sm:inline">Slide</span></a>
+          <a href="./" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Home</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="bg-gray-950 border-b border-gray-800 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center animate-fade-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-900/30 border border-yellow-500/30 text-xs text-yellow-300 font-mono mb-4 uppercase tracking-wider">
+        <i data-lucide="zap" class="w-4 h-4"></i> Express 5 · rotte · params · query · body
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4">Esercitazioni Modulo 4</h1>
+      <p class="text-gray-400 text-lg">Una biblioteca Express da esplorare con il client HTTP, quattro laboratori con verifica automatica (uno è una caccia ai bug), missioni sul vostro PC e quiz finale.</p>
+      <p class="mt-4 text-sm font-mono text-gray-500"><span data-lab-progress="m4-ciao,m4-parametri,m4-trovabug,m4-rubrica"></span> · i progressi restano salvati in questo browser</p>
+    </div>
+  </header>
+
+  <!-- Indice -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+    <div class="flex flex-wrap gap-2 justify-center text-sm">
+      <a href="#guida" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">1 · Guida rapida</a>
+      <a href="#biblioteca" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">2 · Biblioteca Express</a>
+      <a href="#lab" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">3 · Laboratori</a>
+      <a href="#pc" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">4 · Sul tuo PC</a>
+      <a href="#quiz" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">5 · Quiz</a>
+    </div>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-20">
+
+    <!-- 1. GUIDA RAPIDA -->
+    <section id="guida" class="scroll-mt-20 animate-fade-in delay-100">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="book-open" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">1. Guida rapida</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-yellow-400 mb-2">Lo scheletro</h3>
+          <pre class="code small"><code class="language-javascript">const express = require('express');
+const app = express();
+app.use(express.json());          // per leggere req.body
+
+app.get('/', (req, res) => res.send('Ciao!'));
+
+app.listen(3000, () =>
+  console.log('Server su http://localhost:3000'));</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-blue-400 mb-2">Dati nella richiesta</h3>
+          <pre class="code small"><code class="language-javascript">// GET /api/libri/42?formato=breve
+app.get('/api/libri/:id', (req, res) => {
+  req.params.id;       // '42'   (stringa!)
+  req.query.formato;   // 'breve' (o undefined)
+  req.get('Accept');   // un header
+});
+// POST con Content-Type: application/json
+req.body;              // { titolo: '...', ... }</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-green-400 mb-2">Rispondere</h3>
+          <pre class="code small"><code class="language-javascript">res.json(dati);                          // 200
+res.status(201).location(url).json(nuovo);
+res.status(400).json({ errore: '...' });
+res.status(404).json({ errore: '...' });
+res.sendStatus(204);                     // nessun body
+// una sola risposta: dopo un errore → return!</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-red-400 mb-2">Insidie di Express 5</h3>
+          <pre class="code small"><code class="language-javascript">app.get('*', …)            // ❌ PathError all'avvio
+app.use((req, res) => …)   // ✅ "tutto il resto", in fondo
+app.get('/a/:id?', …)      // ❌ PathError
+app.get('/a{/:id}', …)     // ✅ parte opzionale
+// rotte fisse PRIMA di quelle con :parametri
+// senza express.json() → req.body === undefined</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. BIBLIOTECA -->
+    <section id="biblioteca" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="library" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">2. Biblioteca Express</h2>
+      </div>
+      <p class="text-gray-400 mb-4">Un server Express è già in esecuzione nel browser. Completa le missioni usando il client HTTP: metodo, URL, body JSON quando serve. Poi apri il codice del server e cerca la rotta che ha risposto a ogni richiesta.</p>
+      <div id="inspector" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <button onclick="toggleSolution('codice-server')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="file-code-2" class="w-4 h-4"></i> Mostra il codice del server</button>
+      <div id="codice-server" class="solution-container mt-4"><pre class="code small"><code class="language-javascript" id="codice-server-src"></code></pre></div>
+    </section>
+
+    <!-- 3. LABORATORI -->
+    <section id="lab" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-conical" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">3. Laboratori nel browser</h2>
+      </div>
+      <div class="text-gray-400 mb-8 space-y-2">
+        <p>In ogni progetto Express è già installato (in <code class="inline">node_modules/</code>). Premi <kbd>▶ Esegui</kbd> per avviare il server, provalo con il client HTTP sotto l'editor e, quando sei pronto, premi <kbd>Verifica</kbd>.</p>
+        <p class="text-sm">💡 Dopo ogni modifica al codice premi di nuovo <kbd>▶ Esegui</kbd>: come nella realtà, il server va riavviato (sul tuo PC lo fa <code class="inline">node --watch</code>).</p>
+      </div>
+      <div class="space-y-10" id="labs"></div>
+    </section>
+
+    <!-- 4. MISSIONI SUL PC -->
+    <section id="pc" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="laptop" class="w-6 h-6 text-emerald-400"></i>
+        <h2 class="text-2xl font-bold text-white">4. Missioni sul tuo PC</h2>
+      </div>
+      <div class="space-y-8">
+        <!-- Missione A -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-yellow-900/50 flex items-center justify-center border border-yellow-500/30"><i data-lucide="rocket" class="w-5 h-5 text-yellow-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione A: Il primo server Express vero</h3>
+              <p class="text-sm text-yellow-400 font-mono">Focus: installazione, node --watch, curl</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-yellow-500">
+            <li>Crea il progetto <code class="inline">corso-node/lezione4</code>, installa Express e controlla nel <code class="inline">package.json</code> che sia la versione 5.</li>
+            <li>Copia la soluzione del <strong>Lab 1</strong> in <code class="inline">server.js</code> e aggiungi lo script <code class="inline">dev</code> con <code class="inline">node --watch</code>.</li>
+            <li>Apri <code class="inline">http://localhost:3000/api/info</code> nel browser, poi con <code class="inline">curl -i</code>: quali header aggiunge Express?</li>
+            <li>Con il server acceso, cambia il testo di <code class="inline">GET /</code> e salva: cosa succede nel terminale?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-a')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-a" class="solution-container mt-4">
+            <pre class="code small"><code class="language-bash">mkdir -p corso-node/lezione4 && cd corso-node/lezione4
+npm init -y
+npm install express
+npm pkg get dependencies          # { "express": "^5.x.x" }
+code server.js                    # incolla la soluzione del Lab 1
+npm pkg set scripts.dev="node --watch server.js"
+npm run dev
+curl -i http://localhost:3000/api/info
+# X-Powered-By: Express, Content-Type: application/json; charset=utf-8, Content-Length, ETag...
+# al salvataggio: "Restarting 'server.js'" e il server riparte da solo</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione B -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-cyan-900/50 flex items-center justify-center border border-cyan-500/30"><i data-lucide="git-compare" class="w-5 h-5 text-cyan-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione B: Da http a Express</h3>
+              <p class="text-sm text-cyan-400 font-mono">Focus: confronto tra i due approcci</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-cyan-500">
+            <li>Riprendi il <strong>Lab 5 del modulo 3</strong> (Biblioteca in memoria con il modulo <code class="inline">http</code>) e salvalo come <code class="inline">server-http.js</code>.</li>
+            <li>Riscrivi le stesse API con Express in <code class="inline">server-express.js</code>: stesse rotte, stessi status code, stesse risposte.</li>
+            <li>Confronta le righe di codice dei due file. Cosa fa Express al posto tuo?</li>
+            <li>Verifica con <code class="inline">curl</code> che le risposte siano identiche (status e body).</li>
+          </ol>
+          <button onclick="toggleSolution('sol-b')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-b" class="solution-container mt-4">
+            <pre class="code small"><code class="language-bash">wc -l server-http.js server-express.js   # di solito Express ne usa circa la metà
+node server-express.js
+curl -i localhost:3000/api/libri/1
+curl -i -X POST localhost:3000/api/libri -H "Content-Type: application/json" -d '{"titolo":"Dune","autore":"Herbert"}'
+curl -i -X DELETE localhost:3000/api/libri/1
+# Express fa al posto nostro: parsing dell'URL e dei parametri, query string,
+# lettura e parsing del body, Content-Type, JSON.stringify, 404 automatica</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione C -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-red-900/50 flex items-center justify-center border border-red-500/30"><i data-lucide="flame" class="w-5 h-5 text-red-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione C: Rompi Express (di proposito)</h3>
+              <p class="text-sm text-red-400 font-mono">Focus: leggere gli errori</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-red-500">
+            <li>Aggiungi <code class="inline">app.get('*', …)</code>: il server parte? Leggi il messaggio e cerca la soluzione nel link che ti suggerisce.</li>
+            <li>Scrivi una rotta che fa <code class="inline">throw new Error('ops')</code>: cosa vede il browser? Cosa compare nel terminale? Il server è ancora acceso?</li>
+            <li>Ora la stessa cosa in una rotta <code class="inline">async</code> dopo un <code class="inline">await</code>: cambia qualcosa?</li>
+            <li>Togli <code class="inline">app.use(express.json())</code> e fai una POST: che errore ottieni e perché?</li>
+            <li>Lancia il server con <code class="inline">NODE_ENV=production</code> e ripeti il punto 2: cosa cambia nella pagina d'errore?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-c')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-c" class="solution-container mt-4">
+            <pre class="code small"><code class="language-plaintext">1. PathError [TypeError]: Missing parameter name at index 1: *
+   → il server non parte. Usa app.use((req, res) => ...) in fondo, oppure '/*splat'.
+2. Il browser riceve 500 con lo stack dell'errore; nel terminale c'è lo stack;
+   il server resta acceso e risponde alle altre richieste.
+3. Con Express 5 nessuna differenza: anche gli errori async diventano un 500.
+   (Con Express 4 la promise rifiutata avrebbe fatto crashare il processo.)
+4. TypeError: Cannot destructure property '...' of 'req.body' as it is undefined.
+   Senza express.json() nessuno legge il body.
+5. In produzione la pagina mostra solo "Internal Server Error": lo stack non
+   va mai mostrato agli utenti (rivela dettagli interni del server).</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione D -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-purple-900/50 flex items-center justify-center border border-purple-500/30"><i data-lucide="send" class="w-5 h-5 text-purple-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione D: Un client HTTP vero</h3>
+              <p class="text-sm text-purple-400 font-mono">Focus: Bruno / Thunder Client / Postman</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-purple-500">
+            <li>Porta sul PC la soluzione del <strong>Lab 4</strong> (la rubrica) e avviala.</li>
+            <li>Installa un client HTTP (Bruno, l'estensione Thunder Client di VS Code o Postman) e crea una collezione "Rubrica".</li>
+            <li>Salva una richiesta per ogni rotta: lista, filtro per città, dettaglio, creazione, eliminazione, e una POST volutamente sbagliata.</li>
+            <li>Esegui la collezione in ordine: gli status code sono quelli che ti aspetti?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-d')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-d" class="solution-container mt-4">
+            <pre class="code small"><code class="language-plaintext">GET    http://localhost:3000/api/contatti                 → 200 (3 contatti)
+GET    http://localhost:3000/api/contatti?citta=catanzaro → 200 (2 contatti)
+GET    http://localhost:3000/api/contatti/2               → 200
+POST   http://localhost:3000/api/contatti                 → 201 + header Location
+       Body (JSON): { "nome": "Giulia Neri", "telefono": "331 0000000" }
+POST   http://localhost:3000/api/contatti                 → 400
+       Body (JSON): { "nome": "Senza telefono" }
+DELETE http://localhost:3000/api/contatti/1               → 204
+GET    http://localhost:3000/api/contatti/1               → 404</code></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 5. QUIZ -->
+    <section id="quiz" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="check-square" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">5. Quiz di verifica</h2>
+      </div>
+      <div id="quiz-box"></div>
+    </section>
+  </main>
+
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm font-mono">studente@nodelab:~$ app.listen(3000)</div>
+  </footer>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m4-biblioteca.js"></script>
+  <script src="assets/labs-m4.js"></script>
+  <script>
+    // ---------------------------------------------------------------- 2. biblioteca
+    NodeLab.inspector(document.getElementById('inspector'), {
+      id: 'm4-biblioteca-ex',
+      files: { 'server.js': M4_BIBLIOTECA.server },
+      entry: 'server.js', port: 3000, packages: ['express'],
+      missions: M4_BIBLIOTECA.missions,
+      presets: M4_BIBLIOTECA.presets,
+    });
+    document.getElementById('codice-server-src').textContent = M4_BIBLIOTECA.server;
+
+    // ---------------------------------------------------------------- 3. laboratori
+    const labsBox = document.getElementById('labs');
+    for (const cfg of window.M4_LABS) {
+      const el = document.createElement('article');
+      el.id = cfg.id;
+      labsBox.appendChild(el);
+      NodeLab.mount(el, cfg);
+    }
+
+    // ---------------------------------------------------------------- 5. quiz
+    Quiz.mount(document.getElementById('quiz-box'), [
+      {
+        question: 'Che rapporto c\'è tra Express e il modulo `http` di Node?',
+        options: ['Express lo sostituisce completamente', 'Express è costruito sopra `http`: `req` e `res` sono gli stessi oggetti, arricchiti', 'Sono due alternative incompatibili', 'Express funziona solo con HTTPS'],
+        correct: 1,
+        explanation: '`app.listen()` crea un server con `http.createServer(app)`. Tutto ciò che sai del modulo `http` resta valido.',
+      },
+      {
+        question: 'Con la rotta `app.get(\'/api/libri/:id\', …)` e la richiesta `GET /api/libri/42`, quanto vale `req.params.id`?',
+        options: ['Il numero `42`', 'La stringa `\'42\'`', '`undefined`', '`{ id: 42 }`'],
+        correct: 1,
+        explanation: 'Tutto ciò che arriva dall\'URL è testo. Per confrontarlo con id numerici serve `Number(req.params.id)`.',
+      },
+      {
+        question: 'Qual è il modo giusto per leggere `/api/libri?autore=eco&dopo=1960`?',
+        options: ['`req.params.autore` e `req.params.dopo`', '`req.query.autore` e `req.query.dopo`', '`req.body.autore` e `req.body.dopo`', '`req.url.autore`'],
+        correct: 1,
+        explanation: 'La query string (dopo il `?`) finisce in `req.query`. I parametri del percorso (`:id`) in `req.params`.',
+      },
+      {
+        question: 'Una `POST` con body JSON arriva al server, ma `req.body` è `undefined`. Perché?',
+        options: ['Le POST non hanno body', 'Manca `app.use(express.json())` (oppure il client non ha inviato `Content-Type: application/json`)', 'Bisogna usare `req.params`', 'È un bug di Express 5'],
+        correct: 1,
+        explanation: 'Express non legge il body da solo: serve il middleware `express.json()`, che interviene solo se il Content-Type è JSON.',
+      },
+      {
+        question: 'Che cosa succede con questo codice?',
+        code: "app.get('/api/libri/:id', (req, res) => {\n  const libro = libri.find((l) => l.id === Number(req.params.id));\n  if (!libro) {\n    res.status(404).json({ errore: 'Non trovato' });\n  }\n  res.json(libro);\n});",
+        options: ['Funziona correttamente', 'Per un id inesistente risponde due volte: errore `ERR_HTTP_HEADERS_SENT` (manca un `return`)', 'Risponde sempre 404', 'Non si avvia'],
+        correct: 1,
+        explanation: 'Dopo `res.status(404).json(...)` l\'esecuzione continua e `res.json(libro)` prova a rispondere di nuovo. Serve `return res.status(404)...`.',
+      },
+      {
+        question: 'Le rotte sono `app.get(\'/api/libri/:id\')` e, dopo, `app.get(\'/api/libri/recenti\')`. Cosa succede con `GET /api/libri/recenti`?',
+        options: ['Risponde la rotta `/recenti`', 'Risponde la rotta `/:id` con `req.params.id = \'recenti\'`', 'Express dà errore all\'avvio', 'Risponde 405'],
+        correct: 1,
+        explanation: 'Express prova le rotte in ordine e si ferma alla prima che corrisponde. Le rotte "fisse" vanno prima di quelle con parametri.',
+      },
+      {
+        question: 'Perché in Express 5 `app.get(\'*\', …)` non funziona più?',
+        options: ['Perché `*` è riservato a `app.all`', 'Perché la nuova sintassi dei percorsi richiede un nome per il "jolly" (`*nome`): il server non parte con un PathError', 'Funziona, ma è lenta', 'Perché Express 5 non supporta le 404'],
+        correct: 1,
+        explanation: 'Express 5 usa path-to-regexp v8: `*` deve avere un nome (`/*splat`). Per "tutto il resto" si usa `app.use((req, res) => …)` in fondo.',
+      },
+      {
+        question: 'Hai appena creato una risorsa con una `POST`. Quale risposta è la più corretta?',
+        options: ['`res.json(nuovo)`', '`res.status(201).location(\'/api/libri/5\').json(nuovo)`', '`res.sendStatus(204)`', '`res.status(200).send(\'ok\')`'],
+        correct: 1,
+        explanation: '**201 Created**, con l\'header `Location` che indica dove si trova la nuova risorsa e il suo contenuto nel body.',
+      },
+      {
+        question: 'Nessuna rotta corrisponde alla richiesta `GET /api/autori`. Cosa risponde Express?',
+        options: ['Niente: la richiesta resta in attesa', 'Una 404 con una pagina HTML `Cannot GET /api/autori`', 'Una 500', 'Una 200 vuota'],
+        correct: 1,
+        explanation: 'In fondo alla catena Express ha un gestore finale che risponde 404. Nel modulo 5 impareremo a personalizzarlo (es. in JSON).',
+      },
+      {
+        question: 'Una rotta `async` lancia un errore dopo un `await`. Cosa succede con Express 5?',
+        options: ['Il processo Node va in crash', 'Express intercetta l\'errore e risponde 500; il server continua a funzionare', 'La richiesta resta appesa per sempre', 'L\'errore viene ignorato e si risponde 200'],
+        correct: 1,
+        explanation: 'Express 5 gestisce le Promise rifiutate e le passa al gestore degli errori. Con Express 4 bisognava farlo a mano.',
+      },
+    ], { id: 'm4-quiz' });
+
+    if (window.hljs) document.querySelectorAll('pre.code code').forEach((el) => { if (!el.dataset.highlighted) hljs.highlightElement(el); });
+    NodeLab.refreshProgress();
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

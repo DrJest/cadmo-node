@@ -366,6 +366,7 @@
       const name = err.__nodeName || err.name || 'Error';
       let head = err.message !== undefined && err.message !== '' ? `${name}: ${err.message}` : name;
       if (!(err instanceof Error)) return String(err);
+      if (err.__frames) return [head, ...err.__frames].join('\n');
       const frames = parseFrames(err.stack);
       if (!frames.length) return `[${head}]`;
       const lines = frames.map((f) => `    at ${f.fn ? f.fn + ' (' : ''}${f.file}:${f.line}:${f.col}${f.fn ? ')' : ''}`);
@@ -1370,7 +1371,7 @@
         this.finished = true;
         this._finalize();
         const done = typeof encOrCb === 'function' ? encOrCb : cb;
-        scheduleOp(() => { this.emit('finish'); this.emit('close'); if (done) done(); });
+        scheduleOp(() => { this.emit('finish'); this.emit('close'); if (done) done(); }, 0);
         return this;
       }
       _finalize() {
@@ -1533,6 +1534,428 @@
       if (!realFetch) throw new Error('fetch non disponibile');
       pendingOps++;
       try { return await realFetch(input, init); } finally { pendingOps--; }
+    }
+
+    // ------------------------------------------------------------ express
+    // Una piccola Express 5 per il simulatore: stessa API e stessi messaggi
+    // d'errore per le funzionalità usate nel corso.
+    const EXPRESS_MARKER = '/* nodelab:builtin express */';
+    let expressModule = null;
+    function createExpress() {
+      const MIME = { '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.ico': 'image/x-icon', '.md': 'text/markdown; charset=utf-8' };
+      const TYPES = { json: 'application/json; charset=utf-8', html: 'text/html; charset=utf-8', text: 'text/plain; charset=utf-8', txt: 'text/plain; charset=utf-8', css: 'text/css; charset=utf-8', js: 'text/javascript; charset=utf-8' };
+      const htmlEsc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      const errorPage = (msg) => `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>Error</title>\n</head>\n<body>\n<pre>${msg}</pre>\n</body>\n</html>\n`;
+      const pathErr = (msg, p) => {
+        const e = new TypeError(`${msg}: ${p}; visit https://git.new/pathToRegexpError for info`);
+        Object.defineProperty(e, '__nodeName', { value: 'PathError [TypeError]' });
+        return e;
+      };
+
+      // sintassi di path-to-regexp v8 (Express 5): :param, *splat, {opzionale}
+      function compilePath(p, prefix) {
+        if (p instanceof RegExp) return { re: new RegExp(p.source + (prefix ? '(?=/|$)' : '$'), p.flags.includes('i') ? p.flags : p.flags + 'i'), keys: [] };
+        if (typeof p !== 'string') throw new TypeError(`path must be a string, array of strings, or regular expression`);
+        const keys = [];
+        let i = 0;
+        function parse(closing) {
+          let out = '';
+          while (i < p.length) {
+            const ch = p[i];
+            if (ch === '}' && closing) { i++; return out; }
+            if (ch === '{') { i++; out += `(?:${parse(true)})?`; continue; }
+            if (ch === ':' || ch === '*') {
+              const m = /^[A-Za-z_$][\w$]*/.exec(p.slice(i + 1));
+              if (!m) throw pathErr(`Missing parameter name at index ${i + 1}`, p);
+              keys.push({ name: m[0], splat: ch === '*' });
+              out += ch === '*' ? '(.+)' : '([^/]+?)';
+              i += 1 + m[0].length;
+              continue;
+            }
+            if ('()[]?+!'.includes(ch)) throw pathErr(`Unexpected ${ch} at index ${i}`, p);
+            if (ch === '\\') { out += '\\' + (p[i + 1] || ''); i += 2; continue; }
+            out += ch.replace(/[.^$|\\/]/g, '\\$&');
+            i++;
+          }
+          if (closing) throw pathErr(`Unexpected END at index ${i}, expected }`, p);
+          return out;
+        }
+        let body = parse(false);
+        if (prefix) {
+          if (body === '\\/' || body === '') return { re: /^(?=\/|$)/i, keys, root: true };
+          body = body.replace(/\\\/$/, '');
+          return { re: new RegExp(`^${body}(?=/|$)`, 'i'), keys };
+        }
+        return { re: new RegExp(`^${body}\\/?$`, 'i'), keys };
+      }
+      function matchLayer(layer, pathname) {
+        const m = layer.re.exec(pathname);
+        if (!m) return null;
+        const params = {};
+        layer.keys.forEach((k, idx) => {
+          const v = m[idx + 1];
+          if (v === undefined) return;
+          let dv;
+          try { dv = decodeURIComponent(v); } catch (e) { dv = v; }
+          params[k.name] = k.splat ? dv.split('/') : dv;
+        });
+        return { params, matched: m[0] };
+      }
+      const flat = (args) => args.flat(Infinity);
+      function checkHandlers(list) {
+        if (!list.length) throw new TypeError('argument handler is required');
+        for (const h of list) if (typeof h !== 'function') throw new TypeError('argument handler must be a function');
+      }
+      function parseQuery(search) {
+        const q = {};
+        new URLSearchParams(search).forEach((v, k) => { q[k] = k in q ? [].concat(q[k], v) : v; });
+        return q;
+      }
+
+      function makeRouter(isApp) {
+        const stack = [];
+        const router = function (req, res, next) { router.handle(req, res, next); };
+        router.stack = stack;
+        router.params = {};
+        router.use = function (...args) {
+          let p = '/';
+          if (typeof args[0] === 'string' || args[0] instanceof RegExp || Array.isArray(args[0])) p = args.shift();
+          const handlers = flat(args);
+          if (!handlers.length) throw new TypeError(`${isApp ? 'app' : 'Router'}.use() requires a middleware function`);
+          for (const h of handlers) if (typeof h !== 'function') throw new TypeError(`${isApp ? 'app' : 'Router'}.use() requires a middleware function`);
+          for (const pp of [].concat(p)) {
+            const c = compilePath(pp, true);
+            for (const h of handlers) {
+              if (h && h.__nodelabApp) h.parent = router;
+              stack.push({ kind: 'use', re: c.re, keys: c.keys, fn: h, root: !!c.root });
+            }
+          }
+          return router;
+        };
+        const addRoute = (method, p, handlers) => {
+          checkHandlers(handlers);
+          for (const pp of [].concat(p)) {
+            const c = compilePath(pp, false);
+            stack.push({ kind: 'route', method, re: c.re, keys: c.keys, handlers, path: pp });
+          }
+        };
+        for (const m of ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'all']) {
+          router[m] = function (p, ...rest) {
+            if (isApp && m === 'get' && rest.length === 0 && typeof p === 'string') return router.settings ? router.settings[p] : undefined;
+            if (rest.length === 0 && typeof p === 'function') throw new TypeError(`${isApp ? 'app' : 'router'}.${m}() richiede un percorso come primo argomento`);
+            addRoute(m === 'all' ? '*' : m.toUpperCase(), p, flat(rest));
+            return router;
+          };
+        }
+        router.route = (p) => {
+          const chain = {};
+          for (const m of ['get', 'post', 'put', 'patch', 'delete', 'all']) chain[m] = (...h) => { addRoute(m === 'all' ? '*' : m.toUpperCase(), p, flat(h)); return chain; };
+          return chain;
+        };
+        router.param = () => router;
+        router.handle = function (req, res, out) {
+          let idx = 0;
+          const basePath = req.__path;
+          const baseUrl = req.baseUrl || '';
+          const restore = () => { req.__path = basePath; req.baseUrl = baseUrl; req.url = req.__origUrl.slice(baseUrl.length) || '/'; };
+          function next(err) {
+            if (err === 'router') { restore(); return out(); }
+            restore();
+            while (idx < stack.length) {
+              const layer = stack[idx++];
+              const pathname = basePath;
+              if (layer.kind === 'route') {
+                const meth = req.method === 'HEAD' && layer.method === 'GET' ? 'HEAD' : req.method;
+                if (layer.method !== '*' && layer.method !== meth && !(req.method === 'HEAD' && layer.method === 'GET')) continue;
+                const m = matchLayer(layer, pathname);
+                if (!m) continue;
+                req.params = Object.assign({}, req.__parentParams || {}, m.params);
+                req.route = { path: layer.path, method: layer.method.toLowerCase() };
+                return runRoute(layer.handlers, err);
+              }
+              const m = matchLayer(layer, pathname);
+              if (!m) continue;
+              const fn = layer.fn;
+              const isErr = fn.length === 4;
+              if (err ? !isErr : isErr) continue;
+              const matched = layer.root ? '' : m.matched;
+              req.__parentParams = Object.assign({}, req.params || {}, m.params);
+              if (matched) {
+                req.baseUrl = baseUrl + matched;
+                req.__path = pathname.slice(matched.length) || '/';
+                req.url = req.__path + (req.__search || '');
+              }
+              return call(fn, err, next);
+            }
+            return out(err);
+          }
+          function runRoute(handlers, err) {
+            let h = 0;
+            const nextInRoute = (e) => {
+              if (e === 'route') return next();
+              if (e === 'router') return next('router');
+              if (e) err = e;
+              while (h < handlers.length) {
+                const fn = handlers[h++];
+                const isErr = fn.length === 4;
+                if (err ? !isErr : isErr) continue;
+                return call(fn, err, nextInRoute);
+              }
+              return next(err);
+            };
+            nextInRoute(err);
+          }
+          function call(fn, err, nx) {
+            let called = false;
+            const once = (e) => { if (called) return; called = true; nx(e); };
+            try {
+              const r = err ? fn(err, req, res, once) : fn(req, res, once);
+              if (r && typeof r.then === 'function') r.then(undefined, (e) => once(e || new Error('Rejected promise')));
+            } catch (e) { once(e); }
+          }
+          next();
+        };
+        return router;
+      }
+
+      function finalHandler(req, res, app) {
+        return (err) => {
+          if (err) {
+            let status = err.status || err.statusCode;
+            if (!(status >= 400 && status < 600)) status = 500;
+            if (app.settings.env !== 'test') write('stderr', errorText(err, 0) + '\n');
+            if (res.headersSent) { try { res.end(); } catch (e) { /* ignora */ } return; }
+            const dev = app.settings.env !== 'production';
+            const msg = dev && err.stack ? htmlEsc(cleanStack(err)).replace(/\n/g, '<br>').replace(/ {2}/g, ' &nbsp;') : htmlEsc(STATUS_CODES[status] || String(status));
+            sendRaw(res, status, errorPage(msg));
+            return;
+          }
+          if (res.headersSent) return;
+          sendRaw(res, 404, errorPage(`Cannot ${htmlEsc(req.method)} ${htmlEsc(req.__origPath)}`));
+        };
+      }
+      function sendRaw(res, status, body) {
+        res.statusCode = status;
+        for (const h of ['content-type', 'content-length', 'etag', 'location']) res.removeHeader(h);
+        res.setHeader('Content-Security-Policy', "default-src 'none'");
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.end(body);
+      }
+
+      function decorate(app, req, res) {
+        const u = new URL(req.url, 'http://localhost');
+        req.app = app;
+        req.res = res;
+        res.req = req;
+        res.app = app;
+        req.__origUrl = req.url;
+        req.originalUrl = req.url;
+        req.__origPath = u.pathname;
+        req.__path = (() => { try { return decodeURI(u.pathname); } catch (e) { return u.pathname; } })();
+        req.__search = u.search;
+        req.path = u.pathname;
+        req.baseUrl = '';
+        req.query = parseQuery(u.search);
+        req.params = {};
+        req.body = undefined;
+        req.protocol = 'http';
+        req.secure = false;
+        req.ip = '::1';
+        req.ips = [];
+        req.hostname = 'localhost';
+        req.get = req.header = (name) => {
+          const n = String(name).toLowerCase();
+          if (n === 'referer' || n === 'referrer') return req.headers.referer || req.headers.referrer;
+          return req.headers[n];
+        };
+        req.is = (type) => {
+          const ct = (req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+          if (!ct) return null;
+          const t = type.includes('/') ? type : (TYPES[type] || type).split(';')[0];
+          return ct === t || (t.endsWith('/*') && ct.startsWith(t.slice(0, -1))) ? type : false;
+        };
+        for (const k of ['__origUrl', '__origPath', '__path', '__search', '__parentParams']) {
+          Object.defineProperty(req, k, { value: req[k], writable: true, enumerable: false, configurable: true });
+        }
+        res.locals = Object.create(null);
+        res.status = (code) => {
+          if (!Number.isInteger(code)) throw new TypeError(`Invalid status code: ${JSON.stringify(code)}. Status code must be an integer.`);
+          if (code < 100 || code > 999) throw new RangeError(`Invalid status code: ${JSON.stringify(code)}. Status code must be greater than 99 and less than 1000.`);
+          res.statusCode = code;
+          return res;
+        };
+        res.set = res.header = (field, val) => {
+          if (typeof field === 'object') { for (const k of Object.keys(field)) res.set(k, field[k]); return res; }
+          let v = Array.isArray(val) ? val.map(String) : String(val);
+          if (String(field).toLowerCase() === 'content-type' && !/;\s*charset/i.test(v) && /^text\/|json|javascript/.test(v)) v += '; charset=utf-8';
+          res.setHeader(field, v);
+          return res;
+        };
+        res.get = (field) => res.getHeader(field);
+        res.type = res.contentType = (t) => res.set('Content-Type', t.includes('/') ? t : TYPES[t] || MIME['.' + t] || 'application/octet-stream');
+        res.json = (obj) => {
+          const body = obj === undefined ? '' : JSON.stringify(obj, app.settings['json replacer'], app.settings['json spaces']);
+          if (!res.getHeader('Content-Type')) res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          return res.send(body);
+        };
+        res.send = (body) => {
+          if (body === null || body === undefined) body = '';
+          if (typeof body === 'string') {
+            if (!res.getHeader('Content-Type')) res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          } else if (body instanceof Uint8Array) {
+            if (!res.getHeader('Content-Type')) res.setHeader('Content-Type', 'application/octet-stream');
+          } else return res.json(body);
+          if (res.statusCode === 204 || res.statusCode === 304) {
+            res.removeHeader('Content-Type');
+            res.removeHeader('Content-Length');
+            body = '';
+          }
+          if (res.statusCode !== 204 && res.statusCode !== 304) res.setHeader('Content-Length', String(Buffer.byteLength(body)));
+          if (req.method === 'HEAD') { res.end(); return res; }
+          res.end(body);
+          return res;
+        };
+        res.sendStatus = (code) => {
+          res.status(code);
+          res.type('txt');
+          return res.send(STATUS_CODES[code] || String(code));
+        };
+        res.redirect = (a, b) => {
+          const [status, url] = typeof a === 'number' ? [a, b] : [302, a];
+          res.statusCode = status;
+          res.setHeader('Location', url);
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          res.end(`${STATUS_CODES[status]}. Redirecting to ${url}`);
+          return res;
+        };
+        res.location = (url) => res.set('Location', url);
+        res.sendFile = (p, opts, cb) => {
+          if (typeof opts === 'function') { cb = opts; opts = {}; }
+          opts = opts || {};
+          const full = opts.root ? path.resolve(CWD, opts.root, String(p).replace(/^\/+/, '')) : String(p);
+          if (!opts.root && !path.isAbsolute(full)) throw new TypeError('path must be absolute or specify root to res.sendFile');
+          if (!vfs.files.has(full)) {
+            const e = fsError('ENOENT', 'stat', full);
+            e.status = e.statusCode = 404;
+            e.expose = false;
+            if (cb) { cb(e); return; }
+            scheduleOp(() => req.next(e));
+            return;
+          }
+          if (!res.getHeader('Content-Type')) res.setHeader('Content-Type', MIME[path.extname(full).toLowerCase()] || 'application/octet-stream');
+          res.end(vfs.files.get(full));
+          if (cb) scheduleOp(() => cb());
+        };
+        res.render = () => { throw new Error('res.render: nel simulatore non c\'è un template engine (lo vedremo nel modulo dedicato con EJS).'); };
+        res.cookie = (name, value) => res.appendHeader('Set-Cookie', `${name}=${encodeURIComponent(typeof value === 'object' ? 'j:' + JSON.stringify(value) : value)}; Path=/`);
+        res.clearCookie = (name) => res.appendHeader('Set-Cookie', `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT`);
+        if (app.settings['x-powered-by']) res.setHeader('X-Powered-By', 'Express');
+      }
+
+      function readBody(req, cb) {
+        const chunks = [];
+        req.on('data', (c) => chunks.push(typeof c === 'string' ? Buffer.from(c) : c));
+        req.on('end', () => cb(Buffer.concat(chunks).toString()));
+      }
+      const hasBody = (req) => req.headers['transfer-encoding'] !== undefined || Number(req.headers['content-length'] || 0) > 0;
+      function bodyParser(kind, opts) {
+        opts = opts || {};
+        const want = opts.type || (kind === 'json' ? 'application/json' : kind === 'urlencoded' ? 'application/x-www-form-urlencoded' : 'text/plain');
+        return function (req, res, next) {
+          if (req.__bodyParsed) return next();
+          const ct = (req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+          if (!hasBody(req) || !ct || (ct !== want && !(want.endsWith('/*') && ct.startsWith(want.slice(0, -1))))) return next();
+          Object.defineProperty(req, '__bodyParsed', { value: true, configurable: true });
+          readBody(req, (raw) => {
+            if (kind === 'text') { req.body = raw; return next(); }
+            if (kind === 'urlencoded') { req.body = parseQuery(raw); return next(); }
+            if (raw.trim() === '') { req.body = {}; return next(); }
+            try {
+              if (opts.strict !== false && !/^\s*[[{]/.test(raw)) {
+                JSON.parse(raw);
+                throw new SyntaxError(`Unexpected token '${raw.trim()[0]}', "${raw.trim().slice(0, 20)}" is not valid JSON`);
+              }
+              req.body = JSON.parse(raw, opts.reviver);
+              next();
+            } catch (e) {
+              const err = new SyntaxError(e.message);
+              err.status = err.statusCode = 400;
+              err.expose = true;
+              err.type = 'entity.parse.failed';
+              Object.defineProperty(err, '__frames', { value: ['    at JSON.parse (<anonymous>)', '    at parse (/progetto/node_modules/body-parser/lib/types/json.js:92:19)'] });
+              err.body = raw;
+              next(err);
+            }
+          });
+        };
+      }
+      function serveStatic(root, opts) {
+        if (typeof root !== 'string') throw new TypeError('root path required');
+        opts = opts || {};
+        const base = path.resolve(CWD, root);
+        return function (req, res, next) {
+          if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+          const rel = req.__path;
+          let full = path.join(base, rel).replace(/\/$/, '') || '/';
+          if (full !== base && !full.startsWith(base + '/')) return next();
+          if (vfs.dirs.has(full)) {
+            if (!req.__origPath.endsWith('/')) {
+              const loc = req.__origPath + '/' + (req.__search || '');
+              res.statusCode = 301;
+              res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+              res.setHeader('Content-Security-Policy', "default-src 'none'");
+              res.setHeader('X-Content-Type-Options', 'nosniff');
+              res.setHeader('Location', loc);
+              res.end(`<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>Redirecting</title>\n</head>\n<body>\n<pre>Redirecting to ${htmlEsc(loc)}</pre>\n</body>\n</html>\n`);
+              return;
+            }
+            full = path.join(full, opts.index === undefined ? 'index.html' : opts.index || '__no_index__');
+          }
+          if (!vfs.files.has(full)) return next();
+          res.setHeader('Cache-Control', 'public, max-age=0');
+          res.setHeader('Last-Modified', (vfs.mtime.get(full) || new Date()).toUTCString());
+          res.setHeader('Content-Type', MIME[path.extname(full).toLowerCase()] || 'application/octet-stream');
+          res.end(vfs.files.get(full));
+        };
+      }
+
+      function express() {
+        const app = makeRouter(true);
+        Object.defineProperty(app, '__nodelabApp', { value: true });
+        app.settings = { 'x-powered-by': true, env: process.env.NODE_ENV || 'development', 'json spaces': undefined };
+        app.locals = Object.create(null);
+        app.locals.settings = app.settings;
+        app.mountpath = '/';
+        app.set = (k, v) => { if (v === undefined) return app.settings[k]; app.settings[k] = v; return app; };
+        app.enable = (k) => app.set(k, true);
+        app.disable = (k) => app.set(k, false);
+        app.enabled = (k) => !!app.settings[k];
+        app.disabled = (k) => !app.settings[k];
+        app.engine = () => app;
+        app.render = () => { throw new Error('app.render: nel simulatore non c\'è un template engine.'); };
+        const inner = app.handle;
+        app.handle = (req, res, out) => {
+          if (!req.app) decorate(app, req, res);
+          req.next = out || finalHandler(req, res, app);
+          inner(req, res, req.next);
+        };
+        app.listen = (...args) => {
+          const server = http.createServer(app);
+          return server.listen(...args);
+        };
+        return app;
+      }
+      express.Router = () => makeRouter(false);
+      express.json = (o) => bodyParser('json', o);
+      express.urlencoded = (o) => bodyParser('urlencoded', o);
+      express.text = (o) => bodyParser('text', o);
+      express.raw = (o) => bodyParser('text', o);
+      express.static = serveStatic;
+      express.application = {};
+      express.request = {};
+      express.response = {};
+      return express;
     }
 
     // ------------------------------------------------------- altri moduli
@@ -1767,6 +2190,7 @@
         }
         if (isNode) throw makeError(Error, 'ERR_UNKNOWN_BUILTIN_MODULE', `No such built-in module: ${spec}`);
         const filename = resolveFilename(spec, mod.filename);
+        if (vfs.files.get(filename) === EXPRESS_MARKER) return expressModule || (expressModule = createExpress());
         if (moduleCache.has(filename)) return moduleCache.get(filename).exports;
         const child = new Module(filename, mod);
         moduleCache.set(filename, child);
@@ -1833,6 +2257,13 @@
         mkdirp(path.dirname(a));
         vfs.files.set(a, String(content));
         vfs.mtime.set(a, new Date());
+      }
+      // pacchetti npm "installati" nel progetto (es. express)
+      for (const pkg of msg.packages || []) {
+        if (pkg !== 'express') continue;
+        mkdirp(CWD + '/node_modules/express');
+        vfs.files.set(CWD + '/node_modules/express/package.json', JSON.stringify({ name: 'express', version: '5.3.0', main: 'index.js' }, null, 2));
+        vfs.files.set(CWD + '/node_modules/express/index.js', EXPRESS_MARKER);
       }
       for (const [p, content] of Object.entries(msg.files || {})) {
         const a = path.resolve(CWD, p);
@@ -2022,7 +2453,7 @@
           this._finish({ code: 1, crashed: true, fatal: 'Il programma non risponde (ciclo infinito?)', hung: true, fs: this.fs });
         }
       }, 500);
-      this.worker.postMessage({ type: 'run', files: this.opts.files, entry: this.opts.entry, argv: this.opts.argv, env: this.opts.env, fs: this.opts.fs, cwd: '/progetto' });
+      this.worker.postMessage({ type: 'run', files: this.opts.files, entry: this.opts.entry, argv: this.opts.argv, env: this.opts.env, fs: this.opts.fs, packages: this.opts.packages || [], cwd: '/progetto' });
       return this;
     }
     _emitOut(stream, text) { if (this.opts.onOutput) this.opts.onOutput(stream, text); }

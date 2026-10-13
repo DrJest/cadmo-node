@@ -20,7 +20,7 @@
 
   // registro npm simulato
   const REGISTRY = {
-    express: { v: '5.1.0', majors: { 4: '4.21.2', 5: '5.1.0' }, n: 66, deps: ['accepts', 'body-parser', 'content-disposition', 'content-type', 'cookie', 'cookie-signature', 'debug', 'encodeurl', 'escape-html', 'etag', 'finalhandler', 'fresh', 'http-errors', 'merge-descriptors', 'mime-types', 'on-finished', 'once', 'parseurl', 'proxy-addr', 'qs', 'range-parser', 'router', 'send', 'serve-static', 'statuses', 'type-is', 'vary'], desc: 'Fast, unopinionated, minimalist web framework' },
+    express: { v: '5.3.0', majors: { 4: '4.21.2', 5: '5.3.0' }, n: 65, deps: ['accepts', 'body-parser', 'content-disposition', 'content-type', 'cookie', 'cookie-signature', 'debug', 'encodeurl', 'escape-html', 'etag', 'finalhandler', 'fresh', 'http-errors', 'merge-descriptors', 'mime-types', 'on-finished', 'once', 'parseurl', 'proxy-addr', 'qs', 'range-parser', 'router', 'send', 'serve-static', 'statuses', 'type-is', 'vary'], desc: 'Fast, unopinionated, minimalist web framework' },
     nodemon: { v: '3.1.10', majors: { 2: '2.0.22', 3: '3.1.10' }, n: 28, deps: ['chokidar', 'debug', 'ignore-by-default', 'minimatch', 'pstree.remy', 'semver', 'simple-update-notifier', 'supports-color', 'touch', 'undefsafe'], desc: 'Simple monitor script for use during development of a Node.js app.', bin: 'nodemon' },
     chalk: { v: '5.6.2', majors: { 4: '4.1.2', 5: '5.6.2' }, n: 1, deps: [], desc: 'Terminal string styling done right' },
     dotenv: { v: '17.2.3', n: 1, deps: [], desc: 'Loads environment variables from .env file' },
@@ -405,7 +405,7 @@ module.exports = chalk;
 module.exports.default = chalk;`,
       cowsay: `exports.say = ({ text }) => { const t = ' ' + text + ' '; return ' ' + '_'.repeat(t.length) + '\\n<' + t + '>\\n ' + '-'.repeat(t.length) + '\\n        \\\\   ^__^\\n         \\\\  (oo)\\\\_______\\n            (__)\\\\       )\\\\/\\\\\\n                ||----w |\\n                ||     ||'; };`,
     };
-    const stubFor = (n) => STUBS[n] || `throw new Error('[NodeLab] Il pacchetto "${n}" è installato nel simulatore, ma il suo codice non è disponibile qui. Provalo sul tuo PC!');`;
+    const stubFor = (n) => (n === 'express' ? '/* nodelab:builtin express */' : STUBS[n]) || `throw new Error('[NodeLab] Il pacchetto "${n}" è installato nel simulatore, ma il suo codice non è disponibile qui. Provalo sul tuo PC!');`;
     function collectProjectFiles(baseDir) {
       const files = {};
       const pre = baseDir + '/';

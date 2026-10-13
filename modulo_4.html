@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 4 · Express: le basi — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="bg-gray-900">
+
+  <!-- ===================== Esempi di codice (testo puro, niente escape) ===================== -->
+  <script type="text/plain" id="c-http">
+// Modulo 3: solo il modulo http
+const http = require('node:http');
+const JSON_CT = { 'Content-Type': 'application/json' };
+
+http.createServer((req, res) => {
+  const url = new URL(req.url, 'http://x');
+  const m = url.pathname.match(/^\/api\/libri\/(\d+)$/);
+  if (req.method === 'GET' && m) {
+    const id = Number(m[1]);
+    const libro = libri.find((l) => l.id === id);
+    if (!libro) {
+      res.writeHead(404, JSON_CT);
+      return res.end(JSON.stringify({ errore: 'No' }));
+    }
+    res.writeHead(200, JSON_CT);
+    return res.end(JSON.stringify(libro));
+  }
+  // ...e così via per ogni rotta
+}).listen(3000);
+</script>
+  <script type="text/plain" id="c-express">
+// Modulo 4: Express
+const express = require('express');
+const app = express();
+
+app.get('/api/libri/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const libro = libri.find((l) => l.id === id);
+  if (!libro) {
+    return res.status(404).json({ errore: 'No' });
+  }
+  res.json(libro);
+});
+
+app.listen(3000);
+</script>
+  <script type="text/plain" id="c-install">
+$ mkdir biblioteca && cd biblioteca
+$ npm init -y
+$ npm install express
+
+added 65 packages, and audited 66 packages in 1s
+
+$ npm pkg get dependencies
+{
+  "express": "^5.3.0"
+}
+
+$ npm pkg set scripts.dev="node --watch server.js"
+$ npm run dev
+</script>
+  <script type="text/plain" id="c-hello">
+// server.js
+const express = require('express');
+
+const app = express();              // 1. crea l'applicazione
+
+app.get('/', (req, res) => {        // 2. definisce una rotta
+  res.send('Ciao Express!');
+});
+
+app.listen(3000, () => {            // 3. avvia il server
+  console.log('Server su http://localhost:3000');
+});
+</script>
+  <script type="text/plain" id="c-hello-out">
+$ curl -i http://localhost:3000/
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Content-Type: text/html; charset=utf-8
+Content-Length: 13
+ETag: W/"d-NsYHRluFeEbX1OH6Ir1L43RUcxg"
+Date: Tue, 13 Oct 2026 00:01:01 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+Ciao Express!
+</script>
+  <script type="text/plain" id="c-route">
+//  metodo    percorso           gestore (handler)
+app.get(     '/api/libri',      (req, res) => { ... });
+app.post(    '/api/libri',      (req, res) => { ... });
+app.put(     '/api/libri/:id',  (req, res) => { ... });
+app.patch(   '/api/libri/:id',  (req, res) => { ... });
+app.delete(  '/api/libri/:id',  (req, res) => { ... });
+app.all(     '/test',           (req, res) => { ... });  // qualsiasi metodo
+
+// req = la richiesta (cosa chiede il client)
+// res = la risposta  (cosa rispondiamo noi): UNA sola per richiesta!
+</script>
+  <script type="text/plain" id="c-res">
+res.send('Ciao');                 // testo/HTML  → Content-Type: text/html
+res.json({ ok: true });           // oggetto     → Content-Type: application/json
+res.status(201).json(nuovo);      // status + JSON (si possono concatenare)
+res.status(404).json({ errore: 'Non trovato' });
+res.sendStatus(204);              // solo lo status (204 = nessun contenuto)
+res.redirect('/login');           // 302 + header Location
+res.set('X-Versione', '1.0');     // header personalizzato
+res.location('/api/libri/5');     // header Location (utile con il 201)
+</script>
+  <script type="text/plain" id="c-params">
+// Il ":" indica un parametro: la parte di URL diventa una variabile
+app.get('/api/utenti/:id/ordini/:ordine', (req, res) => {
+  res.json(req.params);
+});
+</script>
+  <script type="text/plain" id="c-params-out">
+$ curl localhost:3000/api/utenti/42/ordini/7
+{"id":"42","ordine":"7"}
+</script>
+  <script type="text/plain" id="c-query">
+// GET /api/cerca?autore=Eco&max=10&tag=a&tag=b
+app.get('/api/cerca', (req, res) => {
+  res.json(req.query);
+});
+</script>
+  <script type="text/plain" id="c-query-out">
+$ curl "localhost:3000/api/cerca?autore=Eco&max=10&tag=a&tag=b"
+{"autore":"Eco","max":"10","tag":["a","b"]}
+
+$ curl localhost:3000/api/cerca
+{}
+</script>
+  <script type="text/plain" id="c-body">
+const app = express();
+app.use(express.json());   // ← legge i body JSON e li mette in req.body
+
+app.post('/api/libri', (req, res) => {
+  const { titolo, autore } = req.body;
+  if (!titolo || !autore) {
+    return res.status(400).json({ errore: 'titolo e autore sono obbligatori' });
+  }
+  const libro = { id: prossimoId++, titolo, autore };
+  libri.push(libro);
+  res.status(201).location(`/api/libri/${libro.id}`).json(libro);
+});
+</script>
+  <script type="text/plain" id="c-body-out">
+$ curl -X POST localhost:3000/api/libri \
+       -H "Content-Type: application/json" \
+       -d '{"titolo":"Lessico famigliare","autore":"Natalia Ginzburg"}'
+{"id":5,"titolo":"Lessico famigliare","autore":"Natalia Ginzburg"}
+
+# Senza app.use(express.json()):  req.body è undefined
+# → TypeError: Cannot destructure property 'titolo' of 'req.body' as it is undefined.
+</script>
+  <script type="text/plain" id="c-crud">
+app.get('/api/libri', (req, res) => res.json(libri));
+
+app.get('/api/libri/:id', (req, res) => {
+  const libro = libri.find((l) => l.id === Number(req.params.id));
+  if (!libro) return res.status(404).json({ errore: 'Libro non trovato' });
+  res.json(libro);
+});
+
+app.delete('/api/libri/:id', (req, res) => {
+  const i = libri.findIndex((l) => l.id === Number(req.params.id));
+  if (i === -1) return res.status(404).json({ errore: 'Libro non trovato' });
+  libri.splice(i, 1);
+  res.sendStatus(204);
+});
+</script>
+  <script type="text/plain" id="c-order">
+// ❌ /api/libri/recenti non verrà MAI raggiunta:
+//    "recenti" viene preso come :id dalla rotta precedente
+app.get('/api/libri/:id', ...);
+app.get('/api/libri/recenti', ...);
+
+// ✅ prima le rotte "fisse", poi quelle con parametri
+app.get('/api/libri/recenti', ...);
+app.get('/api/libri/:id', ...);
+
+// Nessuna rotta corrisponde? Express risponde da solo:
+// 404  <pre>Cannot GET /api/autori</pre>
+</script>
+  <script type="text/plain" id="c-ex5">
+// Express 5 usa una nuova sintassi per i percorsi
+app.get('/download/*file', ...);    // /download/foto/2026/mare.jpg
+                                    // → req.params.file = ['foto','2026','mare.jpg']
+app.get('/meteo{/:citta}', ...);    // /meteo  e  /meteo/Roma  (parte opzionale)
+
+app.get('*', ...);          // ❌ PathError [TypeError]: Missing parameter name at index 1: *
+app.get('/libri/:id?', ...);// ❌ PathError [TypeError]: Unexpected ? at index 10: /libri/:id?
+app.use((req, res) => {     // ✅ "tutto il resto": app.use in fondo
+  res.status(404).json({ errore: 'Pagina inesistente' });
+});
+
+// Gli errori nelle funzioni async vengono gestiti da Express (risposta 500)
+app.get('/api/dati', async (req, res) => {
+  const dati = await leggiDati();   // se fallisce → 500, il server NON crasha
+  res.json(dati);
+});
+</script>
+
+  <!-- ===================== Motori ===================== -->
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m4-biblioteca.js"></script>
+  <script>
+    const C = (id) => document.getElementById(id).textContent.replace(/^\n/, '');
+
+    window.DECK = {
+      module: 'MODULO 4',
+      title: 'Express: le basi',
+      prompt: 'modulo-4',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover', icon: 'zap',
+          title: 'Express: le basi',
+          subtitle: 'Lo stesso server del modulo 3, con **molto meno codice**: rotte, parametri, query string e body JSON.',
+          meta: ['2 ore', 'Lezione 4'],
+        },
+        {
+          type: 'agenda', part: 'PROGRAMMA DI OGGI', title: 'Agenda', icon: 'list-checks',
+          rows: [
+            ['Dal modulo `http` a Express: perché un framework', 'teoria'],
+            ['Installare e avviare Express 5', 'demo'],
+            ['Rotte, `req.params` e `req.query`', 'teoria'],
+            ['Body JSON con `express.json()` e status code', 'teoria'],
+            ['Le insidie di Express 5', 'teoria'],
+            ['Biblioteca Express nel browser + laboratori', 'lab'],
+            ['Quiz', 'quiz'],
+          ],
+        },
+        {
+          part: 'EXPRESS', title: 'Cos\'è Express', icon: 'zap', iconColor: 'text-yellow-400',
+          items: [
+            'Il framework web più usato per Node.js: **minimale** e flessibile.',
+            'È costruito **sopra** il modulo `http`: `req` e `res` sono gli stessi oggetti, con funzioni in più.',
+            'Ci dà: routing dichiarativo, `req.params`, `req.query`, `req.body`, `res.json()`, middleware.',
+            'Usiamo **Express 5** (la versione attuale su npm): alcune cose dei tutorial vecchi non funzionano più!',
+          ],
+        },
+        {
+          type: 'compare', part: 'EXPRESS', title: 'Stessa rotta, due mondi', icon: 'git-compare',
+          columns: [
+            { title: 'Modulo `http`', color: 'red', icon: 'hand', code: C('c-http') },
+            { title: 'Express', color: 'green', icon: 'sparkles', code: C('c-express') },
+          ],
+          footer: 'Express si occupa di URL, parametri, `Content-Type` e serializzazione JSON: noi scriviamo solo la **logica**.',
+        },
+        {
+          type: 'code', part: 'INSTALLAZIONE', title: 'Installare Express', icon: 'download', iconColor: 'text-green-400',
+          items: [
+            'Express è un pacchetto npm: `npm install express` (dipendenza, non devDependency).',
+            'Il `^5` nel `package.json` garantisce che restiamo su Express 5.',
+            '`node --watch` riavvia il server ogni volta che salvi (in alternativa `nodemon`).',
+          ],
+          code: C('c-install'), lang: 'bash',
+        },
+        {
+          type: 'code', part: 'INSTALLAZIONE', title: 'Il primo server Express', icon: 'rocket', iconColor: 'text-green-400',
+          items: [
+            '`express()` crea l\'**applicazione**.',
+            '`app.get(percorso, gestore)` registra una **rotta**.',
+            '`app.listen(porta)` crea il server `http` e lo avvia.',
+            'Guarda gli header: `X-Powered-By`, `Content-Type` e `Content-Length` li mette Express.',
+          ],
+          code: C('c-hello'), file: 'server.js', output: C('c-hello-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'ROTTE', title: 'Anatomia di una rotta', icon: 'signpost', iconColor: 'text-blue-400',
+          items: [
+            'Un metodo per ogni verbo HTTP: `get`, `post`, `put`, `patch`, `delete`.',
+            'Una rotta = **metodo + percorso**: `GET /api/libri` e `POST /api/libri` sono due rotte diverse.',
+            'Il gestore riceve `req` e `res` e deve **rispondere una sola volta**.',
+            'Le rotte sono provate **in ordine**: vince la prima che corrisponde.',
+          ],
+          code: C('c-route'),
+        },
+        {
+          type: 'code', part: 'ROTTE', title: 'Rispondere con `res`', icon: 'reply', iconColor: 'text-blue-400',
+          items: [
+            '`res.json()` è il metodo che userete di più nelle API.',
+            '`res.status()` imposta lo status e restituisce `res`: si concatena.',
+            'Dopo aver risposto, usa `return` per non continuare: rispondere due volte dà `ERR_HTTP_HEADERS_SENT`.',
+          ],
+          code: C('c-res'),
+        },
+        {
+          type: 'code', part: 'DATI NELL\'URL', title: 'Parametri di percorso: `req.params`', icon: 'variable', iconColor: 'text-purple-400',
+          items: [
+            '`:nome` nel percorso diventa `req.params.nome`.',
+            'Servono a **identificare una risorsa**: `/api/libri/42`.',
+            'I valori sono sempre **stringhe**: `"42"`, non `42` → `Number(req.params.id)`.',
+            'Caratteri speciali (spazi, accenti) arrivano già decodificati.',
+          ],
+          code: C('c-params'), output: C('c-params-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'DATI NELL\'URL', title: 'Query string: `req.query`', icon: 'search', iconColor: 'text-purple-400',
+          items: [
+            'Tutto ciò che sta dopo `?` diventa l\'oggetto `req.query`.',
+            'Servono a **filtrare, ordinare, cercare**: `/api/libri?autore=eco`.',
+            'Anche qui: solo stringhe. Un parametro ripetuto diventa un array.',
+            'Un parametro che manca vale `undefined`: **controllalo** sempre.',
+          ],
+          code: C('c-query'), output: C('c-query-out'), reveal: true,
+        },
+        {
+          type: 'compare', part: 'DATI NELL\'URL', title: 'Params o query?', icon: 'split',
+          columns: [
+            { title: '`req.params`', color: 'purple', icon: 'key', items: ['Fa parte del percorso: `/api/libri/42`', '**Quale** risorsa voglio', 'Obbligatorio: senza, è un\'altra rotta', 'Es. id, username, codice prodotto'] },
+            { title: '`req.query`', color: 'cyan', icon: 'filter', items: ['Dopo il `?`: `/api/libri?autore=eco&dopo=1960`', '**Come** voglio la lista', 'Facoltativo: la rotta funziona anche senza', 'Es. filtri, ricerca, ordinamento, pagina'] },
+          ],
+        },
+        {
+          type: 'code', part: 'BODY', title: 'Il body JSON: `express.json()`', icon: 'braces', iconColor: 'text-orange-400',
+          items: [
+            'Per `POST`, `PUT`, `PATCH` i dati arrivano nel **body**.',
+            '`app.use(express.json())` li legge e li mette in `req.body` (niente più `data`/`end`!).',
+            'Funziona solo se il client manda `Content-Type: application/json`.',
+            'JSON non valido? Express risponde da solo **400 Bad Request**.',
+            '**Mai fidarsi** del body: controlla i campi obbligatori → 400.',
+          ],
+          code: C('c-body'), output: C('c-body-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'CRUD', title: 'Leggere ed eliminare', icon: 'database', iconColor: 'text-orange-400',
+          items: [
+            'Lista → `200` con un array (anche vuoto).',
+            'Elemento che non esiste → `404` con un messaggio JSON.',
+            'Eliminazione riuscita → `204 No Content` (nessun body).',
+            '`find` per cercare, `findIndex` + `splice` per eliminare.',
+          ],
+          code: C('c-crud'),
+        },
+        {
+          part: 'CRUD', title: 'Lo status code giusto', icon: 'traffic-cone', iconColor: 'text-yellow-400',
+          items: [
+            '**200 OK** → `res.json(dati)` (è il default)',
+            '**201 Created** → `res.status(201).location(url).json(nuovo)` dopo una `POST`',
+            '**204 No Content** → `res.sendStatus(204)` dopo una `DELETE`',
+            '**400 Bad Request** → dati mancanti o sbagliati: colpa del client',
+            '**404 Not Found** → la risorsa non esiste',
+            '**500 Internal Server Error** → errore nel nostro codice (ci pensa Express)',
+          ],
+        },
+        {
+          type: 'code', part: 'ATTENZIONE', title: 'L\'ordine delle rotte conta', icon: 'arrow-down-wide-narrow', iconColor: 'text-red-400',
+          items: [
+            'Express prova le rotte **dall\'alto in basso** e si ferma alla prima che corrisponde.',
+            'Un parametro come `:id` accetta qualsiasi testo, anche `recenti`.',
+            'Se nessuna rotta corrisponde, Express risponde con una **404 automatica** (pagina HTML).',
+          ],
+          code: C('c-order'),
+        },
+        {
+          type: 'code', part: 'ATTENZIONE', title: 'Novità e insidie di Express 5', icon: 'alert-triangle', iconColor: 'text-red-400',
+          items: [
+            'Nuova sintassi dei percorsi: `*nome` per "tutto il resto", `{ }` per le parti opzionali.',
+            '`\'*\'` e `:id?` dei tutorial vecchi ora **bloccano l\'avvio** del server.',
+            'Senza `express.json()` (o se il client non manda JSON) `req.body` è `undefined`: in Express 4 spesso era `{}`.',
+            'Errori nelle funzioni `async`: Express li intercetta e risponde 500 (in Express 4 crashava tutto!).',
+          ],
+          code: C('c-ex5'),
+        },
+        {
+          part: 'RIEPILOGO', title: 'Cosa portiamo a casa', icon: 'check-circle', iconColor: 'text-green-400',
+          items: [
+            '`const app = express()` → `app.get/post/put/delete(percorso, (req, res) => …)` → `app.listen(3000)`.',
+            '`req.params` (quale risorsa) e `req.query` (filtri): sempre **stringhe**.',
+            '`app.use(express.json())` → `req.body`. E poi **valida** i dati.',
+            '`res.json()`, `res.status()`, `res.sendStatus()`: una sola risposta, poi `return`.',
+            'Ordine delle rotte, 404 automatica, sintassi dei percorsi di Express 5.',
+          ],
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Biblioteca Express: mettiti alla prova', icon: 'library', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Un server Express vero sta girando qui nel browser. Completa le missioni con il client HTTP e guarda il log del server: ogni richiesta lascia una riga.</p><div class="biblio"></div>',
+          mount: (el) => NodeLab.inspector(el.querySelector('.biblio'), {
+            id: 'm4-biblioteca-slide',
+            files: { 'server.js': M4_BIBLIOTECA.server },
+            entry: 'server.js', port: 3000, packages: ['express'],
+            missions: M4_BIBLIOTECA.missions,
+            presets: M4_BIBLIOTECA.presets,
+          }),
+        },
+        {
+          type: 'custom', part: 'ORA TOCCA A VOI', title: 'Esercitazioni e laboratori', icon: 'flask-conical',
+          html: `<div class="grid md:grid-cols-2 gap-6 items-center">
+            <ul class="space-y-3 text-lg md:text-xl text-gray-300">
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Biblioteca Express: 9 missioni</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>4 laboratori con verifica automatica</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Un lab "trova i bug" sulle insidie di Express 5</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Missioni sul vostro PC + quiz</li>
+            </ul>
+            <div class="text-center">
+              <a href="modulo_4_ex.html" class="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold hover:bg-green-500 transition-colors">
+                <i data-lucide="flask-conical" class="w-6 h-6"></i> Apri le esercitazioni</a>
+              <p class="mt-6 text-gray-500 font-mono text-sm">Prossimo modulo: middleware, file statici e Router</p>
+            </div></div>`,
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>

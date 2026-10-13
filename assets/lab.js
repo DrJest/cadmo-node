@@ -402,7 +402,7 @@
       setRunning(true);
       if (client) client.setState('<span class="text-yellow-400">● avvio…</span>');
       const p = new NodeProcess({
-        files: Object.assign({}, files), entry, argv: parseArgs(argStr), env: cfg.env || {}, fs: cfg.fs || {},
+        files: Object.assign({}, files), entry, argv: parseArgs(argStr), env: cfg.env || {}, fs: cfg.fs || {}, packages: cfg.packages || [],
         onOutput: (stream, text) => { if (p === proc) term.write(stream, text); },
         onClear: () => { if (p === proc) term.clear(); },
         onIdle: (ports, snap) => {
@@ -450,7 +450,7 @@
         li.innerHTML = `<span class="text-gray-500 mt-0.5">…</span><div class="flex-1"><div class="text-gray-300">${inline(t.name)}</div></div>`;
         list.appendChild(li);
         const argv = Array.isArray(t.argv) ? t.argv : t.argv ? parseArgs(t.argv) : [];
-        const p = new NodeProcess({ files: Object.assign({}, files), entry, argv, env: Object.assign({}, cfg.env || {}, t.env || {}), fs: t.replaceFs ? t.fs || {} : Object.assign({}, cfg.fs || {}, t.fs || {}) });
+        const p = new NodeProcess({ files: Object.assign({}, files), entry, argv, env: Object.assign({}, cfg.env || {}, t.env || {}), fs: t.replaceFs ? t.fs || {} : Object.assign({}, cfg.fs || {}, t.fs || {}), packages: cfg.packages || [] });
         p.start();
         await p.settled(t.wait || 3000);
         let r = p.state === 'exited' && p.exitInfo && p.exitInfo.hung ? { ok: false, message: 'Il programma non risponde (ciclo infinito?).' } : await p.test(fnSource(t.check));
@@ -548,7 +548,7 @@
       term.write('prompt', '$ ');
       term.write('cmd', `node ${cfg.entry || 'server.js'}\n`);
       proc = new NodeProcess({
-        files: cfg.files, entry: cfg.entry || 'server.js', fs: cfg.fs || {},
+        files: cfg.files, entry: cfg.entry || 'server.js', fs: cfg.fs || {}, packages: cfg.packages || [],
         onOutput: (s, t) => term.write(s, t),
         onIdle: (ports) => client.setState(`<span class="text-green-400">● in ascolto su :${ports.join(', :')}</span>`),
         onExit: () => client.setState('<span class="text-red-400">● server spento</span>'),
