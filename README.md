@@ -16,9 +16,10 @@ assets/
   runtime.js          Node.js simulato: fs, path, events, http, process… (window.NodeSim)
   lab.js              laboratori di codice + client HTTP + inspector (window.NodeLab)
   terminal.js         shell simulata con npm/npx/node/nano (window.NodeTerminal)
-  widgets.js          Quiz, EventLoopViz, OrderGame, toggleSolution
+  widgets.js          Quiz, EventLoopViz, OrderGame, PipelineViz, toggleSolution
   labs-mN.js          configurazione dei laboratori del modulo N (window.MN_LABS)
   m4-biblioteca.js    server Express + missioni della "Biblioteca" (modulo 4)
+  m5-biblioteca.js    "Biblioteca 2.0" (morgan, cors, static, Router, errori) + scenario di PipelineViz (modulo 5)
 tools/
   harness.js          esegue il runtime simulato dentro Node (senza browser)
   check-labs.js       verifica soluzioni e codice iniziale dei laboratori
@@ -66,8 +67,8 @@ NodeLab.mount(document.getElementById('lab1'), {
   fs: { 'dati/studenti.json': '[...]' },        // file già presenti in /progetto
   argv: '5 + 3',                                 // mostra il campo argomenti
   env: { PORT: '3000' },
-  packages: ['express'],                         // pacchetti npm presenti in node_modules
-  server: { port: 3000, presets: [{ method: 'GET', path: '/' }] },
+  packages: ['express', 'morgan', 'cors'],       // pacchetti npm presenti in node_modules
+  server: { port: 3000, presets: [{ method: 'GET', path: '/' }, { method: 'POST', path: '/x', body: '{}', headers: 'X-Api-Key: abc', send: false }] },
   tests: [{ name: '...', argv: [], fs: {}, check: async (ctx) => { ctx.assert(...); } }],
   hints: ['...'], solution: { 'app.js': '...' },
 });
@@ -87,7 +88,10 @@ NodeLab.mount(document.getElementById('lab1'), {
 - `NodeLab.inspector(el, { id, files, entry, port, missions: [{ text, check: (req, res) => bool }], presets })` — server pronto + missioni HTTP.
 - `NodeLab.httpClient(el, { send, port, presets, onExchange })`.
 - `Quiz.mount(el, [{ question, code?, options, correct, explanation }], { id })`.
-- `OrderGame.mount(el, [{ title, code, chips, answer, explain }], { id })` — "indovina l'output".
+- `OrderGame.mount(el, [{ title, code, chips, answer, explain, cmd?, prompt? }], { id })` — "indovina l'output"
+  (`cmd` cambia la riga sopra il terminale, es. `$ curl localhost:3000/api/libri`).
+- `PipelineViz.mount(el, { code: [righe], layers: [{ id, label, lines: [da, a], kind: 'mw'|'route'|'err' }], requests: [{ label, steps: [{ layer, act, note, log?, badge? }], response: { status, text } }] })`
+  — una richiesta attraverso i middleware, passo per passo (`act`: `next`, `skip`, `respond`, `error`, `errskip`, `hang`).
 - `EventLoopViz.mount(el, { code: [righe], steps: [{ line, stack, ticks, micro, timers, check, out, phase, note }] })`.
 
 I progressi degli studenti (codice, laboratori superati, quiz) sono salvati solo nel `localStorage` del loro browser.
@@ -99,6 +103,7 @@ iniziale ne fallisca almeno una (serve solo Node, niente browser):
 
 ```bash
 node tools/check-labs.js assets/labs-m4.js M4_LABS
+node tools/check-labs.js assets/labs-m5.js M5_LABS
 ```
 
 ## Note sul simulatore
@@ -108,6 +113,9 @@ node tools/check-labs.js assets/labs-m4.js M4_LABS
   rotte con la sintassi di Express 5 (`:param`, `*splat`, `{opzionale}`), `req.params/query/body`, `express.json/urlencoded/static`,
   `express.Router`, `res.json/status/send/sendStatus/redirect/location/sendFile`, errori async, 404 e pagine d'errore come l'originale.
   Non ci sono template engine (`res.render`).
+- **morgan** (formati `dev`, `tiny`, `short`, `common`, `combined`, token personalizzati, opzioni `skip`, `stream`, `immediate`)
+  e **cors** (porting fedele: `origin` stringa/array/RegExp/funzione, preflight `OPTIONS`) sono integrati come express:
+  `packages: ['express', 'morgan', 'cors']` oppure `npm install` nel terminale.
 - Moduli disponibili: `fs`, `fs/promises`, `path`, `events`, `os`, `util`, `http`, `url`, `querystring`,
   `crypto` (parziale), `assert`, `buffer`, `timers`, `timers/promises`, `stream` (minimo), `string_decoder`.
 - Il file system è virtuale (radice `/progetto`) e si azzera a ogni esecuzione.

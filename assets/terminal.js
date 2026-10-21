@@ -28,8 +28,8 @@
     dayjs: { v: '1.11.18', n: 1, deps: [], desc: '2KB immutable date time library alternative to Moment.js' },
     cowsay: { v: '1.6.0', n: 41, deps: ['get-stdin', 'string-width', 'strip-final-newline', 'yargs'], desc: 'cowsay is a configurable talking cow', bin: 'cowsay' },
     figlet: { v: '1.9.3', n: 2, deps: ['commander'], desc: 'Creates ASCII Art from text.', bin: 'figlet' },
-    morgan: { v: '1.10.1', n: 7, deps: ['basic-auth', 'debug', 'depd', 'on-finished', 'on-headers'], desc: 'HTTP request logger middleware for node.js' },
-    cors: { v: '2.8.5', n: 3, deps: ['object-assign', 'vary'], desc: 'Node.js CORS middleware' },
+    morgan: { v: '1.12.1', n: 9, deps: ['basic-auth', 'debug', 'depd', 'on-finished', 'on-headers'], desc: 'HTTP request logger middleware for node.js' },
+    cors: { v: '2.8.6', n: 3, deps: ['object-assign', 'vary'], desc: 'Node.js CORS middleware' },
     axios: { v: '1.12.2', n: 23, deps: ['follow-redirects', 'form-data', 'proxy-from-env'], desc: 'Promise based HTTP client for the browser and node.js' },
     uuid: { v: '13.0.0', n: 1, deps: [], desc: 'RFC9562 UUIDs', bin: 'uuid' },
     prettier: { v: '3.6.2', n: 1, deps: [], desc: 'Prettier is an opinionated code formatter', bin: 'prettier' },
@@ -405,7 +405,8 @@ module.exports = chalk;
 module.exports.default = chalk;`,
       cowsay: `exports.say = ({ text }) => { const t = ' ' + text + ' '; return ' ' + '_'.repeat(t.length) + '\\n<' + t + '>\\n ' + '-'.repeat(t.length) + '\\n        \\\\   ^__^\\n         \\\\  (oo)\\\\_______\\n            (__)\\\\       )\\\\/\\\\\\n                ||----w |\\n                ||     ||'; };`,
     };
-    const stubFor = (n) => (n === 'express' ? '/* nodelab:builtin express */' : STUBS[n]) || `throw new Error('[NodeLab] Il pacchetto "${n}" è installato nel simulatore, ma il suo codice non è disponibile qui. Provalo sul tuo PC!');`;
+    const BUILTIN = ['express', 'morgan', 'cors'];   // implementati dentro runtime.js
+    const stubFor = (n) => (BUILTIN.includes(n) ? `/* nodelab:builtin ${n} */` : STUBS[n]) || `throw new Error('[NodeLab] Il pacchetto "${n}" è installato nel simulatore, ma il suo codice non è disponibile qui. Provalo sul tuo PC!');`;
     function collectProjectFiles(baseDir) {
       const files = {};
       const pre = baseDir + '/';

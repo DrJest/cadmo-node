@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 5 · Middleware, file statici e Router — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="bg-gray-900">
+
+  <!-- ===================== Esempi di codice (testo puro, niente escape) ===================== -->
+  <script type="text/plain" id="c-static">
+// server.js
+const path = require('path');
+const express = require('express');
+
+const app = express();
+
+// tutti i file di public/ diventano raggiungibili via HTTP
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/api/libri', (req, res) => res.json(libri));
+
+app.listen(3000);
+
+// biblioteca/
+// ├── server.js
+// └── public/
+//     ├── index.html     → GET /   (e GET /index.html)
+//     ├── style.css      → GET /style.css
+//     └── img/logo.png   → GET /img/logo.png
+</script>
+  <script type="text/plain" id="c-static-out">
+$ curl -i localhost:3000/style.css
+HTTP/1.1 200 OK
+X-Powered-By: Express
+Accept-Ranges: bytes
+Cache-Control: public, max-age=0
+Last-Modified: Sun, 18 Oct 2026 20:01:22 GMT
+ETag: W/"2e-1a1509ac304"
+Content-Type: text/css; charset=utf-8
+Content-Length: 46
+
+body { font-family: system-ui; color: #222; }
+</script>
+  <script type="text/plain" id="c-static-rules">
+app.use(express.static(path.join(__dirname, 'public')));
+
+// GET /               → public/index.html      (il file "indice" della cartella)
+// GET /img/logo.png   → public/img/logo.png
+// GET /img            → 301, Location: /img/   (è una cartella)
+// GET /api/libri      → il file non c'è: next() → ci pensano le rotte
+// POST /style.css     → non è GET o HEAD: next()
+// GET /server.js      → non sta in public/: next() → 404
+</script>
+  <script type="text/plain" id="c-static-prefix">
+// un prefisso nell'URL (che NON fa parte del percorso del file)
+app.use('/static', express.static(path.join(__dirname, 'public')));
+// GET /static/style.css  → public/style.css
+
+// più cartelle: vengono provate in ordine
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// opzioni: niente index.html automatico
+app.use('/archivio', express.static(path.join(__dirname, 'archivio'), { index: false }));
+
+// ❌ express.static('public') è relativo alla cartella da cui lanci node:
+//    cd /tmp && node ~/biblioteca/server.js   → cerca /tmp/public
+// ✅ path.join(__dirname, 'public') → sempre la cartella accanto a server.js
+</script>
+  <script type="text/plain" id="c-front-html">
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>Biblioteca</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>📚 Catalogo</h1>
+  <ul id="catalogo"></ul>
+  <script src="/app.js"><\/script>
+</body>
+</html>
+</script>
+  <script type="text/plain" id="c-front-js">
+// public/app.js — gira nel BROWSER, non in Node
+async function caricaCatalogo() {
+  // stessa origine della pagina: niente CORS
+  const risposta = await fetch('/api/libri');
+  const libri = await risposta.json();
+  document.getElementById('catalogo').innerHTML = libri
+    .map((l) => `<li>${l.titolo} — ${l.autore}</li>`)
+    .join('');
+}
+
+caricaCatalogo();
+</script>
+  <script type="text/plain" id="c-mw">
+// un middleware è una funzione con TRE parametri
+function logger(req, res, next) {
+  console.log(`${req.method} ${req.url}`);
+  next();                              // passa la richiesta al prossimo
+}
+
+app.use(logger);                       // per TUTTE le richieste
+
+// li conoscete già: sono middleware anche questi
+app.use(express.json());               // legge il body → req.body
+app.use(express.static('public'));     // risponde con un file… o chiama next()
+</script>
+  <script type="text/plain" id="c-next">
+app.use((req, res, next) => {
+  console.log('1. entra il logger');
+  next();
+  console.log('4. il logger riprende');
+});
+
+app.use('/api', (req, res, next) => {
+  console.log('2. sezione /api');
+  next();
+});
+
+app.get('/api/libri', (req, res) => {
+  console.log('3. la rotta risponde');
+  res.json(libri);
+});
+</script>
+  <script type="text/plain" id="c-next-out">
+$ curl localhost:3000/api/libri          # log del server:
+1. entra il logger
+2. sezione /api
+3. la rotta risponde
+4. il logger riprende
+
+# con app.use(express.static(...)) tra il logger e /api
+# (la ricerca del file è asincrona) l'ordine cambia:
+1. entra il logger
+4. il logger riprende
+2. sezione /api
+3. la rotta risponde
+</script>
+  <script type="text/plain" id="c-mw-bugs">
+// ❌ 1. né risposta né next(): il client aspetta… per sempre
+app.use((req, res, next) => {
+  console.log(req.url);
+});
+
+// ❌ 2. risposta E next(): qualcun altro proverà a rispondere
+app.use((req, res, next) => {
+  if (!req.get('X-Api-Key')) res.status(401).json({ errore: 'Chiave mancante' });
+  next();
+});
+// → Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client
+
+// ✅ o rispondi (con return), o chiami next(): mai entrambe le cose
+app.use((req, res, next) => {
+  if (!req.get('X-Api-Key')) return res.status(401).json({ errore: 'Chiave mancante' });
+  next();
+});
+</script>
+  <script type="text/plain" id="c-where">
+// 1. globale: tutte le richieste
+app.use(morgan('dev'));
+
+// 2. su un prefisso: /api, /api/libri, /api/libri/7…  (ma non /apix)
+app.use('/api', contaRichieste);
+
+// 3. su una sola rotta, prima del gestore
+app.post('/api/libri', richiedeChiave, (req, res) => { /* ... */ });
+
+// 4. più middleware in fila (anche raccolti in un array)
+app.delete('/api/libri/:id', richiedeChiave, soloDirettore, eliminaLibro);
+const protezioni = [richiedeChiave, soloDirettore];
+app.put('/api/libri/:id', protezioni, aggiornaLibro);
+</script>
+  <script type="text/plain" id="c-morgan">
+// $ npm install morgan
+const morgan = require('morgan');
+
+app.use(morgan('dev'));       // il primo della fila: così vede tutto
+
+// altri formati
+app.use(morgan('tiny'));      // GET /api/libri 200 182 - 0.902 ms
+app.use(morgan('combined'));  // formato standard dei server web (produzione)
+app.use(morgan(':method :url → :status (:response-time ms)'));  // su misura
+</script>
+  <script type="text/plain" id="c-morgan-out">
+$ npm run dev                     # e intanto il browser e curl fanno richieste…
+📚 Biblioteca su http://localhost:3000
+GET / 200 2.104 ms - 512
+GET /style.css 200 0.811 ms - 46
+GET /app.js 200 0.502 ms - 318
+GET /api/libri 200 0.902 ms - 182
+POST /api/libri 401 0.403 ms - 28
+GET /favicon.ico 404 0.355 ms - 48
+</script>
+  <script type="text/plain" id="c-cors-err">
+// Console del browser, pagina aperta su http://localhost:5500
+Access to fetch at 'http://localhost:3000/api/libri' from origin
+'http://localhost:5500' has been blocked by CORS policy: No
+'Access-Control-Allow-Origin' header is present on the requested resource.
+</script>
+  <script type="text/plain" id="c-cors">
+// $ npm install cors
+const cors = require('cors');
+
+// tutti i siti possono leggere le risposte  → Access-Control-Allow-Origin: *
+app.use(cors());
+
+// solo il nostro frontend (meglio!)
+app.use(cors({ origin: 'http://localhost:5500' }));
+
+// una lista di origini permesse
+app.use(cors({ origin: ['http://localhost:5500', 'https://biblioteca.example.it'] }));
+</script>
+  <script type="text/plain" id="c-cors-out">
+$ curl -i -X OPTIONS localhost:3000/api/libri \
+       -H "Origin: http://localhost:5500" \
+       -H "Access-Control-Request-Method: POST" \
+       -H "Access-Control-Request-Headers: content-type, x-api-key"
+HTTP/1.1 204 No Content
+X-Powered-By: Express
+Access-Control-Allow-Origin: http://localhost:5500
+Vary: Origin, Access-Control-Request-Headers
+Access-Control-Allow-Methods: GET,HEAD,PUT,PATCH,POST,DELETE
+Access-Control-Allow-Headers: content-type, x-api-key
+Content-Length: 0
+</script>
+  <script type="text/plain" id="c-logger">
+function logger(req, res, next) {
+  const inizio = Date.now();
+  // 'finish' scatta quando la risposta è stata inviata:
+  // solo ora conosciamo lo status!
+  res.on('finish', () => {
+    const ms = Date.now() - inizio;
+    console.log(`${req.method} ${req.originalUrl} → ${res.statusCode} (${ms} ms)`);
+  });
+  next();
+}
+
+app.use(logger);
+</script>
+  <script type="text/plain" id="c-logger-out">
+GET /api/libri → 200 (2 ms)
+POST /api/libri → 401 (0 ms)
+GET /api/autori → 404 (1 ms)
+</script>
+  <script type="text/plain" id="c-enrich">
+let contatore = 0;
+
+app.use((req, res, next) => {
+  contatore++;
+  req.numero = contatore;                             // un dato per chi viene dopo
+  res.set('X-Richiesta-Numero', String(contatore));   // un header per il client
+  next();
+});
+
+app.get('/api/info', (req, res) => {
+  res.json({ richiesta: req.numero });
+});
+</script>
+  <script type="text/plain" id="c-enrich-out">
+$ curl -i localhost:3000/api/info
+HTTP/1.1 200 OK
+X-Powered-By: Express
+X-Richiesta-Numero: 7
+Content-Type: application/json; charset=utf-8
+
+{"richiesta":7}
+</script>
+  <script type="text/plain" id="c-chiave">
+function richiedeChiave(req, res, next) {
+  const chiave = req.get('X-Api-Key');
+  if (!chiave) {
+    return res.status(401).json({ errore: 'Chiave mancante' });
+  }
+  if (chiave !== 'cadmo') {
+    return res.status(403).json({ errore: 'Chiave non valida' });
+  }
+  next();                                    // tutto ok: avanti
+}
+
+app.get('/api/libri', elencoLibri);                       // libera
+app.post('/api/libri', richiedeChiave, aggiungiLibro);    // protetta
+app.delete('/api/libri/:id', richiedeChiave, eliminaLibro);
+</script>
+  <script type="text/plain" id="c-factory">
+// una funzione che CREA e restituisce un middleware
+function richiedeRuolo(ruolo) {
+  return (req, res, next) => {
+    if (req.get('X-Ruolo') !== ruolo) {        // (per esercizio: il ruolo vero
+      return res.status(403).json({            //  arriverà dal login, modulo 12)
+        errore: `Serve il ruolo ${ruolo}`,
+      });
+    }
+    next();
+  };
+}
+
+app.delete('/api/libri/:id', richiedeRuolo('bibliotecario'), eliminaLibro);
+app.use('/api/admin', richiedeRuolo('direttore'));
+
+// ecco perché si scrive morgan('dev') e cors({ ... }) con le parentesi:
+// sono "fabbriche" che restituiscono un middleware già configurato
+</script>
+  <script type="text/plain" id="c-router">
+// routes/libri.js
+const express = require('express');
+const router = express.Router();               // una "mini-app"
+
+const libri = [ /* ... */ ];
+
+router.get('/', (req, res) => res.json(libri));              // GET  /api/libri
+router.get('/:id', (req, res) => { /* ... */ });             // GET  /api/libri/7
+router.post('/', richiedeChiave, (req, res) => { /* ... */ });  // POST /api/libri
+router.delete('/:id', richiedeChiave, (req, res) => { /* ... */ });
+
+module.exports = router;
+</script>
+  <script type="text/plain" id="c-mount">
+// server.js
+const express = require('express');
+const libriRouter = require('./routes/libri');
+const autoriRouter = require('./routes/autori');
+
+const app = express();
+app.use(express.json());
+
+app.use('/api/libri', libriRouter);       // il prefisso si scrive UNA volta
+app.use('/api/autori', autoriRouter);
+
+app.listen(3000);
+</script>
+  <script type="text/plain" id="c-mount-out">
+// dentro il router, per GET /api/libri/7?completo=1
+req.originalUrl   // '/api/libri/7?completo=1'   l'URL completo
+req.baseUrl       // '/api/libri'                dove è montato il router
+req.url           // '/7?completo=1'             relativo al router
+req.path          // '/7'
+req.params.id     // '7'
+</script>
+  <script type="text/plain" id="c-router-adv">
+const router = express.Router();
+
+// middleware del router: vale SOLO per le rotte di questo router
+router.use((req, res, next) => {
+  console.log(`[libri] ${req.method} ${req.url}`);
+  next();
+});
+
+// stesso percorso, più metodi: router.route()
+router.route('/:id')
+  .get(leggiLibro)
+  .put(richiedeChiave, aggiornaLibro)
+  .delete(richiedeChiave, eliminaLibro);
+
+module.exports = router;
+
+// in server.js: un intero router protetto con un solo app.use
+app.use('/api/admin', richiedeChiave, adminRouter);
+</script>
+  <script type="text/plain" id="c-tree">
+biblioteca/
+├── package.json
+├── server.js            avvia: require('./app') + app.listen(3000)
+├── app.js               crea l'app: middleware, router, errori
+│                        → module.exports = app
+├── routes/
+│   ├── libri.js         express.Router() per /api/libri
+│   └── autori.js        express.Router() per /api/autori
+├── middleware/
+│   ├── richiedeChiave.js
+│   └── errori.js        nonTrovato + gestoreErrori
+├── data/
+│   └── libri.json
+└── public/              il frontend
+    ├── index.html
+    ├── style.css
+    └── app.js
+</script>
+  <script type="text/plain" id="c-404">
+// ... tutte le rotte e i router ...
+
+// in fondo: se nessuno ha risposto, è una 404
+app.use((req, res) => {
+  res.status(404).json({
+    errore: `Rotta non trovata: ${req.method} ${req.originalUrl}`,
+  });
+});
+</script>
+  <script type="text/plain" id="c-404-out">
+$ curl -i localhost:3000/api/autori
+HTTP/1.1 404 Not Found
+X-Powered-By: Express
+Content-Type: application/json; charset=utf-8
+Content-Length: 47
+
+{"errore":"Rotta non trovata: GET /api/autori"}
+</script>
+  <script type="text/plain" id="c-handler">
+// l'ULTIMO della fila, con QUATTRO parametri
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.parse.failed') {      // body JSON rotto
+    return res.status(400).json({ errore: 'JSON non valido' });
+  }
+  const status = err.status || 500;
+  if (status === 500) console.error(err);        // i dettagli restano nel terminale
+  res.status(status).json({
+    errore: status === 500 ? 'Errore interno del server' : err.message,
+  });
+});
+</script>
+  <script type="text/plain" id="c-sources">
+function creaErrore(status, messaggio) {
+  const err = new Error(messaggio);
+  err.status = status;
+  return err;
+}
+
+// 1. throw in una rotta
+app.get('/api/libri/:id', (req, res) => {
+  const libro = libri.find((l) => l.id === Number(req.params.id));
+  if (!libro) throw creaErrore(404, 'Libro non trovato');
+  res.json(libro);
+});
+
+// 2. next(err) esplicito
+app.post('/api/prestiti', (req, res, next) => {
+  if (!libro.disponibile) return next(creaErrore(409, 'Libro già in prestito'));
+  // ...
+});
+
+// 3. async: con Express 5 la Promise rifiutata arriva da sola al gestore
+app.get('/api/catalogo', async (req, res) => {
+  const testo = await fs.promises.readFile('data/libri.json', 'utf8');
+  res.json(JSON.parse(testo));
+});
+
+// 4. dai middleware: express.json() con un body rotto → next(err)
+//    con err.status = 400 e err.type = 'entity.parse.failed'
+</script>
+  <script type="text/plain" id="c-traps">
+// ❌ errore dentro una callback: Express NON lo vede → crash di tutto il server
+app.get('/api/vecchio', (req, res) => {
+  fs.readFile('data/libri.json', 'utf8', (err, testo) => {
+    res.json(JSON.parse(testo));        // file rotto? 💥 il processo termina
+  });
+});
+
+// ✅ con le Promise e async/await l'errore arriva al gestore (500)
+app.get('/api/nuovo', async (req, res) => {
+  const testo = await fs.promises.readFile('data/libri.json', 'utf8');
+  res.json(JSON.parse(testo));
+});
+
+// Express 4 (tutorial vecchi): gli errori async andavano passati a mano
+app.get('/api/express4', async (req, res, next) => {
+  try {
+    res.json(await leggiCatalogo());
+  } catch (err) {
+    next(err);
+  }
+});
+</script>
+  <script type="text/plain" id="c-order">
+// app.js
+const app = express();
+
+app.use(morgan('dev'));                                    // 1. log: per primo, vede tutto
+app.use(cors({ origin: 'http://localhost:5500' }));        // 2. CORS: prima delle rotte
+app.use(express.json());                                   // 3. body: prima di chi usa req.body
+app.use(express.static(path.join(__dirname, 'public')));   // 4. file statici
+
+app.use('/api/libri', libriRouter);                        // 5. le rotte
+app.use('/api/autori', autoriRouter);
+
+app.use(nonTrovato);                                       // 6. 404: dopo tutte le rotte
+app.use(gestoreErrori);                                    // 7. errori: sempre l'ultimo
+
+module.exports = app;
+</script>
+
+  <!-- ===================== Motori ===================== -->
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m5-biblioteca.js"></script>
+  <script>
+    // nei blocchi text/plain il tag di chiusura degli script è scritto con la barra "escapata"
+    const C = (id) => document.getElementById(id).textContent.replace(/^\n/, '').replace(/<\\\/script>/g, '<\/script>');
+
+    const PIPE_BOX = (label, cls) => `<span class="px-3 py-2 rounded-lg border font-mono text-sm md:text-base ${cls}">${label}</span>`;
+    const ARROW = '<span class="text-gray-500 text-xl">→</span>';
+    const PIPELINE_HTML = `
+      <div class="space-y-6">
+        <div class="flex flex-wrap items-center gap-2">
+          ${PIPE_BOX('📨 richiesta', 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200')}${ARROW}
+          ${PIPE_BOX('morgan', 'bg-purple-500/10 border-purple-500/40 text-purple-200')}${ARROW}
+          ${PIPE_BOX('cors', 'bg-purple-500/10 border-purple-500/40 text-purple-200')}${ARROW}
+          ${PIPE_BOX('express.json()', 'bg-purple-500/10 border-purple-500/40 text-purple-200')}${ARROW}
+          ${PIPE_BOX('express.static', 'bg-purple-500/10 border-purple-500/40 text-purple-200')}${ARROW}
+          ${PIPE_BOX('rotte e router', 'bg-blue-500/10 border-blue-500/40 text-blue-200')}${ARROW}
+          ${PIPE_BOX('404', 'bg-yellow-500/10 border-yellow-500/40 text-yellow-200')}
+        </div>
+        <div class="flex flex-wrap items-center gap-2 pl-4 md:pl-24">
+          <span class="text-red-300 font-mono text-sm">throw · next(err) · Promise rifiutata ⚡</span>${ARROW}
+          ${PIPE_BOX('(err, req, res, next)', 'bg-red-500/10 border-red-500/40 text-red-200')}
+        </div>
+        <ul class="slide-items space-y-3 text-base md:text-xl text-gray-300">
+          <li class="flex"><span class="text-green-500 mr-4 font-mono">$</span><span>Ogni richiesta percorre la fila <strong>dall'alto verso il basso</strong>, nell'ordine in cui avete scritto <code class="inline">app.use</code> e le rotte.</span></li>
+          <li class="flex"><span class="text-green-500 mr-4 font-mono">$</span><span>Il primo che <strong>risponde</strong> chiude il viaggio: chi viene dopo non viene eseguito.</span></li>
+          <li class="flex"><span class="text-green-500 mr-4 font-mono">$</span><span>Un errore fa <strong>saltare</strong> tutto fino al primo gestore con 4 parametri.</span></li>
+          <li class="flex"><span class="text-green-500 mr-4 font-mono">$</span><span>Le rotte sono middleware "speciali": filtrano per <strong>metodo</strong> e <strong>percorso esatto</strong>, e di solito rispondono.</span></li>
+        </ul>
+      </div>`;
+
+    window.DECK = {
+      module: 'MODULO 5',
+      title: 'Middleware, file statici e Router',
+      prompt: 'modulo-5',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover', icon: 'git-merge',
+          title: 'Middleware, file statici e Router',
+          subtitle: 'Come Express elabora **davvero** una richiesta: una fila di funzioni, dal primo log fino al gestore degli errori.',
+          meta: ['6 ore', 'Modulo 5'],
+        },
+        {
+          type: 'agenda', part: 'PROGRAMMA', title: 'Agenda', icon: 'list-checks',
+          rows: [
+            ['Un sito e un\'API nello stesso server: `express.static`', 'teoria'],
+            ['Cos\'è un middleware: la pipeline e `next()`', 'teoria'],
+            ['Simulazione: segui la richiesta', 'demo'],
+            ['Middleware pronti: `morgan` e `cors`', 'teoria'],
+            ['Pausa', 'pausa'],
+            ['Middleware fatti in casa: logger, contatori, buttafuori', 'teoria'],
+            ['`express.Router` e la struttura del progetto', 'teoria'],
+            ['404 e gestione centralizzata degli errori', 'teoria'],
+            ['Biblioteca 2.0 + 8 laboratori', 'lab'],
+            ['Quiz', 'quiz'],
+          ],
+        },
+        {
+          part: 'RIPASSO', title: 'Dove eravamo rimasti', icon: 'rewind', iconColor: 'text-gray-400',
+          items: [
+            '`const app = express()` → `app.get/post/put/delete(percorso, (req, res) => …)` → `app.listen(3000)`.',
+            '`req.params`, `req.query`, `req.body` (grazie ad `app.use(express.json())`).',
+            '`res.status().json()`, `res.sendStatus()`: **una** risposta per richiesta.',
+            'Oggi scopriamo cosa c\'è **in mezzo** tra la richiesta e la risposta… e perché quel misterioso `app.use` è il cuore di Express.',
+          ],
+        },
+
+        /* ------------------------------------------------ FILE STATICI */
+        {
+          part: 'FILE STATICI', title: 'Un server, due mestieri', icon: 'layers', iconColor: 'text-green-400',
+          items: [
+            '**API**: dati in JSON per i programmi → `/api/libri`.',
+            '**Sito**: file "statici" per il browser → HTML, CSS, JavaScript, immagini, PDF.',
+            '"Statico" = il file si invia **così com\'è**, senza calcolare niente.',
+            'Nel modulo 3 li servivamo a mano: `fs.readFile`, una tabella dei `Content-Type`, i controlli sul percorso…',
+            'Con Express basta **una riga**: `express.static`.',
+          ],
+        },
+        {
+          type: 'code', part: 'FILE STATICI', title: '`express.static`', icon: 'folder-open', iconColor: 'text-green-400',
+          items: [
+            'Gli si dà una **cartella**: ogni file al suo interno diventa un URL.',
+            'Il `Content-Type` lo deduce dall\'estensione: `.css` → `text/css`.',
+            'Aggiunge da solo gli header per la cache (`ETag`, `Last-Modified`).',
+            'Per convenzione la cartella si chiama `public/`.',
+          ],
+          code: C('c-static'), file: 'server.js', output: C('c-static-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'FILE STATICI', title: 'Come ragiona `express.static`', icon: 'brain', iconColor: 'text-green-400',
+          items: [
+            'Trasforma l\'URL in un percorso dentro la cartella e cerca il file.',
+            'File trovato → **risponde** (e la richiesta finisce lì).',
+            'File **non** trovato → chiama `next()`: la richiesta prosegue verso le rotte.',
+            'Non esce mai dalla cartella: `server.js` e i dati restano **privati**.',
+          ],
+          code: C('c-static-rules'),
+        },
+        {
+          type: 'code', part: 'FILE STATICI', title: 'Prefissi, più cartelle e `__dirname`', icon: 'folder-tree', iconColor: 'text-green-400',
+          items: [
+            'Con `app.use(\'/static\', …)` i file stanno sotto un prefisso.',
+            'Si possono montare **più cartelle**: vince la prima che ha il file.',
+            '`__dirname` = la cartella del file in esecuzione: rende il percorso **assoluto**.',
+          ],
+          code: C('c-static-prefix'),
+        },
+        {
+          type: 'compare', part: 'FILE STATICI', title: 'Il frontend parla con l\'API', icon: 'monitor-smartphone',
+          columns: [
+            { title: 'public/index.html', color: 'cyan', icon: 'file-code-2', code: C('c-front-html'), lang: 'xml' },
+            { title: 'public/app.js', color: 'yellow', icon: 'file-code-2', code: C('c-front-js') },
+          ],
+          footer: 'Il browser scarica la pagina con `express.static`, poi lo script chiama `/api/libri` sullo **stesso server**. Il JavaScript di `public/` gira nel browser: lì non ci sono `require` né `fs`!',
+        },
+
+        /* ------------------------------------------------ MIDDLEWARE */
+        {
+          type: 'code', part: 'MIDDLEWARE', title: 'Cos\'è un middleware', icon: 'git-merge', iconColor: 'text-purple-400',
+          items: [
+            'Una funzione `(req, res, next)` che sta **in mezzo** tra la richiesta e la risposta.',
+            'Può leggere e modificare `req` e `res`, rispondere, oppure passare il testimone con `next()`.',
+            'Si registra con `app.use()`: viene eseguita **nell\'ordine** in cui la scrivete.',
+            'Li usate già: `express.json()` ed `express.static()` sono middleware!',
+          ],
+          code: C('c-mw'),
+        },
+        {
+          type: 'custom', part: 'MIDDLEWARE', title: 'La pipeline di Express', icon: 'workflow', iconColor: 'text-purple-400',
+          html: PIPELINE_HTML,
+        },
+        {
+          type: 'compare', part: 'MIDDLEWARE', title: 'Le tre scelte di un middleware', icon: 'split',
+          columns: [
+            { title: 'Rispondere', color: 'green', icon: 'reply', items: ['`res.json(…)`, `res.send(…)`, `res.sendStatus(…)`', 'Il viaggio **finisce qui**', 'Es. `express.static` che trova il file, una rotta, un 401'] },
+            { title: '`next()`', color: 'blue', icon: 'arrow-down', items: ['Passa al **prossimo** middleware o rotta che corrisponde', 'Es. un logger, `express.json()`, un controllo superato'] },
+            { title: '`next(err)`', color: 'red', icon: 'zap', items: ['Segnala un **errore**', 'Salta tutto fino al gestore degli errori', 'Anche `throw` e le Promise rifiutate finiscono qui'] },
+          ],
+          footer: '⚠️ Se un middleware **non fa nessuna delle tre**, la richiesta resta appesa finché il client non si arrende.',
+        },
+        {
+          type: 'code', part: 'MIDDLEWARE', title: '`next()` passa il testimone', icon: 'arrow-down-up', iconColor: 'text-purple-400',
+          items: [
+            '`next()` esegue subito il middleware successivo: è una normale **chiamata di funzione**.',
+            'Il codice **dopo** `next()` gira quando gli altri hanno finito la parte **sincrona**…',
+            '…ma con qualcosa di asincrono in mezzo (`express.static`, un `await`) gira **prima** della risposta!',
+            'Per fare qualcosa a risposta inviata, si usa l\'evento `res.on(\'finish\')`.',
+          ],
+          code: C('c-next'), output: C('c-next-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'MIDDLEWARE', title: 'I due errori classici', icon: 'alert-triangle', iconColor: 'text-red-400',
+          items: [
+            'Dimenticare `next()`: il browser mostra la rotellina, `curl` resta in attesa.',
+            'Rispondere **e** chiamare `next()`: chi viene dopo prova a rispondere di nuovo → `ERR_HTTP_HEADERS_SENT`.',
+            'Regola: `return res.…` quando rispondi, `next()` quando lasci passare.',
+          ],
+          code: C('c-mw-bugs'),
+        },
+        {
+          type: 'compare', part: 'MIDDLEWARE', title: '`app.use` o `app.get`?', icon: 'git-compare',
+          columns: [
+            { title: '`app.use(percorso?, fn)`', color: 'purple', icon: 'filter', items: ['**Qualsiasi** metodo HTTP', 'Percorso come **prefisso**: `/api` vale per `/api/libri/7`', 'Senza percorso: **tutte** le richieste', 'Di solito: middleware che preparano, controllano o chiudono (404, errori)'] },
+            { title: '`app.get(percorso, fn)`', color: 'blue', icon: 'signpost', items: ['**Solo** il metodo indicato (`GET`)', 'Percorso **esatto** (con i `:parametri`)', 'Può avere più funzioni in fila: `app.get(p, mw1, mw2, gestore)`', 'Di solito: l\'ultima tappa, quella che risponde'] },
+          ],
+          footer: 'Il prefisso rispetta i segmenti: `app.use(\'/api\', …)` vale per `/api` e `/api/libri`, ma **non** per `/apix`.',
+        },
+        {
+          type: 'code', part: 'MIDDLEWARE', title: 'Dove agganciare un middleware', icon: 'anchor', iconColor: 'text-purple-400',
+          items: [
+            '**Globale**: log, CORS, body → per tutti.',
+            '**Su un prefisso**: una sezione del sito (`/api`, `/admin`).',
+            '**Su una rotta**: un controllo solo lì (es. la chiave per le `POST`).',
+            'I middleware di una rotta si eseguono **da sinistra a destra**.',
+          ],
+          code: C('c-where'),
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Segui la richiesta', icon: 'route', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Scegli una richiesta e avanza passo per passo: quale middleware la lascia passare, chi la salta, chi risponde?</p><div class="pipe"></div>',
+          mount: (el) => PipelineViz.mount(el.querySelector('.pipe'), M5_PIPELINE),
+        },
+
+        /* ------------------------------------------------ MORGAN E CORS */
+        {
+          type: 'code', part: 'MIDDLEWARE PRONTI', title: 'Il log delle richieste: `morgan`', icon: 'scroll-text', iconColor: 'text-cyan-400',
+          items: [
+            'Un pacchetto npm: `npm install morgan`.',
+            'Stampa una riga per ogni richiesta, **quando la risposta è finita**.',
+            '`dev`: colorato per status (verde 2xx, giallo 4xx, rosso 5xx), perfetto in sviluppo.',
+            '`combined`: il formato standard dei server web, per la produzione.',
+            'Mettilo **per primo**: registra anche le 404 e gli errori.',
+          ],
+          code: C('c-morgan'), output: C('c-morgan-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'MIDDLEWARE PRONTI', title: 'CORS: la regola dello stesso sito', icon: 'globe-lock', iconColor: 'text-cyan-400',
+          items: [
+            '**Origine** = protocollo + host + porta: `http://localhost:5500` e `http://localhost:3000` sono origini **diverse**.',
+            'Per sicurezza il **browser** non lascia leggere a una pagina le risposte di un\'altra origine…',
+            '…a meno che il server non lo permetta con l\'header `Access-Control-Allow-Origin`.',
+            'È una regola **del browser**: `curl`, Postman e Node non la applicano.',
+            'Con `express.static` pagina e API hanno la stessa origine: niente CORS!',
+          ],
+          code: C('c-cors-err'), lang: 'plaintext',
+        },
+        {
+          type: 'code', part: 'MIDDLEWARE PRONTI', title: 'Il pacchetto `cors`', icon: 'shield-check', iconColor: 'text-cyan-400',
+          items: [
+            '`cors()` aggiunge gli header CORS a ogni risposta.',
+            'Senza opzioni permette **qualsiasi** sito (`*`): comodo, ma meglio indicare le origini.',
+            'Per JSON, `PUT`/`DELETE` o header personalizzati il browser manda prima un **preflight**: una richiesta `OPTIONS` di "permesso".',
+            '`cors` risponde da solo al preflight con **204** e gli header `Access-Control-Allow-…`.',
+          ],
+          code: C('c-cors'), output: C('c-cors-out'), reveal: true,
+        },
+        {
+          type: 'compare', part: 'MIDDLEWARE PRONTI', title: 'Richiesta semplice o preflight?', icon: 'plane-takeoff',
+          columns: [
+            { title: 'Richiesta "semplice"', color: 'green', icon: 'send', items: ['`GET`, `HEAD` o `POST` da form', 'Solo header "normali" (`Accept`, `Content-Type: text/plain`…)', 'Il browser la invia subito e poi **controlla** `Access-Control-Allow-Origin`'] },
+            { title: 'Con preflight', color: 'orange', icon: 'plane', items: ['`PUT`, `PATCH`, `DELETE`, oppure `Content-Type: application/json`', 'Header personalizzati come `X-Api-Key`', 'Prima un `OPTIONS` con `Origin` e `Access-Control-Request-Method`; solo se va bene parte la richiesta vera'] },
+          ],
+          footer: 'Nella tab **Network** dei DevTools vedrete due righe per la stessa chiamata: l\'`OPTIONS` e la richiesta vera.',
+        },
+
+        /* ------------------------------------------------ FATTI IN CASA */
+        {
+          type: 'code', part: 'FATTI IN CASA', title: 'Un logger fatto in casa', icon: 'timer', iconColor: 'text-pink-400',
+          items: [
+            'All\'arrivo della richiesta non sappiamo ancora come andrà a finire.',
+            '`res` è un EventEmitter: l\'evento `finish` scatta a risposta inviata.',
+            'Lì conosciamo `res.statusCode` e il tempo impiegato.',
+            '`req.originalUrl` è l\'URL completo, anche dentro un Router.',
+          ],
+          code: C('c-logger'), output: C('c-logger-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'FATTI IN CASA', title: 'Arricchire `req` e `res`', icon: 'sparkles', iconColor: 'text-pink-400',
+          items: [
+            '`req` e `res` sono **gli stessi oggetti** per tutta la pipeline.',
+            'Un middleware può aggiungere dati a `req` per chi viene dopo (es. `req.utente` nel modulo 12).',
+            'Oppure impostare header sulla risposta con `res.set()`.',
+            'Per i dati "di servizio" Express offre anche `res.locals`.',
+          ],
+          code: C('c-enrich'), output: C('c-enrich-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'FATTI IN CASA', title: 'Il buttafuori: proteggere le rotte', icon: 'shield-half', iconColor: 'text-pink-400',
+          items: [
+            'Un middleware può **fermare** la richiesta prima che arrivi al gestore.',
+            '**401 Unauthorized**: non ti sei identificato (manca la chiave).',
+            '**403 Forbidden**: ti conosco, ma non puoi (chiave sbagliata o permessi insufficienti).',
+            'Le chiavi scritte nel codice vanno bene solo per esercizio: segreti in `.env` (modulo 7), login vero nel modulo 12.',
+          ],
+          code: C('c-chiave'),
+        },
+        {
+          type: 'code', part: 'FATTI IN CASA', title: 'Middleware con parametri', icon: 'factory', iconColor: 'text-pink-400',
+          items: [
+            'Una funzione che **restituisce** un middleware: una "fabbrica".',
+            'Lo stesso codice, configurato in modo diverso per ogni porta.',
+            'È lo stesso schema di `morgan(\'dev\')`, `cors({ … })`, `express.json()`, `express.static(\'public\')`.',
+          ],
+          code: C('c-factory'),
+        },
+
+        /* ------------------------------------------------ ROUTER */
+        {
+          part: 'ROUTER', title: 'Quando `server.js` diventa enorme', icon: 'file-warning', iconColor: 'text-blue-400',
+          items: [
+            'Libri, autori, prestiti, utenti… cinque rotte per risorsa → `server.js` da 300 righe.',
+            '`express.Router()` crea una **mini-app**: rotte e middleware suoi, in un file suo.',
+            'Il router si **monta** su un prefisso con `app.use(\'/api/libri\', router)`.',
+            'Dentro il router i percorsi sono **relativi**: `\'/\'`, `\'/:id\'`.',
+            'Un file per risorsa nella cartella `routes/`.',
+          ],
+        },
+        {
+          type: 'code', part: 'ROUTER', title: 'Un router per i libri', icon: 'file-code-2', iconColor: 'text-blue-400',
+          items: [
+            'Stesse funzioni di `app`: `router.get/post/put/delete`, `router.use`.',
+            'Nei commenti, l\'URL completo dopo il montaggio su `/api/libri`.',
+            '`module.exports = router` per poterlo importare.',
+            '⚠️ Se scrivete `router.get(\'/api/libri\')` la rotta diventa `/api/libri/api/libri`!',
+          ],
+          code: C('c-router'), file: 'routes/libri.js',
+        },
+        {
+          type: 'code', part: 'ROUTER', title: 'Montare i router', icon: 'plug', iconColor: 'text-blue-400',
+          items: [
+            '`require(\'./routes/libri\')` → il router esportato.',
+            '`app.use(prefisso, router)`: tutte le richieste che iniziano con il prefisso entrano nel router.',
+            'Dentro il router `req.url` perde il prefisso; `req.originalUrl` e `req.baseUrl` lo conservano.',
+          ],
+          code: C('c-mount'), file: 'server.js', output: C('c-mount-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'ROUTER', title: 'Middleware del router e `router.route()`', icon: 'git-branch', iconColor: 'text-blue-400',
+          items: [
+            '`router.use(…)` vale **solo** per le richieste che entrano in quel router.',
+            '`router.route(\'/:id\')` raggruppa i metodi di uno stesso percorso.',
+            'Si possono mettere middleware anche al montaggio: `app.use(\'/api/admin\', richiedeChiave, adminRouter)`.',
+          ],
+          code: C('c-router-adv'), file: 'routes/libri.js',
+        },
+        {
+          type: 'code', part: 'ROUTER', title: 'La struttura del progetto', icon: 'folder-tree', iconColor: 'text-blue-400',
+          items: [
+            '`app.js` **crea** l\'app e la esporta; `server.js` la **avvia**.',
+            'Perché separarli? I test (modulo 16) importano `app` senza aprire una porta.',
+            'Un file = una responsabilità: rotte, middleware, dati, frontend.',
+            'Nel modulo 7 aggiungeremo `controllers/` e `services/`.',
+          ],
+          code: C('c-tree'), lang: 'plaintext',
+        },
+
+        /* ------------------------------------------------ ERRORI */
+        {
+          type: 'code', part: 'ERRORI', title: 'La 404 personalizzata', icon: 'search-x', iconColor: 'text-red-400',
+          items: [
+            'Se nessuno ha risposto, Express manda la sua 404 in HTML (`Cannot GET …`).',
+            'Per un\'API meglio un JSON: un `app.use` **senza percorso**, **dopo** tutte le rotte.',
+            'È una normale funzione `(req, res)`: viene raggiunta solo se tutti hanno chiamato `next()`.',
+          ],
+          code: C('c-404'), output: C('c-404-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'ERRORI', title: 'Il gestore centralizzato degli errori', icon: 'siren', iconColor: 'text-red-400',
+          items: [
+            'Express lo riconosce dai **4 parametri** `(err, req, res, next)`: anche se `next` non lo usate, deve esserci!',
+            'Va messo **per ultimo**, dopo la 404.',
+            'Un solo posto per decidere status e formato di **tutti** gli errori.',
+            'Per i 500: dettagli nel terminale (`console.error`), al client un messaggio generico.',
+          ],
+          code: C('c-handler'),
+        },
+        {
+          type: 'code', part: 'ERRORI', title: 'Da dove arrivano gli errori', icon: 'radar', iconColor: 'text-red-400',
+          items: [
+            '`throw` dentro una rotta o un middleware.',
+            '`next(err)`: lo passate voi, esplicitamente.',
+            'Una Promise rifiutata in una funzione `async` (novità di **Express 5**).',
+            'Un middleware: `express.json()` con un body rotto crea un errore 400.',
+            'Un `err.status` dice al gestore quale status usare.',
+          ],
+          code: C('c-sources'),
+        },
+        {
+          type: 'code', part: 'ERRORI', title: 'Le trappole', icon: 'alert-octagon', iconColor: 'text-red-400',
+          items: [
+            'Un errore dentro una **callback** (`fs.readFile`, `setTimeout`) avviene "più tardi": Express non lo vede e il processo **crasha**.',
+            'Soluzione: API con le Promise (`fs/promises`) + `async`/`await`.',
+            'Nei tutorial per **Express 4** troverete `try/catch` + `next(err)` ovunque: con Express 5 non serve più.',
+          ],
+          code: C('c-traps'),
+        },
+        {
+          type: 'code', part: 'ERRORI', title: 'L\'ordine giusto', icon: 'list-ordered', iconColor: 'text-yellow-400',
+          items: [
+            'Prima i middleware che **preparano** (log, CORS, body).',
+            'Poi chi **risponde** (file statici, rotte, router).',
+            'In fondo chi **chiude** (404, poi errori).',
+            'Quasi tutti i bug di questo modulo sono… un `app.use` nel posto sbagliato!',
+          ],
+          code: C('c-order'), file: 'app.js',
+        },
+
+        /* ------------------------------------------------ CHIUSURA */
+        {
+          part: 'RIEPILOGO', title: 'Cosa portiamo a casa', icon: 'check-circle', iconColor: 'text-green-400',
+          items: [
+            '`express.static(path.join(__dirname, \'public\'))`: il sito e l\'API nello stesso server.',
+            'Middleware `(req, res, next)`: rispondi, `next()` o `next(err)`. Ordine dall\'alto in basso.',
+            '`morgan` per il log, `cors` per le altre origini, fabbriche di middleware per i controlli.',
+            '`express.Router()` + `module.exports` + `app.use(prefisso, router)`: un file per risorsa.',
+            '404 in fondo, poi il gestore `(err, req, res, next)`: errori sempre in JSON.',
+          ],
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Biblioteca 2.0: mettiti alla prova', icon: 'library', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Il server completo gira qui nel browser: morgan, cors, static, Router, buttafuori e gestore degli errori. Usa i preset (anche quelli con gli header) e guarda il log colorato di morgan.</p><div class="biblio"></div>',
+          mount: (el) => NodeLab.inspector(el.querySelector('.biblio'), {
+            id: 'm5-biblioteca-slide',
+            files: { 'server.js': M5_BIBLIOTECA.server },
+            fs: M5_BIBLIOTECA.fs,
+            entry: 'server.js', port: 3000, packages: ['express', 'morgan', 'cors'],
+            missions: M5_BIBLIOTECA.missions,
+            presets: M5_BIBLIOTECA.presets,
+          }),
+        },
+        {
+          type: 'custom', part: 'ORA TOCCA A VOI', title: 'Esercitazioni e laboratori', icon: 'flask-conical',
+          html: `<div class="grid md:grid-cols-2 gap-6 items-center">
+            <ul class="space-y-3 text-lg md:text-xl text-gray-300">
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Segui la richiesta + "che cosa stampa il server?"</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Biblioteca 2.0: 12 missioni</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>8 laboratori con verifica automatica (un boss multi-file)</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Missioni sul vostro PC + quiz</li>
+            </ul>
+            <div class="text-center">
+              <a href="modulo_5_ex.html" class="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold hover:bg-green-500 transition-colors">
+                <i data-lucide="flask-conical" class="w-6 h-6"></i> Apri le esercitazioni</a>
+              <p class="mt-6 text-gray-500 font-mono text-sm">Prossimo modulo: API REST e CRUD</p>
+            </div></div>`,
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>

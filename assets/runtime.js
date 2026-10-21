@@ -1300,6 +1300,7 @@
         Object.defineProperty(this, '_done', { value: done, writable: true });
         Object.defineProperty(this, '_usedWrite', { value: false, writable: true });
         Object.defineProperty(this, '_finished', { value: false, writable: true });
+        Object.defineProperty(this, '_result', { value: null, writable: true });
         this.req = req;
         this.statusCode = 200;
         this.statusMessage = undefined;
@@ -1371,7 +1372,14 @@
         this.finished = true;
         this._finalize();
         const done = typeof encOrCb === 'function' ? encOrCb : cb;
-        scheduleOp(() => { this.emit('finish'); this.emit('close'); if (done) done(); }, 0);
+        // come nella realtà: 'finish' scatta sul server prima che il client riceva la risposta
+        const deliver = () => { const r = this._result; this._result = null; if (r) this._done(r); };
+        pendingOps++;
+        realSetTimeout(() => {
+          pendingOps--;
+          runMacrotask(() => { try { this.emit('finish'); this.emit('close'); } finally { deliver(); } if (done) done(); });
+          deliver();
+        }, 0);
         return this;
       }
       _finalize() {
@@ -1393,13 +1401,13 @@
           if (this._usedWrite) headers.push(['Transfer-Encoding', 'chunked']);
           else headers.push(['Content-Length', String(body.length)]);
         }
-        this._done({
+        this._result = {
           ok: true,
           status: this.statusCode,
           statusMessage: this.statusMessage || STATUS_CODES[this.statusCode] || 'unknown',
           headers,
           body: this.req.method === 'HEAD' || noBody ? '' : body.toString(),
-        });
+        };
       }
       _abort(msg, code) {
         if (this._finished) return;
@@ -1539,8 +1547,6 @@
     // ------------------------------------------------------------ express
     // Una piccola Express 5 per il simulatore: stessa API e stessi messaggi
     // d'errore per le funzionalità usate nel corso.
-    const EXPRESS_MARKER = '/* nodelab:builtin express */';
-    let expressModule = null;
     function createExpress() {
       const MIME = { '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.ico': 'image/x-icon', '.md': 'text/markdown; charset=utf-8' };
       const TYPES = { json: 'application/json; charset=utf-8', html: 'text/html; charset=utf-8', text: 'text/plain; charset=utf-8', txt: 'text/plain; charset=utf-8', css: 'text/css; charset=utf-8', js: 'text/javascript; charset=utf-8' };
@@ -1657,7 +1663,12 @@
           let idx = 0;
           const basePath = req.__path;
           const baseUrl = req.baseUrl || '';
-          const restore = () => { req.__path = basePath; req.baseUrl = baseUrl; req.url = req.__origUrl.slice(baseUrl.length) || '/'; };
+          const restore = () => {
+            req.__path = basePath;
+            req.baseUrl = baseUrl;
+            const rest = req.__origUrl.slice(baseUrl.length);
+            req.url = rest.startsWith('/') ? rest : '/' + rest;
+          };
           function next(err) {
             if (err === 'router') { restore(); return out(); }
             restore();
@@ -1740,6 +1751,7 @@
         res.setHeader('Content-Security-Policy', "default-src 'none'");
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Content-Length', String(Buffer.byteLength(body)));
         res.end(body);
       }
 
@@ -1754,7 +1766,8 @@
         req.__origPath = u.pathname;
         req.__path = (() => { try { return decodeURI(u.pathname); } catch (e) { return u.pathname; } })();
         req.__search = u.search;
-        req.path = u.pathname;
+        // come in Express: req.path dipende da req.url (relativo al punto di montaggio)
+        Object.defineProperty(req, 'path', { get() { const q = req.url.indexOf('?'); return q === -1 ? req.url : req.url.slice(0, q); }, enumerable: true, configurable: true });
         req.baseUrl = '';
         req.query = parseQuery(u.search);
         req.params = {};
@@ -1896,7 +1909,11 @@
         const base = path.resolve(CWD, root);
         return function (req, res, next) {
           if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+          // come serve-static: la ricerca del file è asincrona (fs.stat)
           const rel = req.__path;
+          scheduleOp(() => lookup(req, res, next, rel), 0);
+        };
+        function lookup(req, res, next, rel) {
           let full = path.join(base, rel).replace(/\/$/, '') || '/';
           if (full !== base && !full.startsWith(base + '/')) return next();
           if (vfs.dirs.has(full)) {
@@ -1907,17 +1924,21 @@
               res.setHeader('Content-Security-Policy', "default-src 'none'");
               res.setHeader('X-Content-Type-Options', 'nosniff');
               res.setHeader('Location', loc);
-              res.end(`<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>Redirecting</title>\n</head>\n<body>\n<pre>Redirecting to ${htmlEsc(loc)}</pre>\n</body>\n</html>\n`);
+              const page = `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>Redirecting</title>\n</head>\n<body>\n<pre>Redirecting to ${htmlEsc(loc)}</pre>\n</body>\n</html>\n`;
+              res.setHeader('Content-Length', String(Buffer.byteLength(page)));
+              res.end(page);
               return;
             }
             full = path.join(full, opts.index === undefined ? 'index.html' : opts.index || '__no_index__');
           }
           if (!vfs.files.has(full)) return next();
+          res.setHeader('Accept-Ranges', 'bytes');
           res.setHeader('Cache-Control', 'public, max-age=0');
           res.setHeader('Last-Modified', (vfs.mtime.get(full) || new Date()).toUTCString());
           res.setHeader('Content-Type', MIME[path.extname(full).toLowerCase()] || 'application/octet-stream');
+          res.setHeader('Content-Length', String(Buffer.byteLength(vfs.files.get(full))));
           res.end(vfs.files.get(full));
-        };
+        }
       }
 
       function express() {
@@ -1956,6 +1977,252 @@
       express.request = {};
       express.response = {};
       return express;
+    }
+
+    // ------------------------------------------------------------- morgan
+    // Stessi formati, token e messaggi di morgan 1.x.
+    function createMorgan() {
+      const CLF_MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const pad2 = (n) => String(n).padStart(2, '0');
+      const clfdate = (d) => `${pad2(d.getUTCDate())}/${CLF_MONTH[d.getUTCMonth()]}/${d.getUTCFullYear()}:${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())} +0000`;
+      const deprecate = (msg) => write('stderr', `${new Date().toUTCString()} morgan deprecated ${msg}\n`);
+      const headersSent = (res) => !!res.headersSent;
+      const escapeLogField = (v) => (v == null ? undefined : String(v).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029"\\]/g, (ch) => ({ '\\': '\\\\', '"': '\\"', '\b': '\\b', '\f': '\\f', '\n': '\\n', '\r': '\\r', '\t': '\\t' }[ch] || '\\u' + ('0000' + ch.charCodeAt(0).toString(16)).slice(-4))));
+      const getip = (req) => req.ip || req._remoteAddress || (req.connection && req.connection.remoteAddress) || undefined;
+      const hr = () => process.hrtime();
+
+      function compile(format) {
+        if (typeof format !== 'string') throw new TypeError('argument format must be a string');
+        const parts = [];
+        let last = 0;
+        format.replace(/:([-\w]{2,})(?:\[([^\]]+)\])?/g, (m, name, arg, at) => {
+          parts.push(format.slice(last, at), { name, arg });
+          last = at + m.length;
+          return m;
+        });
+        parts.push(format.slice(last));
+        return (tokens, req, res) => parts.map((p) => {
+          if (typeof p === 'string') return p;
+          if (typeof tokens[p.name] !== 'function') throw new TypeError(`tokens.${p.name} is not a function`);
+          return (p.arg === undefined ? tokens[p.name](req, res) : tokens[p.name](req, res, p.arg)) || '-';
+        }).join('');
+      }
+
+      function morgan(format, options) {
+        let fmt = format;
+        let opts = options || {};
+        if (format && typeof format === 'object') {
+          opts = format;
+          fmt = opts.format || 'default';
+          deprecate(`morgan(options): use morgan(${typeof fmt === 'string' ? JSON.stringify(fmt) : 'format'}, options) instead`);
+        }
+        if (fmt === undefined) deprecate('undefined format: specify a format');
+        const immediate = opts.immediate;
+        const skip = opts.skip || false;
+        if (fmt === undefined || fmt === 'default') deprecate('default format: use combined format');
+        const formatLine = typeof fmt !== 'function' ? getFormatFunction(fmt) : fmt;
+        const stream = opts.stream || process.stdout;
+        return function logger(req, res, next) {
+          req._startAt = undefined;
+          req._startTime = undefined;
+          req._remoteAddress = getip(req);
+          res._startAt = undefined;
+          res._startTime = undefined;
+          req._startAt = hr();
+          req._startTime = new Date();
+          function logRequest() {
+            if (skip !== false && skip(req, res)) return;
+            const line = formatLine(morgan, req, res);
+            if (line == null) return;
+            stream.write(line + '\n');
+          }
+          if (immediate) logRequest();
+          else {
+            // l'equivalente di on-headers + on-finished
+            const end = res.end;
+            res.end = function (...a) {
+              if (!res._startAt) { res._startAt = hr(); res._startTime = new Date(); }
+              return end.apply(this, a);
+            };
+            res.once('finish', logRequest);
+          }
+          next();
+        };
+      }
+      function getFormatFunction(name) {
+        const fmt = morgan[name] || name || morgan.default;
+        return typeof fmt !== 'function' ? compile(fmt) : fmt;
+      }
+      morgan.compile = compile;
+      morgan.format = function (name, fmt) { morgan[name] = fmt; return this; };
+      morgan.token = function (name, fn) {
+        morgan[name] = function tokenValue(...a) {
+          const v = fn.apply(this, a);
+          return typeof v === 'string' ? escapeLogField(v) : v;
+        };
+        return this;
+      };
+
+      morgan.format('combined', ':remote-addr - :remote-user [:date[clf]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent"');
+      morgan.format('common', ':remote-addr - :remote-user [:date[clf]] ":method :url HTTP/:http-version" :status :res[content-length]');
+      morgan.format('default', ':remote-addr - :remote-user [:date] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent"');
+      morgan.format('short', ':remote-addr :remote-user :method :url HTTP/:http-version :status :res[content-length] - :response-time ms');
+      morgan.format('tiny', ':method :url :status :res[content-length] - :response-time ms');
+      const devCache = {};
+      morgan.format('dev', function developmentFormatLine(tokens, req, res) {
+        const status = headersSent(res) ? res.statusCode : undefined;
+        const color = status >= 500 ? 31 : status >= 400 ? 33 : status >= 300 ? 36 : status >= 200 ? 32 : 0;
+        if (!devCache[color]) devCache[color] = compile(`\x1b[0m:method :url \x1b[${color}m:status\x1b[0m :response-time ms - :res[content-length]\x1b[0m`);
+        return devCache[color](tokens, req, res);
+      });
+      if (process.env.NO_COLOR) morgan.format('dev', compile(':method :url :status :response-time ms - :res[content-length]'));
+
+      morgan.token('url', (req) => req.originalUrl || req.url);
+      morgan.token('method', (req) => req.method);
+      morgan.token('response-time', (req, res, digits) => {
+        if (!req._startAt || !res._startAt) return undefined;
+        const ms = (res._startAt[0] - req._startAt[0]) * 1e3 + (res._startAt[1] - req._startAt[1]) * 1e-6;
+        return ms.toFixed(digits === undefined ? 3 : digits);
+      });
+      morgan.token('total-time', (req, res, digits) => {
+        if (!req._startAt || !res._startAt) return undefined;
+        const e = process.hrtime(req._startAt);
+        return (e[0] * 1e3 + e[1] * 1e-6).toFixed(digits === undefined ? 3 : digits);
+      });
+      morgan.token('date', (req, res, f) => {
+        const d = new Date();
+        switch (f || 'web') {
+          case 'clf': return clfdate(d);
+          case 'iso': return d.toISOString();
+          case 'web': return d.toUTCString();
+          default: return undefined;
+        }
+      });
+      morgan.token('status', (req, res) => (headersSent(res) ? String(res.statusCode) : undefined));
+      morgan.token('referrer', (req) => req.headers.referer || req.headers.referrer);
+      morgan.token('remote-addr', getip);
+      morgan.token('remote-user', (req) => {
+        const m = /^\s*basic\s+([A-Za-z0-9._~+/-]+=*)\s*$/i.exec(req.headers.authorization || '');
+        if (!m) return undefined;
+        let dec = '';
+        try { dec = Buffer.from(m[1], 'base64').toString(); } catch (e) { return undefined; }
+        const i = dec.indexOf(':');
+        return i === -1 ? undefined : dec.slice(0, i);
+      });
+      morgan.token('pid', () => String(process.pid));
+      morgan.token('http-version', (req) => req.httpVersionMajor + '.' + req.httpVersionMinor);
+      morgan.token('user-agent', (req) => req.headers['user-agent']);
+      morgan.token('req', (req, res, field) => {
+        const h = req.headers[String(field).toLowerCase()];
+        return Array.isArray(h) ? h.join(', ') : h;
+      });
+      morgan.token('res', (req, res, field) => {
+        if (!headersSent(res)) return undefined;
+        const h = res.getHeader(field);
+        return Array.isArray(h) ? h.join(', ') : h;
+      });
+      return morgan;
+    }
+
+    // --------------------------------------------------------------- cors
+    // Porting fedele di cors 2.8.
+    function createCors() {
+      const defaults = { origin: '*', methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', preflightContinue: false, optionsSuccessStatus: 204 };
+      const isString = (s) => typeof s === 'string' || s instanceof String;
+      function vary(res, field) {
+        const cur = res.getHeader('Vary');
+        const list = cur ? String(Array.isArray(cur) ? cur.join(', ') : cur).split(/\s*,\s*/).filter(Boolean) : [];
+        if (list.includes('*')) return;
+        for (const f of String(field).split(/\s*,\s*/)) if (f && !list.some((x) => x.toLowerCase() === f.toLowerCase())) list.push(f);
+        res.setHeader('Vary', list.join(', '));
+      }
+      function isOriginAllowed(origin, allowed) {
+        if (Array.isArray(allowed)) return allowed.some((a) => isOriginAllowed(origin, a));
+        if (isString(allowed)) return origin === allowed;
+        if (allowed instanceof RegExp) return allowed.test(origin);
+        return !!allowed;
+      }
+      function configureOrigin(o, req) {
+        if (!o.origin || o.origin === '*') return [{ key: 'Access-Control-Allow-Origin', value: '*' }];
+        if (isString(o.origin)) return [{ key: 'Access-Control-Allow-Origin', value: o.origin }, { key: 'Vary', value: 'Origin' }];
+        const ok = isOriginAllowed(req.headers.origin, o.origin);
+        return [{ key: 'Access-Control-Allow-Origin', value: ok ? req.headers.origin : false }, { key: 'Vary', value: 'Origin' }];
+      }
+      const configureMethods = (o) => ({ key: 'Access-Control-Allow-Methods', value: o.methods.join ? o.methods.join(',') : o.methods });
+      const configureCredentials = (o) => (o.credentials === true ? { key: 'Access-Control-Allow-Credentials', value: 'true' } : null);
+      function configureAllowedHeaders(o, req) {
+        let allowed = o.allowedHeaders || o.headers;
+        const out = [];
+        if (!allowed) {
+          allowed = req.headers['access-control-request-headers'];
+          out.push({ key: 'Vary', value: 'Access-Control-Request-Headers' });
+        } else if (allowed.join) allowed = allowed.join(',');
+        if (allowed && allowed.length) out.push({ key: 'Access-Control-Allow-Headers', value: allowed });
+        return out;
+      }
+      function configureExposedHeaders(o) {
+        let h = o.exposedHeaders;
+        if (!h) return null;
+        if (h.join) h = h.join(',');
+        return h && h.length ? { key: 'Access-Control-Expose-Headers', value: h } : null;
+      }
+      function configureMaxAge(o) {
+        const m = (typeof o.maxAge === 'number' || o.maxAge) && o.maxAge.toString();
+        return m && m.length ? { key: 'Access-Control-Max-Age', value: m } : null;
+      }
+      function applyHeaders(headers, res) {
+        for (const h of headers) {
+          if (!h) continue;
+          if (Array.isArray(h)) applyHeaders(h, res);
+          else if (h.key === 'Vary' && h.value) vary(res, h.value);
+          else if (h.value) res.setHeader(h.key, h.value);
+        }
+      }
+      function run(o, req, res, next) {
+        const method = req.method && req.method.toUpperCase();
+        if (method === 'OPTIONS') {
+          applyHeaders([configureOrigin(o, req), configureCredentials(o), configureMethods(o), configureAllowedHeaders(o, req), configureMaxAge(o), configureExposedHeaders(o)], res);
+          if (o.preflightContinue) return next();
+          res.statusCode = o.optionsSuccessStatus;
+          res.setHeader('Content-Length', '0');
+          res.end();
+          return undefined;
+        }
+        applyHeaders([configureOrigin(o, req), configureCredentials(o), configureExposedHeaders(o)], res);
+        return next();
+      }
+      return function cors(o) {
+        const optionsCallback = typeof o === 'function' ? o : (req, cb) => cb(null, o);
+        return function corsMiddleware(req, res, next) {
+          optionsCallback(req, (err, options) => {
+            if (err) return next(err);
+            const co = Object.assign({}, defaults, options);
+            let originCallback = null;
+            if (co.origin && typeof co.origin === 'function') originCallback = co.origin;
+            else if (co.origin) originCallback = (origin, cb) => cb(null, co.origin);
+            if (!originCallback) return next();
+            return originCallback(req.headers.origin, (err2, origin) => {
+              if (err2 || !origin) return next(err2);
+              co.origin = origin;
+              return run(co, req, res, next);
+            });
+          });
+        };
+      };
+    }
+
+    // pacchetti npm "integrati" nel simulatore: node_modules/<nome>/index.js contiene solo un marcatore
+    const BUILTIN_PKGS = {
+      express: { version: '5.3.0', create: createExpress },
+      morgan: { version: '1.12.1', create: createMorgan },
+      cors: { version: '2.8.6', create: createCors },
+    };
+    const builtinCache = new Map();
+    function builtinPackage(src) {
+      const m = /^\/\* nodelab:builtin ([\w-]+) \*\/$/.exec(src || '');
+      if (!m || !BUILTIN_PKGS[m[1]]) return undefined;
+      if (!builtinCache.has(m[1])) builtinCache.set(m[1], BUILTIN_PKGS[m[1]].create());
+      return builtinCache.get(m[1]);
     }
 
     // ------------------------------------------------------- altri moduli
@@ -2190,7 +2457,8 @@
         }
         if (isNode) throw makeError(Error, 'ERR_UNKNOWN_BUILTIN_MODULE', `No such built-in module: ${spec}`);
         const filename = resolveFilename(spec, mod.filename);
-        if (vfs.files.get(filename) === EXPRESS_MARKER) return expressModule || (expressModule = createExpress());
+        const builtin = builtinPackage(vfs.files.get(filename));
+        if (builtin) return builtin;
         if (moduleCache.has(filename)) return moduleCache.get(filename).exports;
         const child = new Module(filename, mod);
         moduleCache.set(filename, child);
@@ -2258,12 +2526,12 @@
         vfs.files.set(a, String(content));
         vfs.mtime.set(a, new Date());
       }
-      // pacchetti npm "installati" nel progetto (es. express)
+      // pacchetti npm "installati" nel progetto (express, morgan, cors)
       for (const pkg of msg.packages || []) {
-        if (pkg !== 'express') continue;
-        mkdirp(CWD + '/node_modules/express');
-        vfs.files.set(CWD + '/node_modules/express/package.json', JSON.stringify({ name: 'express', version: '5.3.0', main: 'index.js' }, null, 2));
-        vfs.files.set(CWD + '/node_modules/express/index.js', EXPRESS_MARKER);
+        if (!BUILTIN_PKGS[pkg]) continue;
+        mkdirp(`${CWD}/node_modules/${pkg}`);
+        vfs.files.set(`${CWD}/node_modules/${pkg}/package.json`, JSON.stringify({ name: pkg, version: BUILTIN_PKGS[pkg].version, main: 'index.js' }, null, 2));
+        vfs.files.set(`${CWD}/node_modules/${pkg}/index.js`, `/* nodelab:builtin ${pkg} */`);
       }
       for (const [p, content] of Object.entries(msg.files || {})) {
         const a = path.resolve(CWD, p);

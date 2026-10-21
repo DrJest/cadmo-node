@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esercitazioni Modulo 5 — CADMO NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white prose-code">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <div class="flex items-center gap-5 text-sm">
+          <a href="modulo_5.html" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="presentation" class="w-4 h-4"></i><span class="hidden sm:inline">Slide</span></a>
+          <a href="./" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Home</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="bg-gray-950 border-b border-gray-800 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center animate-fade-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-900/30 border border-purple-500/30 text-xs text-purple-300 font-mono mb-4 uppercase tracking-wider">
+        <i data-lucide="git-merge" class="w-4 h-4"></i> middleware · static · morgan · cors · Router · errori
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4">Esercitazioni Modulo 5</h1>
+      <p class="text-gray-400 text-lg">Segui una richiesta nella pipeline, indovina cosa stampa il server, esplora la Biblioteca 2.0 e completa otto laboratori con verifica automatica, fino al boss multi-file.</p>
+      <p class="mt-4 text-sm font-mono text-gray-500"><span data-lab-progress="m5-statici,m5-terzeparti,m5-custom,m5-buttafuori,m5-router,m5-errori,m5-trovabug,m5-boss"></span> · i progressi restano salvati in questo browser</p>
+    </div>
+  </header>
+
+  <!-- Indice -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+    <div class="flex flex-wrap gap-2 justify-center text-sm">
+      <a href="#guida" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">1 · Guida rapida</a>
+      <a href="#pipeline" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">2 · La pipeline</a>
+      <a href="#biblioteca" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">3 · Biblioteca 2.0</a>
+      <a href="#lab" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">4 · Laboratori</a>
+      <a href="#pc" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">5 · Sul tuo PC</a>
+      <a href="#quiz" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">6 · Quiz</a>
+    </div>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-20">
+
+    <!-- 1. GUIDA RAPIDA -->
+    <section id="guida" class="scroll-mt-20 animate-fade-in delay-100">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="book-open" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">1. Guida rapida</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-purple-400 mb-2">Un middleware</h3>
+          <pre class="code small"><code class="language-javascript">function mio(req, res, next) {
+  // 1. rispondi:   return res.status(401).json({ … })
+  // 2. lascia passare:     next()
+  // 3. segnala un errore:  next(err)  (o throw)
+}
+app.use(mio);                     // tutte le richieste
+app.use('/api', mio);             // solo /api/…
+app.post('/api/libri', mio, gestore);  // una rotta</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-green-400 mb-2">File statici</h3>
+          <pre class="code small"><code class="language-javascript">const path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
+// GET /           → public/index.html
+// GET /style.css  → public/style.css
+// file mancante   → next()
+
+app.use('/docs', express.static(path.join(__dirname, 'documenti')));
+// GET /docs/a.pdf → documenti/a.pdf</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-cyan-400 mb-2">morgan e cors</h3>
+          <pre class="code small"><code class="language-javascript">// npm install morgan cors
+const morgan = require('morgan');
+const cors = require('cors');
+
+app.use(morgan('dev'));    // GET /api/libri 200 1.2 ms - 182
+app.use(cors({ origin: 'http://localhost:5500' }));
+// preflight OPTIONS → 204 automatico</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-blue-400 mb-2">Router</h3>
+          <pre class="code small"><code class="language-javascript">// routes/libri.js
+const router = express.Router();
+router.get('/', elenco);          // GET /api/libri
+router.get('/:id', dettaglio);    // GET /api/libri/7
+module.exports = router;
+
+// app.js
+app.use('/api/libri', require('./routes/libri'));</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-red-400 mb-2">404 ed errori</h3>
+          <pre class="code small"><code class="language-javascript">// in fondo, dopo tutte le rotte
+app.use((req, res) =>
+  res.status(404).json({ errore: 'Rotta non trovata' }));
+
+// l'ultimo, con 4 parametri
+app.use((err, req, res, next) => {
+  const status = err.status || 500;
+  if (status === 500) console.error(err);
+  res.status(status).json({ errore: status === 500 ? 'Errore interno' : err.message });
+});</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-yellow-400 mb-2">L'ordine giusto</h3>
+          <pre class="code small"><code class="language-javascript">app.use(morgan('dev'));          // 1. log
+app.use(cors({ origin }));       // 2. CORS
+app.use(express.json());         // 3. body
+app.use(express.static(...));    // 4. file statici
+app.use('/api/libri', router);   // 5. rotte e router
+app.use(nonTrovato);             // 6. 404
+app.use(gestoreErrori);          // 7. errori (4 parametri)</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. LA PIPELINE -->
+    <section id="pipeline" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="route" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">2. La pipeline</h2>
+      </div>
+      <h3 class="text-xl font-bold text-white mt-6 mb-2">Segui la richiesta</h3>
+      <p class="text-gray-400 mb-4">Scegli una richiesta e falla avanzare passo per passo. Prima di premere il pulsante, prova a prevedere: chi la lascia passare? Chi la salta? Chi risponde?</p>
+      <div id="pipe" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Che cosa stampa il server?</h3>
+      <p class="text-gray-400 mb-4">Arriva una sola richiesta (scritta sopra il terminale). Clicca le righe del log nell'ordine in cui il server le stampa. Attenzione: qualche riga potrebbe non comparire mai!</p>
+      <div id="order-game"></div>
+    </section>
+
+    <!-- 3. BIBLIOTECA 2.0 -->
+    <section id="biblioteca" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="library" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">3. Biblioteca 2.0</h2>
+      </div>
+      <p class="text-gray-400 mb-4">La biblioteca del modulo 4, cresciuta: morgan, cors, un contatore, i file statici, un Router con il buttafuori, la 404 e il gestore degli errori. Completa le missioni con il client HTTP: per gli header (<code class="inline">X-Api-Key</code>, <code class="inline">Origin</code>…) apri <strong>Header aggiuntivi</strong>. Dopo ogni missione apri il codice e trova il middleware che ha risposto.</p>
+      <div id="inspector" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <button onclick="toggleSolution('codice-server')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="file-code-2" class="w-4 h-4"></i> Mostra il codice del server</button>
+      <div id="codice-server" class="solution-container mt-4"><pre class="code small"><code class="language-javascript" id="codice-server-src"></code></pre></div>
+    </section>
+
+    <!-- 4. LABORATORI -->
+    <section id="lab" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-conical" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">4. Laboratori nel browser</h2>
+      </div>
+      <div class="text-gray-400 mb-8 space-y-2">
+        <p>Nei progetti sono già installati i pacchetti che servono (<code class="inline">express</code> e, dove indicato, <code class="inline">morgan</code> e <code class="inline">cors</code>): li trovi in <code class="inline">node_modules/</code>. Premi <kbd>▶ Esegui</kbd> per avviare il server, provalo con il client HTTP e poi premi <kbd>Verifica</kbd>.</p>
+        <p class="text-sm">💡 Dopo ogni modifica premi di nuovo <kbd>▶ Esegui</kbd>. Nei lab con più file usa le tab sopra l'editor. Per mandare un header (es. <code class="inline">X-Api-Key: cadmo</code>) apri <strong>Header aggiuntivi</strong> nel client.</p>
+      </div>
+      <div class="space-y-10" id="labs"></div>
+    </section>
+
+    <!-- 5. MISSIONI SUL PC -->
+    <section id="pc" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="laptop" class="w-6 h-6 text-emerald-400"></i>
+        <h2 class="text-2xl font-bold text-white">5. Missioni sul tuo PC</h2>
+      </div>
+      <div class="space-y-8">
+        <!-- Missione A -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-green-900/50 flex items-center justify-center border border-green-500/30"><i data-lucide="monitor-smartphone" class="w-5 h-5 text-green-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione A: Il catalogo nel browser</h3>
+              <p class="text-sm text-green-400 font-mono">Focus: express.static, fetch, DevTools</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-green-500">
+            <li>Crea <code class="inline">corso-node/lezione5</code>, installa <code class="inline">express</code>, <code class="inline">morgan</code> e <code class="inline">cors</code>, aggiungi lo script <code class="inline">dev</code> con <code class="inline">node --watch server.js</code>.</li>
+            <li>Copia il server della <strong>Biblioteca 2.0</strong> (sezione 3) in <code class="inline">server.js</code> e i tre file di <code class="inline">public/</code> (li trovi nella soluzione qui sotto).</li>
+            <li>Apri <code class="inline">http://localhost:3000</code>: il catalogo compare? Apri i DevTools (<kbd>F12</kbd>) → tab <strong>Network</strong> e ricarica: quante richieste fa la pagina? Confrontale con le righe di morgan nel terminale.</li>
+            <li>Aggiungi un libro con <code class="inline">curl</code> (con la chiave!) e ricarica la pagina.</li>
+          </ol>
+          <button onclick="toggleSolution('sol-a')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-a" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-bash">mkdir -p corso-node/lezione5/public && cd corso-node/lezione5
+npm init -y
+npm install express morgan cors
+npm pkg set scripts.dev="node --watch server.js"
+code server.js public/index.html public/style.css public/app.js
+npm run dev
+
+# la pagina fa 4 richieste (più, forse, /favicon.ico → 404):
+#   GET /  ·  GET /style.css  ·  GET /app.js  ·  GET /api/libri
+curl -X POST localhost:3000/api/libri -H "Content-Type: application/json" \
+     -H "X-Api-Key: cadmo" -d '{"titolo":"Lessico famigliare","autore":"Natalia Ginzburg"}'</code></pre>
+            <div class="text-xs font-mono text-gray-500">public/index.html · public/style.css · public/app.js</div>
+            <pre class="code small"><code class="language-xml" id="sol-a-html"></code></pre>
+            <pre class="code small"><code class="language-css" id="sol-a-css"></code></pre>
+            <pre class="code small"><code class="language-javascript" id="sol-a-js"></code></pre>
+          </div>
+        </article>
+
+        <!-- Missione B -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-cyan-900/50 flex items-center justify-center border border-cyan-500/30"><i data-lucide="globe-lock" class="w-5 h-5 text-cyan-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione B: Provoca (e risolvi) un errore CORS</h3>
+              <p class="text-sm text-cyan-400 font-mono">Focus: origini, preflight, cors</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-cyan-500">
+            <li>Nel progetto della missione A <strong>commenta</strong> la riga di <code class="inline">cors</code> e in <code class="inline">public/app.js</code> usa l'URL completo <code class="inline">http://localhost:3000/api/libri</code>.</li>
+            <li>Servi la cartella <code class="inline">public/</code> da un'altra origine: <code class="inline">npx serve public -l 5500</code> (oppure l'estensione Live Server di VS Code).</li>
+            <li>Apri <code class="inline">http://localhost:5500</code>: il catalogo resta vuoto. Cosa dice la console? La richiesta compare nel log di morgan? 🤔</li>
+            <li>Rimetti <code class="inline">cors({ origin: [...] })</code>: ora funziona? E da <code class="inline">http://127.0.0.1:5500</code>?</li>
+            <li>Aggiungi nella pagina un pulsante che fa una <code class="inline">POST</code> JSON con l'header <code class="inline">X-Api-Key</code>: nella tab Network trovi il <strong>preflight</strong> <code class="inline">OPTIONS</code>?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-b')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-b" class="solution-container mt-4">
+            <pre class="code small"><code class="language-javascript">// 3. Console: "Access to fetch at 'http://localhost:3000/api/libri' from origin
+//    'http://localhost:5500' has been blocked by CORS policy: No 'Access-Control-Allow-Origin'..."
+//    Morgan invece la registra: GET /api/libri 200 … → il server HA risposto,
+//    è il BROWSER che nasconde la risposta alla pagina.
+
+// 4. funziona da localhost:5500 e da 127.0.0.1:5500 (sono entrambe nella lista);
+//    da un'origine non in lista l'header Access-Control-Allow-Origin manca.
+app.use(cors({ origin: ['http://localhost:5500', 'http://127.0.0.1:5500'] }));
+
+// 5. nel browser (public/app.js)
+document.querySelector('#aggiungi').addEventListener('click', async () => {
+  const r = await fetch('http://localhost:3000/api/libri', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Api-Key': 'cadmo' },
+    body: JSON.stringify({ titolo: 'Dune', autore: 'Frank Herbert' }),
+  });
+  console.log(r.status, await r.json());
+});
+// Network: prima "OPTIONS /api/libri 204" (preflight), poi "POST /api/libri 201".
+// Il preflight c'è per via di Content-Type: application/json e dell'header X-Api-Key.</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione C -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-blue-900/50 flex items-center justify-center border border-blue-500/30"><i data-lucide="folder-tree" class="w-5 h-5 text-blue-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione C: Dal monolite ai moduli</h3>
+              <p class="text-sm text-blue-400 font-mono">Focus: struttura del progetto, Router</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-blue-500">
+            <li>Porta sul PC la soluzione del <strong>Lab 8 (boss)</strong> con la stessa struttura di cartelle: <code class="inline">server.js</code>, <code class="inline">app.js</code>, <code class="inline">routes/</code>, <code class="inline">middleware/</code>, <code class="inline">public/</code>.</li>
+            <li>Aggiungi <code class="inline">routes/autori.js</code> con <code class="inline">GET /</code> (elenco degli autori, senza doppioni) e <code class="inline">GET /:nome/libri</code>, e montalo su <code class="inline">/api/autori</code>.</li>
+            <li>Dentro il nuovo router stampa <code class="inline">req.baseUrl</code>, <code class="inline">req.url</code> e <code class="inline">req.originalUrl</code>: corrispondono a quanto visto nelle slide?</li>
+            <li>Lancia <code class="inline">node server.js</code> da <strong>un'altra cartella</strong> (es. <code class="inline">cd .. && node lezione5-boss/server.js</code>): la home funziona ancora? Perché?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-c')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-c" class="solution-container mt-4">
+            <pre class="code small"><code class="language-javascript">// routes/autori.js  (i libri vanno condivisi: spostali in data/libri.js e importali nei due router)
+const express = require('express');
+const libri = require('../data/libri');
+
+const router = express.Router();
+
+router.use((req, res, next) => {
+  console.log({ baseUrl: req.baseUrl, url: req.url, originalUrl: req.originalUrl });
+  next();
+});
+
+router.get('/', (req, res) => {
+  res.json([...new Set(libri.map((l) => l.autore))]);
+});
+
+router.get('/:nome/libri', (req, res) => {
+  const nome = req.params.nome.toLowerCase();
+  res.json(libri.filter((l) => l.autore.toLowerCase().includes(nome)));
+});
+
+module.exports = router;
+
+// app.js:  app.use('/api/autori', require('./routes/autori'));   (prima di nonTrovato!)
+// GET /api/autori/calvino/libri → { baseUrl: '/api/autori', url: '/calvino/libri', originalUrl: '/api/autori/calvino/libri' }
+// 4. Sì: con path.join(__dirname, 'public') il percorso non dipende dalla cartella corrente.
+//    Con express.static('public') invece Express cercherebbe ./public nella cartella da cui lanci node.</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione D -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-purple-900/50 flex items-center justify-center border border-purple-500/30"><i data-lucide="scroll-text" class="w-5 h-5 text-purple-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione D: Log e errori "da produzione"</h3>
+              <p class="text-sm text-purple-400 font-mono">Focus: opzioni di morgan, NODE_ENV</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-purple-500">
+            <li>Fai scrivere a morgan, in formato <code class="inline">combined</code>, tutte le richieste nel file <code class="inline">access.log</code> (usa <code class="inline">fs.createWriteStream</code> con <code class="inline">{ flags: 'a' }</code> e l'opzione <code class="inline">stream</code>).</li>
+            <li>Nel terminale, invece, mostra con il formato <code class="inline">dev</code> <strong>solo</strong> le risposte con status ≥ 400 (opzione <code class="inline">skip</code>).</li>
+            <li>Segui il file mentre fai richieste: <code class="inline">tail -f access.log</code> (su Windows: <code class="inline">Get-Content access.log -Wait</code>).</li>
+            <li>Avvia con <code class="inline">NODE_ENV=production</code> e chiama una rotta che fallisce <strong>senza</strong> il tuo gestore degli errori: cosa cambia nella pagina d'errore di Express rispetto allo sviluppo?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-d')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-d" class="solution-container mt-4">
+            <pre class="code small"><code class="language-javascript">const fs = require('fs');
+const path = require('path');
+const morgan = require('morgan');
+
+const accessLog = fs.createWriteStream(path.join(__dirname, 'access.log'), { flags: 'a' });
+
+app.use(morgan('combined', { stream: accessLog }));                          // tutto su file
+app.use(morgan('dev', { skip: (req, res) => res.statusCode < 400 }));        // solo errori a video
+
+// access.log:
+// ::1 - - [18/Oct/2026:10:15:02 +0000] "GET /api/libri HTTP/1.1" 200 182 "-" "curl/8.7.1"
+
+// 4. NODE_ENV=production node server.js
+//    sviluppo  → pagina con lo stack dell'errore (file e righe del server!)
+//    produzione → solo "Internal Server Error": i dettagli interni non vanno mai mostrati
+//    (su Windows PowerShell: $env:NODE_ENV="production"; node server.js)</code></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 6. QUIZ -->
+    <section id="quiz" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="check-square" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">6. Quiz di verifica</h2>
+      </div>
+      <div id="quiz-box"></div>
+    </section>
+  </main>
+
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm font-mono">studente@nodelab:~$ next()</div>
+  </footer>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m5-biblioteca.js"></script>
+  <script src="assets/labs-m5.js"></script>
+  <script>
+    // ---------------------------------------------------------------- 2. pipeline
+    PipelineViz.mount(document.getElementById('pipe'), M5_PIPELINE);
+
+    OrderGame.mount(document.getElementById('order-game'), [
+      {
+        title: 'Chi viene eseguito?',
+        cmd: '$ curl localhost:3000/api/libri',
+        prompt: 'Clicca le righe nell\'ordine in cui compaiono nel log del server:',
+        code: `app.use((req, res, next) => { console.log('A'); next(); });
+app.use('/api', (req, res, next) => { console.log('B'); next(); });
+app.get('/api/libri', (req, res) => { console.log('C'); res.json([]); });
+app.use((req, res, next) => { console.log('D'); next(); });`,
+        chips: ['A', 'B', 'C', 'D'],
+        answer: ['A', 'B', 'C'],
+        explain: '`B` gira perché `/api` è un **prefisso** di `/api/libri`. `D` non viene mai raggiunto: la rotta risponde e non chiama `next()`.',
+      },
+      {
+        title: 'Il codice dopo `next()`',
+        cmd: '$ curl localhost:3000/',
+        prompt: 'Clicca le righe nell\'ordine in cui compaiono nel log del server:',
+        code: `app.use((req, res, next) => {
+  console.log('1');
+  next();
+  console.log('2');
+});
+
+app.get('/', (req, res) => {
+  console.log('3');
+  res.send('ok');
+});`,
+        chips: ['1', '2', '3'],
+        answer: ['1', '3', '2'],
+        explain: '`next()` è una normale chiamata di funzione: la rotta (sincrona) viene eseguita **dentro** `next()`; quando ha finito, il middleware riprende e stampa `2`.',
+      },
+      {
+        title: 'Un errore nella rotta',
+        cmd: '$ curl localhost:3000/x',
+        prompt: 'Clicca le righe nell\'ordine in cui compaiono nel log del server:',
+        code: `app.use((req, res, next) => { console.log('log'); next(); });
+
+app.get('/x', (req, res) => {
+  console.log('rotta');
+  throw new Error('ops');
+});
+
+app.use((req, res) => { console.log('404'); res.sendStatus(404); });
+
+app.use((err, req, res, next) => {
+  console.log('errore: ' + err.message);
+  res.sendStatus(500);
+});`,
+        chips: ['log', 'rotta', '404', 'errore: ops'],
+        answer: ['log', 'rotta', 'errore: ops'],
+        explain: 'Dopo il `throw` Express salta i middleware normali (la 404 ha 2 parametri) e va dritto al primo gestore con **4 parametri**.',
+      },
+      {
+        title: 'Dentro un Router',
+        cmd: '$ curl localhost:3000/api/libri/7',
+        prompt: 'Clicca le righe nell\'ordine in cui compaiono nel log del server:',
+        code: `const router = express.Router();
+router.use((req, res, next) => { console.log('router ' + req.url); next(); });
+router.get('/:id', (req, res) => { console.log('id ' + req.params.id); res.end(); });
+
+app.use((req, res, next) => { console.log('app ' + req.url); next(); });
+app.use('/api/libri', router);`,
+        chips: ['app /api/libri/7', 'router /api/libri/7', 'router /7', 'id 7', 'id /7'],
+        answer: ['app /api/libri/7', 'router /7', 'id 7'],
+        explain: 'Dentro il router `req.url` perde il prefisso di montaggio (`/api/libri`): resta `/7`. L\'URL completo è sempre in `req.originalUrl`.',
+      },
+      {
+        title: 'Quando scatta `finish`?',
+        cmd: '$ curl localhost:3000/',
+        prompt: 'Clicca le righe nell\'ordine in cui compaiono nel log del server:',
+        code: `app.use((req, res, next) => {
+  console.log('arriva');
+  res.on('finish', () => console.log('finita: ' + res.statusCode));
+  next();
+});
+
+app.get('/', (req, res) => {
+  console.log('rotta');
+  res.send('ok');
+  console.log('dopo send');
+});`,
+        chips: ['arriva', 'rotta', 'dopo send', 'finita: 200'],
+        answer: ['arriva', 'rotta', 'dopo send', 'finita: 200'],
+        explain: '`res.send()` non interrompe la funzione (per questo serve il `return`!). L\'evento `finish` scatta dopo, quando la risposta è stata consegnata.',
+      },
+      {
+        title: '`next()` dentro una rotta',
+        cmd: '$ curl localhost:3000/api/libri',
+        prompt: 'Clicca le righe nell\'ordine in cui compaiono nel log del server:',
+        code: `app.use('/api', (req, res, next) => { console.log('api'); next(); });
+
+app.get('/api/libri', (req, res, next) => { console.log('primo'); next(); });
+app.get('/api/libri', (req, res) => { console.log('secondo'); res.end(); });
+app.get('/api/*resto', (req, res) => { console.log('jolly'); res.end(); });`,
+        chips: ['api', 'primo', 'secondo', 'jolly'],
+        answer: ['api', 'primo', 'secondo'],
+        explain: 'Anche una rotta può chiamare `next()`: si passa alla rotta successiva che corrisponde. `jolly` corrisponderebbe, ma `secondo` ha già risposto.',
+      },
+      {
+        title: 'BOSS: `await next()`',
+        cmd: '$ curl localhost:3000/',
+        prompt: 'Clicca le righe nell\'ordine in cui compaiono nel log del server:',
+        code: `app.use(async (req, res, next) => {
+  console.log('prima');
+  await next();
+  console.log('dopo');
+});
+
+app.get('/', async (req, res) => {
+  await new Promise((r) => setTimeout(r, 10));
+  console.log('rotta');
+  res.send('ok');
+});`,
+        chips: ['prima', 'rotta', 'dopo'],
+        answer: ['prima', 'dopo', 'rotta'],
+        explain: 'In Express `next()` **non** restituisce una Promise che aspetta le rotte: `await next()` non attende niente. Per agire a risposta finita si usa `res.on(\'finish\')`.',
+      },
+    ], { id: 'm5-order' });
+
+    // ---------------------------------------------------------------- 3. biblioteca
+    NodeLab.inspector(document.getElementById('inspector'), {
+      id: 'm5-biblioteca-ex',
+      files: { 'server.js': M5_BIBLIOTECA.server },
+      fs: M5_BIBLIOTECA.fs,
+      entry: 'server.js', port: 3000, packages: ['express', 'morgan', 'cors'],
+      missions: M5_BIBLIOTECA.missions,
+      presets: M5_BIBLIOTECA.presets,
+    });
+    document.getElementById('codice-server-src').textContent = M5_BIBLIOTECA.server;
+    document.getElementById('sol-a-html').textContent = M5_BIBLIOTECA.fs['public/index.html'];
+    document.getElementById('sol-a-css').textContent = M5_BIBLIOTECA.fs['public/style.css'];
+    document.getElementById('sol-a-js').textContent = M5_BIBLIOTECA.fs['public/app.js'];
+
+    // ---------------------------------------------------------------- 4. laboratori
+    const labsBox = document.getElementById('labs');
+    for (const cfg of window.M5_LABS) {
+      const el = document.createElement('article');
+      el.id = cfg.id;
+      labsBox.appendChild(el);
+      NodeLab.mount(el, cfg);
+    }
+
+    // ---------------------------------------------------------------- 6. quiz
+    Quiz.mount(document.getElementById('quiz-box'), [
+      {
+        question: 'Che cos\'è un middleware in Express?',
+        options: ['Una funzione `(req, res, next)` eseguita in ordine sulla richiesta: può rispondere, passare con `next()` o segnalare un errore', 'Un database in memoria', 'Un file della cartella `public/`', 'Un altro nome per le rotte `GET`'],
+        correct: 0,
+        explanation: 'Le richieste attraversano una fila di funzioni, nell\'ordine in cui le registrate. Anche `express.json()` ed `express.static()` sono middleware.',
+      },
+      {
+        question: 'Con `app.use(express.static(path.join(__dirname, \'public\')))`, quale file risponde a `GET /css/tema.css`?',
+        options: ['`/css/tema.css` del disco', '`public/css/tema.css`', '`public/tema.css`', 'Nessuno: serve una rotta `app.get(\'/css/tema.css\')`'],
+        correct: 1,
+        explanation: 'Il percorso dell\'URL viene "appeso" alla cartella indicata. Con un prefisso (`app.use(\'/static\', …)`) il prefisso non fa parte del percorso del file.',
+      },
+      {
+        question: 'Che cosa fa `express.static` se il file richiesto **non** esiste?',
+        options: ['Risponde 404 e si ferma', 'Va in crash', 'Crea un file vuoto', 'Chiama `next()`: la richiesta prosegue verso le rotte successive'],
+        correct: 3,
+        explanation: 'Per questo si può mettere `express.static` prima delle rotte dell\'API: `/api/libri` non è un file, quindi passa oltre.',
+      },
+      {
+        question: 'Cosa succede con questo middleware?',
+        code: "app.use((req, res, next) => {\n  console.log(req.method, req.url);\n});",
+        options: ['Funziona: Express chiama `next()` da solo', 'Ogni richiesta resta appesa: il middleware non risponde e non chiama `next()`', 'Express risponde 404', 'Il server non parte'],
+        correct: 1,
+        explanation: 'Un middleware deve rispondere oppure chiamare `next()` (o `next(err)`). Altrimenti il client aspetta finché non scade il timeout.',
+      },
+      {
+        question: 'Per quali richieste viene eseguito `app.use(\'/api\', mw)`?',
+        options: ['Solo `GET /api`', 'Tutte le richieste del server', 'Tutte quelle che iniziano con `/api` (es. `/api/libri/7`), con qualsiasi metodo — ma non `/apix`', 'Solo le `POST`'],
+        correct: 2,
+        explanation: '`app.use` lavora per **prefisso** di segmenti e con tutti i metodi. `app.get` invece vuole metodo e percorso esatti.',
+      },
+      {
+        question: 'Perché conviene registrare `morgan` per primo?',
+        options: ['Perché così registra tutte le richieste, anche quelle che finiscono prima delle rotte (file statici, 401, body JSON rotti…)', 'Perché altrimenti non si installa', 'Perché è più veloce', 'Non conta: morgan legge sempre tutto'],
+        correct: 0,
+        explanation: 'Un middleware vede solo le richieste che arrivano fino a lui. Se `express.json()` va in errore prima del logger, quel logger viene saltato.',
+      },
+      {
+        question: 'Chi applica le regole CORS?',
+        options: ['Il server Express', 'Il **browser**: non lascia leggere a una pagina le risposte di un\'altra origine senza `Access-Control-Allow-Origin`', 'npm', '`curl` e Postman'],
+        correct: 1,
+        explanation: 'CORS protegge gli utenti del browser. `curl`, Postman e Node ignorano queste regole: per questo "con Postman funziona" ma nel browser no.',
+      },
+      {
+        question: 'La pagina su `http://localhost:5500` chiama `http://localhost:3000/api/libri`. Cosa serve sul server?',
+        options: ['Niente: è sempre `localhost`', 'Spostare il server sulla porta 80', '`express.static`', '`app.use(cors({ origin: \'http://localhost:5500\' }))`: porta diversa = origine diversa'],
+        correct: 3,
+        explanation: 'Origine = protocollo + host + **porta**. In alternativa si serve la pagina dallo stesso Express con `express.static` (stessa origine, niente CORS).',
+      },
+      {
+        question: 'Il router è montato con `app.use(\'/api/libri\', router)`. Quale rotta risponde a `GET /api/libri/7`?',
+        options: ['`router.get(\'/api/libri/:id\', …)`', '`router.get(\'/:id\', …)`', '`router.get(\'/libri/:id\', …)`', '`app.get(\'/:id\', …)`'],
+        correct: 1,
+        explanation: 'Nel router i percorsi sono **relativi** al punto di montaggio. Con `\'/api/libri/:id\'` la rotta diventerebbe `/api/libri/api/libri/7`.',
+      },
+      {
+        question: 'Perché questo gestore degli errori viene ignorato da Express?',
+        code: "app.use((err, req, res) => {\n  res.status(err.status || 500).json({ errore: err.message });\n});",
+        options: ['Perché manca `return`', 'Perché va scritto con `app.get`', 'Perché ha 3 parametri: Express riconosce i gestori degli errori solo se ne hanno **4** `(err, req, res, next)`', 'Perché `err.status` non esiste'],
+        correct: 2,
+        explanation: 'Con 3 parametri è un middleware normale (e `err` sarebbe in realtà la richiesta!). Anche se `next` non si usa, va scritto.',
+      },
+      {
+        question: 'Quale ordine è corretto?',
+        options: ['404 → rotte → `express.json()` → gestore errori', '`express.json()` → rotte → 404 → gestore errori', 'gestore errori → rotte → 404 → `express.json()`', 'rotte → `express.json()` → gestore errori → 404'],
+        correct: 1,
+        explanation: 'Prima chi prepara (body), poi chi risponde (rotte), in fondo chi chiude: la 404 e infine il gestore degli errori.',
+      },
+      {
+        question: 'Con Express 5, quale di questi errori **fa crashare** il server?',
+        options: ['`throw` dentro una rotta', 'Una Promise rifiutata in una rotta `async`', 'Un `throw` dentro la callback di `fs.readFile`', '`next(err)`'],
+        correct: 2,
+        explanation: 'La callback viene eseguita "più tardi", fuori dalla catena di Express: nessuno cattura l\'errore. Con `fs/promises` e `await` l\'errore arriverebbe al gestore.',
+      },
+    ], { id: 'm5-quiz' });
+
+    if (window.hljs) document.querySelectorAll('pre.code code').forEach((el) => { if (!el.dataset.highlighted) hljs.highlightElement(el); });
+    NodeLab.refreshProgress();
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

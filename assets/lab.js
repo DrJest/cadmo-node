@@ -8,7 +8,7 @@
  *   fs: { 'dati/studenti.json': '...' },      // file già presenti nel progetto
  *   argv: '5 + 3',                             // mostra il campo argomenti
  *   env: {},
- *   server: { port: 3000, presets: [{ method, path, body }] },
+ *   server: { port: 3000, presets: [{ method, path, body, headers: 'Nome: valore\n…' }] },
  *   tests: [{ name, argv: [] | 'stringa', fs: {}, check: async (ctx) => {} }],
  *   hints: ['...'], solution: { 'app.js': '...' },
  * })
@@ -165,6 +165,8 @@
         url.value = `http://localhost:${p.port || port}${p.path || '/'}`;
         body.value = p.body || '';
         if (p.contentType) $('.hc-ctype').value = p.contentType;
+        $('.hc-headers').value = p.headers || '';
+        if (p.headers) $('.hc-headers').closest('details').open = true;
         syncBody();
         if (p.send !== false) send();
       };

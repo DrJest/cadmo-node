@@ -1,5 +1,6 @@
 /* ==========================================================================
- * NodeLab Widgets: Quiz, EventLoopViz (passo-passo), OrderGame (indovina l'output)
+ * NodeLab Widgets: Quiz, EventLoopViz (passo-passo), OrderGame (indovina l'output),
+ * PipelineViz (la richiesta attraverso i middleware di Express)
  * ========================================================================== */
 (function () {
   'use strict';
@@ -142,7 +143,7 @@
   }
 
   /* ---------------------------------------------------------- OrderGame
-   * OrderGame.mount(el, [{ title, code, chips: [...], answer: [...], explain }], { id })
+   * OrderGame.mount(el, [{ title, code, chips: [...], answer: [...], explain, cmd?, prompt? }], { id })
    * Lo studente clicca le righe di output nell'ordine in cui pensa verranno stampate.
    */
   function mountOrderGame(el, snippets, opts) {
@@ -161,9 +162,9 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <pre class="code small"><code class="language-javascript">${esc(sn.code.trim())}</code></pre>
           <div class="flex flex-col gap-3">
-            <div class="text-sm text-gray-400">Clicca le righe nell'ordine in cui compariranno nel terminale:</div>
+            <div class="text-sm text-gray-400">${inline(sn.prompt || 'Clicca le righe nell\'ordine in cui compariranno nel terminale:')}</div>
             <div class="og-chips flex flex-wrap gap-2"></div>
-            <div class="term p-3 min-h-[90px]"><div class="text-xs text-gray-500 font-mono mb-1">$ node app.js</div><div class="og-seq font-mono text-sm text-gray-200 space-y-0.5"></div></div>
+            <div class="term p-3 min-h-[90px]"><div class="text-xs text-gray-500 font-mono mb-1">${esc(sn.cmd || '$ node app.js')}</div><div class="og-seq font-mono text-sm text-gray-200 space-y-0.5"></div></div>
             <div class="flex gap-2">
               <button class="og-check px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium">Verifica</button>
               <button class="og-undo px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300" title="Annulla ultimo"><i data-lucide="undo-2" class="w-4 h-4"></i></button>
@@ -213,12 +214,121 @@
     icons();
   }
 
+  /* -------------------------------------------------------- PipelineViz
+   * Segui una richiesta attraverso i middleware di Express, passo per passo.
+   * PipelineViz.mount(el, {
+   *   code: [righe],
+   *   layers: [{ id, label, lines: [da, a], kind: 'mw' | 'route' | 'err' }],
+   *   requests: [{ label, steps: [{ layer, act, note, log }], response: { status, text } }],
+   * })
+   * act: 'next' | 'skip' | 'respond' | 'error' | 'errskip' | 'hang'
+   */
+  const ACT = {
+    next: ['next() ↓', 'border-green-500/40 bg-green-500/10 text-green-300'],
+    skip: ['non corrisponde', 'border-gray-700 bg-gray-800 text-gray-500'],
+    respond: ['risponde ✓', 'border-emerald-400/60 bg-emerald-500/20 text-emerald-200'],
+    error: ['errore ⚡', 'border-red-500/60 bg-red-500/15 text-red-300'],
+    errskip: ['ignorato', 'border-gray-700 bg-gray-800 text-gray-500'],
+    hang: ['nessuna risposta ⏳', 'border-red-500/60 bg-red-500/15 text-red-300'],
+  };
+  const KIND = {
+    mw: ['middleware', 'text-purple-300'],
+    route: ['rotta', 'text-blue-300'],
+    err: ['gestore errori', 'text-red-300'],
+  };
+  function mountPipeline(el, cfg) {
+    let r = 0;
+    let i = -1;
+    let timer = null;
+    el.innerHTML = `<div class="space-y-4">
+      <div class="flex flex-wrap gap-2 items-center"><span class="text-sm text-gray-400 mr-1">Richiesta:</span>${cfg.requests.map((q, n) => `
+        <button data-r="${n}" class="pv-req font-mono text-sm px-3 py-1.5 rounded-lg border">${esc(q.label)}</button>`).join('')}</div>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <pre class="code small pv-code lg:col-span-6" style="font-size:0.74rem"></pre>
+        <div class="lg:col-span-3 flex flex-col gap-1 pv-layers"></div>
+        <div class="lg:col-span-3 flex flex-col gap-3">
+          <div class="pv-note bg-gray-900 border border-gray-700 rounded-xl p-4 text-gray-200 min-h-[110px]"></div>
+          <div class="flex gap-2">
+            <button class="pv-prev px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200" title="Passo precedente"><i data-lucide="skip-back" class="w-4 h-4"></i></button>
+            <button class="pv-next flex-1 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium flex items-center justify-center gap-2 whitespace-nowrap">Avanti <i data-lucide="step-forward" class="w-4 h-4"></i></button>
+            <button class="pv-play px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200" title="Riproduci tutto"><i data-lucide="fast-forward" class="w-4 h-4"></i></button>
+          </div>
+          <div class="pv-resp"></div>
+          <div class="term p-3"><div class="text-xs text-gray-500 font-mono mb-1">log del server</div><div class="pv-log term-out text-sm text-gray-200 min-h-[2.5em]"></div></div>
+        </div>
+      </div></div>`;
+    const $ = (s) => el.querySelector(s);
+    function draw() {
+      const q = cfg.requests[r];
+      const st = i >= 0 ? q.steps[i] : null;
+      const done = {};
+      q.steps.slice(0, i + 1).forEach((s) => { done[s.layer] = s; });
+      el.querySelectorAll('.pv-req').forEach((b) => {
+        b.className = `pv-req font-mono text-sm px-3 py-1.5 rounded-lg border ${Number(b.dataset.r) === r ? 'border-green-500 bg-green-500/15 text-white' : 'border-gray-700 bg-gray-900 text-gray-300 hover:border-green-500'}`;
+      });
+      const cur = st ? cfg.layers.find((L) => L.id === st.layer) : null;
+      $('.pv-code').innerHTML = cfg.code.map((line, n) => {
+        const on = cur && n + 1 >= cur.lines[0] && n + 1 <= (cur.lines[1] || cur.lines[0]);
+        return `<div class="${on ? 'pv-on bg-yellow-500/20 -mx-2 px-2 rounded' : ''}"><span class="text-gray-600 select-none mr-3">${String(n + 1).padStart(2, ' ')}</span>${window.hljs ? window.hljs.highlight(line, { language: 'javascript' }).value : esc(line)}</div>`;
+      }).join('');
+      // se il codice scorre (es. nelle slide), porta in vista le righe evidenziate
+      const pre = $('.pv-code');
+      const hl = pre.querySelector('.pv-on');
+      if (hl && pre.scrollHeight > pre.clientHeight) {
+        const top = hl.offsetTop - pre.offsetTop;
+        if (top < pre.scrollTop || top > pre.scrollTop + pre.clientHeight - 48) pre.scrollTop = Math.max(0, top - 60);
+      }
+      $('.pv-layers').innerHTML = cfg.layers.map((L, n) => {
+        const s = done[L.id];
+        const isCur = st && st.layer === L.id;
+        const k = KIND[L.kind] || KIND.mw;
+        const a = s && (ACT[s.act] || ACT.next);
+        return `<div class="rounded-lg border px-2.5 py-1.5 transition-all ${isCur ? 'border-yellow-400 ring-2 ring-yellow-400/40 bg-gray-900' : s ? 'border-gray-700 bg-gray-900' : 'border-gray-800 bg-gray-950/60 opacity-70'}">
+            <div class="flex items-center gap-1.5 min-h-[18px]"><span class="text-[10px] uppercase tracking-wider ${k[1]}">${isCur ? '📨 ' : ''}${k[0]}</span>
+              ${a ? `<span class="ml-auto text-[10px] font-mono px-1.5 rounded border whitespace-nowrap ${a[1]}">${esc(s.badge || a[0])}</span>` : ''}</div>
+            <div class="font-mono text-xs text-gray-200 break-words">${esc(L.label)}</div>
+          </div>`;
+      }).join('');
+      $('.pv-note').innerHTML = st ? inline(st.note || '')
+        : `Premi <strong>Avanti</strong> per far entrare la richiesta <code class="inline">${esc(q.label)}</code> nella pipeline. Express prova i middleware e le rotte <strong>dall'alto verso il basso</strong>.`;
+      $('.pv-log').innerHTML = q.steps.slice(0, i + 1).filter((s) => s.log).map((s) => `<div>${esc(s.log)}</div>`).join('') || '<span class="text-gray-700 text-xs italic">—</span>';
+      const last = i === q.steps.length - 1;
+      const resp = q.response;
+      $('.pv-resp').innerHTML = last && resp ? `<div class="p-3 rounded-lg border font-mono text-sm ${resp.status >= 500 || !resp.status ? 'border-red-500/40 bg-red-500/10 text-red-200' : resp.status >= 400 ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-200' : 'border-green-500/40 bg-green-500/10 text-green-200'}">← ${resp.status ? `<strong>${resp.status}</strong> ` : ''}${inline(resp.text || '')}</div>` : '';
+      $('.pv-prev').disabled = i < 0;
+      $('.pv-prev').classList.toggle('opacity-40', i < 0);
+      $('.pv-next').disabled = last;
+      $('.pv-next').classList.toggle('opacity-40', last);
+    }
+    const stop = () => { clearInterval(timer); timer = null; };
+    const step = () => { const q = cfg.requests[r]; if (i < q.steps.length - 1) { i++; draw(); } else stop(); };
+    $('.pv-next').onclick = () => { stop(); step(); };
+    $('.pv-prev').onclick = () => { stop(); if (i >= 0) { i--; draw(); } };
+    $('.pv-play').onclick = () => {
+      stop();
+      if (i >= cfg.requests[r].steps.length - 1) i = -1;
+      step();
+      timer = setInterval(step, 1300);
+    };
+    el.querySelector('.flex.flex-wrap').onclick = (e) => {
+      const b = e.target.closest('[data-r]');
+      if (!b) return;
+      stop();
+      r = Number(b.dataset.r);
+      i = -1;
+      draw();
+    };
+    draw();
+    icons();
+  }
+
   /* ------------------------------------------------- Soluzioni a scomparsa */
   function toggleSolution(id) { document.getElementById(id).classList.toggle('open'); }
 
   window.Quiz = { mount: mountQuiz };
   window.EventLoopViz = { mount: mountEventLoop };
   window.OrderGame = { mount: mountOrderGame };
+  window.PipelineViz = { mount: mountPipeline };
   window.toggleSolution = toggleSolution;
   window.NodeLabStore = store;
 })();
