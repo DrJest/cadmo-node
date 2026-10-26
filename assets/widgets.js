@@ -1,6 +1,6 @@
 /* ==========================================================================
  * NodeLab Widgets: Quiz, EventLoopViz (passo-passo), OrderGame (indovina l'output),
- * PipelineViz (la richiesta attraverso i middleware di Express)
+ * PipelineViz (la richiesta attraverso i middleware di Express), RestGame (progetta l'endpoint REST)
  * ========================================================================== */
 (function () {
   'use strict';
@@ -322,6 +322,110 @@
     icons();
   }
 
+  /* ----------------------------------------------------------- RestGame
+   * "Progetta l'endpoint": per ogni scenario si scelgono metodo, URL e status code della risposta.
+   * RestGame.mount(el, [{ text, paths: [], statuses: [], answer: { method, path, status }, explain }], { id })
+   */
+  const STATUS_TEXT = { 200: 'OK', 201: 'Created', 202: 'Accepted', 204: 'No Content', 206: 'Partial Content', 301: 'Moved Permanently', 302: 'Found', 400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 405: 'Method Not Allowed', 409: 'Conflict', 410: 'Gone', 415: 'Unsupported Media Type', 422: 'Unprocessable Entity', 500: 'Internal Server Error' };
+  const REST_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+  const METHOD_CLS = { GET: 'text-green-300', POST: 'text-yellow-300', PUT: 'text-blue-300', PATCH: 'text-purple-300', DELETE: 'text-red-300' };
+  const statusCls = (s) => (s >= 500 ? 'text-red-300' : s >= 400 ? 'text-yellow-300' : s >= 300 ? 'text-blue-300' : 'text-green-300');
+  function mountRestGame(el, scenarios, opts) {
+    opts = opts || {};
+    const solved = new Set((opts.id && store.get('rest:' + opts.id)) || []);
+    const picks = scenarios.map(() => ({}));
+    const paths = scenarios.map((s) => s.paths.slice().sort(() => Math.random() - 0.5));
+    let n = 0;
+    let checked = false;
+    const row = (label, cls) => `<div class="flex flex-col sm:flex-row sm:items-center gap-2"><span class="sm:w-20 shrink-0 text-xs uppercase tracking-wider text-gray-500">${label}</span><div class="${cls} flex flex-wrap gap-2"></div></div>`;
+    el.innerHTML = `<div class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6 space-y-5">
+      <div class="flex flex-wrap items-center gap-3">
+        <span class="rg-num font-mono text-sm text-gray-400"></span>
+        <div class="rg-dots flex flex-wrap gap-1.5"></div>
+        <span class="rg-score ml-auto text-xs font-mono"></span>
+      </div>
+      <div class="rg-text text-lg md:text-2xl text-white font-semibold"></div>
+      <div class="space-y-3">${row('Metodo', 'rg-methods')}${row('URL', 'rg-paths')}${row('Risposta', 'rg-statuses')}</div>
+      <div class="term p-3 font-mono text-sm"><div class="rg-req text-gray-200"></div><div class="rg-res mt-1"></div></div>
+      <div class="flex flex-wrap gap-2">
+        <button class="rg-check px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium">Verifica</button>
+        <button class="rg-prev px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300" title="Scenario precedente"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+        <button class="rg-next px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 flex items-center gap-1">Prossimo <i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+      </div>
+      <div class="rg-fb hidden p-3 rounded-lg border text-sm"></div>
+    </div>`;
+    const $ = (s) => el.querySelector(s);
+    const chip = (kind, value, label, sel, verdict) => {
+      const st = verdict === true ? 'border-green-500 bg-green-500/15 text-white'
+        : verdict === false ? 'border-red-500 bg-red-500/15 text-red-200'
+          : sel ? 'border-cyan-400 bg-cyan-500/15 text-white' : 'border-gray-600 bg-gray-900 text-gray-300 hover:border-cyan-400 hover:text-white';
+      return `<button data-k="${kind}" data-v="${esc(value)}" class="chip font-mono text-sm px-3 py-1.5 rounded-lg border ${st}">${label}</button>`;
+    };
+    function draw() {
+      const s = scenarios[n];
+      const p = picks[n];
+      const verdict = (k) => (checked && p[k] !== undefined ? p[k] === s.answer[k] : undefined);
+      $('.rg-num').textContent = `${n + 1}/${scenarios.length}`;
+      $('.rg-dots').innerHTML = scenarios.map((_, i) => `<button data-n="${i}" title="Scenario ${i + 1}" class="w-2.5 h-2.5 rounded-full ${i === n ? 'ring-2 ring-cyan-400 ' : ''}${solved.has(i) ? 'bg-green-500' : 'bg-gray-600 hover:bg-gray-500'}"></button>`).join('');
+      $('.rg-score').innerHTML = solved.size === scenarios.length ? '<span class="text-green-400">✓ tutti risolti!</span>' : `<span class="text-gray-500">${solved.size}/${scenarios.length} risolti</span>`;
+      $('.rg-text').innerHTML = `${solved.has(n) ? '<span class="text-green-400 mr-2">✓</span>' : ''}${inline(s.text)}`;
+      $('.rg-methods').innerHTML = REST_METHODS.map((m) => chip('method', m, `<span class="${METHOD_CLS[m]}">${m}</span>`, p.method === m, p.method === m ? verdict('method') : undefined)).join('');
+      $('.rg-paths').innerHTML = paths[n].map((u) => chip('path', u, esc(u), p.path === u, p.path === u ? verdict('path') : undefined)).join('');
+      $('.rg-statuses').innerHTML = s.statuses.slice().sort((a, b) => a - b).map((c) => chip('status', c, `${c} <span class="text-gray-500">${STATUS_TEXT[c] || ''}</span>`, p.status === c, p.status === c ? verdict('status') : undefined)).join('');
+      const flag = p.method && p.method !== 'GET' ? `-X ${p.method} ` : '';
+      $('.rg-req').innerHTML = `<span class="text-green-400">$</span> curl -i ${flag}<span class="text-gray-400">localhost:3000</span>${p.path ? esc(p.path) : '<span class="text-gray-600">…</span>'}`;
+      $('.rg-res').innerHTML = p.status ? `<span class="${statusCls(p.status)}">HTTP/1.1 ${p.status} ${STATUS_TEXT[p.status] || ''}</span>` : '<span class="text-gray-600">HTTP/1.1 …</span>';
+      $('.rg-prev').disabled = n === 0;
+      $('.rg-prev').classList.toggle('opacity-40', n === 0);
+      $('.rg-next').disabled = n === scenarios.length - 1;
+      $('.rg-next').classList.toggle('opacity-40', n === scenarios.length - 1);
+      icons();
+    }
+    const go = (i) => { n = i; checked = false; $('.rg-fb').classList.add('hidden'); draw(); };
+    el.onclick = (e) => {
+      const c = e.target.closest('[data-k]');
+      if (c) {
+        const k = c.dataset.k;
+        picks[n][k] = k === 'status' ? Number(c.dataset.v) : c.dataset.v;
+        checked = false;
+        $('.rg-fb').classList.add('hidden');
+        draw();
+        return;
+      }
+      const d = e.target.closest('[data-n]');
+      if (d) go(Number(d.dataset.n));
+    };
+    $('.rg-prev').onclick = () => { if (n > 0) go(n - 1); };
+    $('.rg-next').onclick = () => { if (n < scenarios.length - 1) go(n + 1); };
+    $('.rg-check').onclick = () => {
+      const s = scenarios[n];
+      const p = picks[n];
+      const fb = $('.rg-fb');
+      fb.classList.remove('hidden');
+      if (!p.method || !p.path || p.status === undefined) {
+        fb.className = 'rg-fb p-3 rounded-lg border text-sm border-yellow-500/40 bg-yellow-500/10 text-yellow-200';
+        fb.textContent = 'Scegli il metodo, l\'URL e lo status code della risposta.';
+        return;
+      }
+      checked = true;
+      const wrong = ['method', 'path', 'status'].filter((k) => p[k] !== s.answer[k]);
+      const ok = wrong.length === 0;
+      if (ok) {
+        solved.add(n);
+        if (opts.id) store.set('rest:' + opts.id, Array.from(solved));
+      }
+      const names = { method: 'il metodo', path: 'l\'URL', status: 'lo status code' };
+      const answer = `<div class="font-mono mb-2"><span class="${METHOD_CLS[s.answer.method]}">${s.answer.method}</span> ${esc(s.answer.path)} → <span class="${statusCls(s.answer.status)}">${s.answer.status} ${STATUS_TEXT[s.answer.status] || ''}</span></div>${inline(s.explain || '')}`;
+      fb.className = `rg-fb p-3 rounded-lg border text-sm ${ok ? 'border-green-500/40 bg-green-500/10 text-green-200' : 'border-red-500/40 bg-red-500/10 text-red-200'}`;
+      fb.innerHTML = ok ? `<strong>✓ Esatto!</strong> ${answer}`
+        : `<strong>✗ Non proprio:</strong> ricontrolla ${wrong.map((k) => names[k]).join(' e ')}. Riprova, oppure <button class="rg-show underline">mostra la soluzione</button>.`;
+      const show = fb.querySelector('.rg-show');
+      if (show) show.onclick = () => { fb.innerHTML = answer; };
+      draw();
+    };
+    draw();
+  }
+
   /* ------------------------------------------------- Soluzioni a scomparsa */
   function toggleSolution(id) { document.getElementById(id).classList.toggle('open'); }
 
@@ -329,6 +433,7 @@
   window.EventLoopViz = { mount: mountEventLoop };
   window.OrderGame = { mount: mountOrderGame };
   window.PipelineViz = { mount: mountPipeline };
+  window.RestGame = { mount: mountRestGame };
   window.toggleSolution = toggleSolution;
   window.NodeLabStore = store;
 })();

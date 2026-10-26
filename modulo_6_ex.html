@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esercitazioni Modulo 6 — CADMO NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white prose-code">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <div class="flex items-center gap-5 text-sm">
+          <a href="modulo_6.html" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="presentation" class="w-4 h-4"></i><span class="hidden sm:inline">Slide</span></a>
+          <a href="./" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Home</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="bg-gray-950 border-b border-gray-800 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center animate-fade-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-900/30 border border-orange-500/30 text-xs text-orange-300 font-mono mb-4 uppercase tracking-wider">
+        <i data-lucide="server" class="w-4 h-4"></i> REST · CRUD · status code · filtri · pagine · versioni · file JSON
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4">Esercitazioni Modulo 6</h1>
+      <p class="text-gray-400 text-lg">Progetta gli endpoint, indovina che cosa risponde il server, esplora la Biblioteca 3.0 e completa otto laboratori con verifica automatica, fino al boss con il repository su file.</p>
+      <p class="mt-4 text-sm font-mono text-gray-500"><span data-lab-progress="m6-rest,m6-crud,m6-filtri,m6-pagine,m6-file,m6-versioni,m6-trovabug,m6-boss"></span> · i progressi restano salvati in questo browser</p>
+    </div>
+  </header>
+
+  <!-- Indice -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+    <div class="flex flex-wrap gap-2 justify-center text-sm">
+      <a href="#guida" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">1 · Guida rapida</a>
+      <a href="#progetta" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">2 · Progetta l'API</a>
+      <a href="#biblioteca" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">3 · Biblioteca 3.0</a>
+      <a href="#lab" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">4 · Laboratori</a>
+      <a href="#pc" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">5 · Sul tuo PC</a>
+      <a href="#quiz" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">6 · Quiz</a>
+    </div>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-20">
+
+    <!-- 1. GUIDA RAPIDA -->
+    <section id="guida" class="scroll-mt-20 animate-fade-in delay-100">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="book-open" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">1. Guida rapida</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-orange-400 mb-2">Risorse e metodi</h3>
+          <pre class="code small"><code class="language-plaintext">GET     /api/libri      200
+GET     /api/libri/7    200 · 404
+POST    /api/libri      201 + Location · 400 · 409
+PUT     /api/libri/7    200 · 400 · 404   (tutto)
+PATCH   /api/libri/7    200 · 400 · 404   (una parte)
+DELETE  /api/libri/7    204 · 404
+altri metodi            405 + Allow</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-yellow-400 mb-2">Status code e errori</h3>
+          <pre class="code small"><code class="language-javascript">res.status(201).location(`/api/libri/${libro.id}`).json(libro);
+res.sendStatus(204);                       // body vuoto
+res.status(400).json({ errore: 'titolo e autore sono obbligatori' });
+res.status(404).json({ errore: 'Libro non trovato' });
+res.status(409).json({ errore: 'Libro già in catalogo' });
+// sempre lo stesso formato: { errore: '…' }
+// ❌ mai 200 con { ok: false }</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-blue-400 mb-2">CRUD: le regole d'oro</h3>
+          <pre class="code small"><code class="language-javascript">const id = Number(req.params.id);       // i params sono stringhe
+const dati = scegliCampi(req.body);     // solo i campi ammessi
+const libro = { id: prossimoId++, ...dati };   // l'id lo decide il server
+Object.assign(libro, PREDEFINITI, dati); // PUT: sostituisce tutto
+Object.assign(libro, dati);              // PATCH: solo ciò che arriva
+// ❌ libri.length + 1  → id doppi dopo una DELETE</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-cyan-400 mb-2">Query string</h3>
+          <pre class="code small"><code class="language-javascript">// ?autore=calvino&disponibile=false&ordina=-anno&pagina=2&limite=10
+req.query.disponibile === 'true'        // tutto è stringa!
+lista.toSorted((a, b) => …)            // sort() modifica l'originale
+const inizio = (pagina - 1) * limite;
+// filtra → ordina → impagina
+res.json({ dati: lista.slice(inizio, inizio + limite),
+           pagina, limite, totale, pagine });</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-emerald-400 mb-2">Il catalogo su file</h3>
+          <pre class="code small"><code class="language-javascript">const fs = require('fs/promises');
+const FILE = path.join(__dirname, 'data', 'libri.json');
+
+const leggi = async () => JSON.parse(await fs.readFile(FILE, 'utf8'));
+async function salva(libri) {
+  await fs.writeFile(FILE + '.tmp', JSON.stringify(libri, null, 2));
+  await fs.rename(FILE + '.tmp', FILE);   // mai scritto a metà
+}
+// leggi → modifica → salva</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-purple-400 mb-2">Versioni e client</h3>
+          <pre class="code small"><code class="language-bash"># app.use('/api/v1/libri', v1);  app.use('/api/v2/libri', v2);
+curl -i localhost:3000/api/v1/libri/3
+curl "localhost:3000/api/v1/libri?autore=calvino&limite=2"
+curl -i --json '{"titolo":"Dune","autore":"Frank Herbert"}' \
+     localhost:3000/api/v1/libri
+curl -i -X PATCH --json '{"disponibile":false}' localhost:3000/api/v1/libri/16
+curl -i -X DELETE localhost:3000/api/v1/libri/16</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. PROGETTA L'API -->
+    <section id="progetta" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="drafting-compass" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">2. Progetta l'API</h2>
+      </div>
+      <h3 class="text-xl font-bold text-white mt-6 mb-2">Progetta l'endpoint</h3>
+      <p class="text-gray-400 mb-4">Per ogni operazione scegli il <strong>metodo</strong>, l'<strong>URL</strong> e lo <strong>status code</strong> della risposta, poi premi Verifica. Le prime sono facili, poi qualcosa va storto…</p>
+      <div id="rest-game"></div>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Che cosa stampa il client?</h3>
+      <p class="text-gray-400 mb-4">Ogni script fa una serie di richieste a un server REST e stampa qualcosa. Clicca le righe nell'ordine in cui compaiono nel terminale (alcune possono comparire più di una volta, altre mai!).</p>
+      <div id="order-game"></div>
+    </section>
+
+    <!-- 3. BIBLIOTECA 3.0 -->
+    <section id="biblioteca" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="library" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">3. Biblioteca 3.0</h2>
+      </div>
+      <p class="text-gray-400 mb-4">La biblioteca è diventata un'API REST vera: versione nell'URL, CRUD completo, filtri, ordinamento, pagine, 405 e 409, e il catalogo nel file <code class="inline">data/libri.json</code>, che vedi cambiare sotto il log. Il pulsante <kbd>↻</kbd> riavvia il server <strong>mantenendo i file</strong>; quello con il database rimette i dati iniziali.</p>
+      <div id="inspector" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <button onclick="toggleSolution('codice-server')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="file-code-2" class="w-4 h-4"></i> Mostra il codice del server</button>
+      <div id="codice-server" class="solution-container mt-4"><pre class="code small"><code class="language-javascript" id="codice-server-src"></code></pre></div>
+    </section>
+
+    <!-- 4. LABORATORI -->
+    <section id="lab" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-conical" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">4. Laboratori nel browser</h2>
+      </div>
+      <div class="text-gray-400 mb-8 space-y-2">
+        <p>In ogni progetto <code class="inline">express</code> è già installato. Premi <kbd>▶ Esegui</kbd> per avviare il server, provalo con il client HTTP (i preset riempiono metodo, URL e body: per le richieste che modificano i dati premi tu <strong>Invia</strong>) e poi premi <kbd>Verifica</kbd>.</p>
+        <p class="text-sm">💡 Dopo ogni modifica premi di nuovo <kbd>▶ Esegui</kbd>: il server riparte con i dati iniziali. Nei lab con i file JSON apri il pannello <strong>File system virtuale</strong> per vedere che cosa ha scritto il server.</p>
+      </div>
+      <div class="space-y-10" id="labs"></div>
+    </section>
+
+    <!-- 5. MISSIONI SUL PC -->
+    <section id="pc" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="laptop" class="w-6 h-6 text-emerald-400"></i>
+        <h2 class="text-2xl font-bold text-white">5. Missioni sul tuo PC</h2>
+      </div>
+      <div class="space-y-8">
+        <!-- Missione A -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-blue-900/50 flex items-center justify-center border border-blue-500/30"><i data-lucide="file-text" class="w-5 h-5 text-blue-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione A: La collezione di richieste</h3>
+              <p class="text-sm text-blue-400 font-mono">Focus: REST Client / Bruno, file .http, ciclo di vita di una risorsa</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-blue-500">
+            <li>Crea <code class="inline">corso-node/lezione6</code>, installa <code class="inline">express</code> e <code class="inline">morgan</code> e aggiungi lo script <code class="inline">dev</code> con <code class="inline">node --watch server.js</code>.</li>
+            <li>Copia il server della <strong>Biblioteca 3.0</strong> (sezione 3) in <code class="inline">server.js</code> e il catalogo in <code class="inline">data/libri.json</code> (lo trovi nella soluzione).</li>
+            <li>Installa l'estensione <strong>REST Client</strong> di VS Code (oppure usa Bruno) e scrivi <code class="inline">biblioteca.http</code> con tutto il ciclo di vita di un libro: crealo, rileggilo, segnalo in prestito con un PATCH, prova un PUT senza autore (400), eliminalo due volte (204, poi 404).</li>
+            <li>Tieni aperto <code class="inline">data/libri.json</code> mentre mandi le richieste: lo vedi cambiare? Ferma il server, riavvialo e rileggi il catalogo: i tuoi libri ci sono ancora?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-a')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-a" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-bash">mkdir -p corso-node/lezione6/data && cd corso-node/lezione6
+npm init -y
+npm install express morgan
+npm pkg set scripts.dev="node --watch server.js"
+code server.js data/libri.json biblioteca.http
+npm run dev</code></pre>
+            <div class="text-xs font-mono text-gray-500">biblioteca.http</div>
+            <pre class="code small"><code class="language-plaintext">@base = http://localhost:3000/api/v1
+
+### Crea un libro
+# @name nuovo
+POST {{base}}/libri
+Content-Type: application/json
+
+{ "titolo": "Sostiene Pereira", "autore": "Antonio Tabucchi", "anno": 1994, "genere": "romanzo" }
+
+### Rileggilo (201 → l'id è nella risposta di "nuovo")
+GET {{base}}/libri/{{nuovo.response.body.$.id}}
+
+### In prestito: cambia solo questo campo
+PATCH {{base}}/libri/{{nuovo.response.body.$.id}}
+Content-Type: application/json
+
+{ "disponibile": false }
+
+### PUT senza autore → 400
+PUT {{base}}/libri/{{nuovo.response.body.$.id}}
+Content-Type: application/json
+
+{ "titolo": "Sostiene Pereira" }
+
+### Eliminalo → 204 (rilancialo: 404)
+DELETE {{base}}/libri/{{nuovo.response.body.$.id}}
+
+### Metodo non permesso → 405 + Allow
+DELETE {{base}}/libri</code></pre>
+            <p class="text-sm text-gray-400">Sì: dopo il riavvio i libri ci sono ancora, perché il server rilegge <code class="inline">data/libri.json</code> a ogni richiesta. <code class="inline">node --watch</code> non riavvia il server quando il file cambia: guarda solo i file caricati con <code class="inline">require</code>.</p>
+            <div class="text-xs font-mono text-gray-500">data/libri.json</div>
+            <pre class="code small"><code class="language-json" id="sol-a-json"></code></pre>
+          </div>
+        </article>
+
+        <!-- Missione B -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-emerald-900/50 flex items-center justify-center border border-emerald-500/30"><i data-lucide="refresh-cw" class="w-5 h-5 text-emerald-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione B: nodemon e il file che cambia</h3>
+              <p class="text-sm text-emerald-400 font-mono">Focus: strumenti di sviluppo, file osservati, cache di require</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-emerald-500">
+            <li>Nel progetto della missione A installa <code class="inline">nodemon</code> come dipendenza di sviluppo e aggiungi lo script <code class="inline">"dev:nodemon": "nodemon server.js"</code>.</li>
+            <li>Avvia con <code class="inline">npm run dev:nodemon</code> e crea un libro: che cosa succede nel terminale subito dopo la risposta? Perché?</li>
+            <li>Fai in modo che nodemon <strong>ignori</strong> la cartella <code class="inline">data/</code> (dalla riga di comando oppure con un file <code class="inline">nodemon.json</code>).</li>
+            <li>Esperimento: nel server sostituisci <code class="inline">leggiLibri()</code> con un <code class="inline">require('./data/libri.json')</code> letto una volta sola, e avvia con <code class="inline">node --watch</code>. Ora che cosa succede a ogni POST? E se avvii con <code class="inline">node server.js</code>, i libri nuovi compaiono nell'elenco?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-b')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-b" class="solution-container mt-4">
+            <pre class="code small"><code class="language-bash">npm install -D nodemon
+npm pkg set scripts.dev:nodemon="nodemon server.js"
+npm run dev:nodemon
+
+# 2. dopo la POST:
+# [nodemon] restarting due to changes...
+# [nodemon] starting `node server.js`
+# nodemon osserva anche i file .json della cartella: il server ha scritto
+# data/libri.json e nodemon lo ha riavviato. Qui non si perde niente (i dati
+# sono nel file), ma con richieste lunghe, cache o connessioni aperte sì.
+
+# 3. due soluzioni equivalenti
+npm pkg set scripts.dev:nodemon="nodemon --ignore data/ server.js"
+echo '{ "ignore": ["data/*"] }' > nodemon.json
+
+# 4. con require('./data/libri.json'):
+#    - node --watch riavvia il server a ogni POST: il file ora è un modulo "osservato";
+#    - con node server.js il file si legge UNA volta (cache di require): le POST lo
+#      scrivono, ma l'elenco resta quello dell'avvio finché non riavvii.
+#    Morale: per dati che cambiano, fs.readFile a ogni richiesta (o un database).</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione C -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-red-900/50 flex items-center justify-center border border-red-500/30"><i data-lucide="zap" class="w-5 h-5 text-red-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione C: Venti POST nello stesso istante</h3>
+              <p class="text-sm text-red-400 font-mono">Focus: richieste contemporanee, lost update, coda delle scritture</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-red-500">
+            <li>Con il server della missione A acceso, crea <code class="inline">stress.mjs</code>: manda <strong>insieme</strong> 20 <code class="inline">POST</code> (con <code class="inline">Promise.all</code>), stampa gli status e poi quanti libri con autore <code class="inline">Stress Test</code> ci sono nel catalogo.</li>
+            <li>Lancialo un paio di volte (<code class="inline">node stress.mjs</code>): arrivano 20 risposte 201? Nel catalogo ci sono 20 libri nuovi? Ci sono id ripetuti? Qualche 500?</li>
+            <li>Spiega che cosa è successo, disegnando su un foglio due richieste che si "accavallano" (leggi → modifica → scrivi).</li>
+            <li>Correggi il server con una <strong>coda</strong>: le operazioni che scrivono vengono eseguite una alla volta. Rilancia lo script.</li>
+          </ol>
+          <button onclick="toggleSolution('sol-c')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-c" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-javascript">// stress.mjs — 20 POST contemporanee (.mjs: qui await si può usare fuori da una funzione)
+const url = 'http://localhost:3000/api/v1/libri';
+
+const risposte = await Promise.all(
+  Array.from({ length: 20 }, (_, i) =>
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titolo: `Libro di prova ${i}`, autore: 'Stress Test' }),
+    }),
+  ),
+);
+console.log(risposte.map((r) => r.status).join(' '));
+
+const elenco = await (await fetch(`${url}?autore=stress&limite=50`)).json();
+console.log('Libri "Stress Test" nel catalogo:', elenco.totale);
+console.log('Id:', elenco.dati.map((l) => l.id).join(', '));
+
+// Risultato tipico (cambia a ogni esecuzione): molti 201, forse qualche 500,
+// ma nel catalogo ne restano MENO di 20 e alcuni id si ripetono.
+// Più richieste leggono lo stesso file, ognuna aggiunge il suo libro e riscrive:
+// l'ultima che scrive cancella il lavoro delle altre ("lost update").
+// I 500 arrivano quando due richieste rinominano lo stesso libri.json.tmp.</code></pre>
+            <pre class="code small"><code class="language-javascript">// server.js — una coda: ogni scrittura parte solo quando la precedente è finita
+let coda = Promise.resolve();
+
+function inCoda(operazione) {
+  const risultato = coda.then(operazione);
+  coda = risultato.catch(() => {});   // un errore non deve bloccare la coda
+  return risultato;
+}
+
+// nella POST (e allo stesso modo in PUT, PATCH e DELETE)
+.post(async (req, res) => {
+  const dati = scegliCampi(req.body);
+  if (!dati.titolo || !dati.autore) throw creaErrore(400, 'titolo e autore sono obbligatori');
+  const libro = await inCoda(async () => {
+    const libri = await leggiLibri();
+    // ... controllo dei doppioni ...
+    const nuovo = libroCompleto(Math.max(0, ...libri.map((l) => l.id)) + 1, dati);
+    libri.push(nuovo);
+    await salvaLibri(libri);
+    return nuovo;
+  });
+  res.status(201).location(`/api/v1/libri/${libro.id}`).json(libro);
+})
+// Ora: 20 × 201, 20 libri, id tutti diversi. Funziona con UN processo:
+// con più server (o più istanze) serve un database con le transazioni (modulo 9).</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione D -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-orange-900/50 flex items-center justify-center border border-orange-500/30"><i data-lucide="globe" class="w-5 h-5 text-orange-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione D: Come lo fanno i grandi</h3>
+              <p class="text-sm text-orange-400 font-mono">Focus: API pubbliche reali, paginazione, versionamento, errori</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-orange-500">
+            <li><strong>PokeAPI</strong>: <code class="inline">curl -i "https://pokeapi.co/api/v2/pokemon?limit=3"</code>. Dov'è la versione? Come si chiamano i parametri della paginazione? Dove stanno il totale e il link alla pagina successiva?</li>
+            <li><strong>GitHub</strong>: <code class="inline">curl -i "https://api.github.com/repos/nodejs/node/issues?per_page=2&amp;page=2"</code>. Il body è una busta o un array? In quale header trovi le pagine successive?</li>
+            <li>Chiedi a GitHub un repository che non esiste: che status e che body ricevi? Come si sceglie la versione dell'API di GitHub (cerca "X-GitHub-Api-Version" nella documentazione)?</li>
+            <li>Negli header di GitHub cerca quelli che iniziano con <code class="inline">x-ratelimit-</code>: che cosa raccontano? Che cosa copieresti nella tua Biblioteca?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-d')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-d" class="solution-container mt-4">
+            <pre class="code small"><code class="language-bash"># 1. PokeAPI: versione nell'URL (/api/v2), paginazione con offset/limit, metadati nel BODY
+#    { "count": …, "next": "https://pokeapi.co/api/v2/pokemon?offset=3&limit=3",
+#      "previous": null, "results": [ { "name": "bulbasaur", "url": "…" }, … ] }
+
+# 2. GitHub: il body è un ARRAY; le pagine stanno nell'header Link
+#    link: <…?per_page=2&page=1>; rel="prev", <…?per_page=2&page=3>; rel="next",
+#          <…?per_page=2&page=1>; rel="first", <…?per_page=2&page=…>; rel="last"
+
+# 3. curl -i https://api.github.com/repos/nodejs/non-esiste
+#    HTTP/2 404  e un JSON con "message": "Not Found" e "documentation_url":
+#    lo status dice cosa è successo, il body spiega e rimanda alla documentazione.
+#    La versione si sceglie con un header:
+curl -i -H "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/nodejs/node
+
+# 4. x-ratelimit-limit / -remaining / -reset: quante richieste puoi ancora fare
+#    (senza login sono poche all'ora) e quando il contatore si azzera.
+#    Superato il limite: 403 o 429 Too Many Requests. Il rate limiting lo vedremo nel modulo 13.</code></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 6. QUIZ -->
+    <section id="quiz" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="check-square" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">6. Quiz di verifica</h2>
+      </div>
+      <div id="quiz-box"></div>
+    </section>
+  </main>
+
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm font-mono">studente@nodelab:~$ curl -i localhost:3000/api/v1/libri</div>
+  </footer>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m6-biblioteca.js"></script>
+  <script src="assets/labs-m6.js"></script>
+  <script>
+    // ---------------------------------------------------------------- 2. progetta l'API
+    RestGame.mount(document.getElementById('rest-game'), M6_REST, { id: 'm6-rest-game' });
+
+    OrderGame.mount(document.getElementById('order-game'), [
+      {
+        title: 'Il ciclo di vita di un libro',
+        cmd: '$ node prove.mjs',
+        prompt: 'Il server è un CRUD come quello delle slide, con i libri 1, 2 e 3 (e prossimoId = 4). Clicca gli status nell\'ordine in cui vengono stampati:',
+        code: `const url = 'http://localhost:3000/api/libri';
+const headers = { 'Content-Type': 'application/json' };
+const body = JSON.stringify({ titolo: 'Dune', autore: 'Frank Herbert' });
+
+console.log((await fetch(url, { method: 'POST', headers, body })).status);
+console.log((await fetch(url + '/4')).status);
+console.log((await fetch(url + '/4', { method: 'DELETE' })).status);
+console.log((await fetch(url + '/4')).status);
+console.log((await fetch(url + '/4', { method: 'DELETE' })).status);`,
+        chips: ['200', '201', '204', '404', '404', '400', '500'],
+        answer: ['201', '200', '204', '404', '404'],
+        explain: 'Il nuovo libro prende l\'id 4 (**201**), si legge (**200**), si elimina (**204**). Poi non esiste più: sia la GET sia la seconda DELETE rispondono **404**. La DELETE resta idempotente: il libro è eliminato comunque.',
+      },
+      {
+        title: 'Ripetere una richiesta',
+        cmd: '$ node prove.mjs',
+        prompt: 'Stesso server, di nuovo con i libri 1, 2 e 3 (e nessun controllo dei doppioni). Clicca le righe nell\'ordine in cui vengono stampate:',
+        code: `const url = 'http://localhost:3000/api/libri';
+const invia = (method, indirizzo) => fetch(indirizzo, {
+  method,
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ titolo: 'Dune', autore: 'Frank Herbert' }),
+});
+
+console.log((await invia('POST', url)).status);
+console.log((await invia('POST', url)).status);
+console.log((await invia('PUT', url + '/1')).status);
+console.log((await invia('PUT', url + '/1')).status);
+
+const elenco = await (await fetch(url)).json();
+console.log(elenco.length);`,
+        chips: ['201', '201', '200', '200', '409', '4', '5'],
+        answer: ['201', '201', '200', '200', '5'],
+        explain: 'La POST **non** è idempotente: due POST = due libri (3 + 2 = **5**). Il PUT sì: dopo il secondo, il libro 1 è identico a dopo il primo, e il numero di libri non cambia.',
+      },
+      {
+        title: 'Nella query string è tutto stringa',
+        cmd: '$ node prove.mjs',
+        prompt: 'Il client chiede l\'elenco senza filtri, poi con ?disponibile=true, poi con ?disponibile=false. Clicca le righe nell\'ordine in cui vengono stampate:',
+        code: `// server: i libri 1, 3 e 5 sono disponibili, il 2 e il 4 sono in prestito
+app.get('/api/libri', (req, res) => {
+  let risultato = libri;
+  if (req.query.disponibile) {
+    risultato = risultato.filter((l) => l.disponibile === Boolean(req.query.disponibile));
+  }
+  res.json(risultato.map((l) => l.id));
+});
+
+// client
+for (const q of ['', '?disponibile=true', '?disponibile=false']) {
+  console.log(await (await fetch('http://localhost:3000/api/libri' + q)).json());
+}`,
+        chips: ['[ 1, 2, 3, 4, 5 ]', '[ 1, 3, 5 ]', '[ 1, 3, 5 ]', '[ 2, 4 ]', '[]'],
+        answer: ['[ 1, 2, 3, 4, 5 ]', '[ 1, 3, 5 ]', '[ 1, 3, 5 ]'],
+        explain: '`req.query.disponibile` è la **stringa** `\'false\'`, e ogni stringa non vuota è "vera": `Boolean(\'false\') === true`. Il confronto giusto è `=== \'true\'`.',
+      },
+      {
+        title: '`sort()` cambia l\'originale',
+        cmd: '$ node prove.mjs',
+        prompt: 'Il client chiede GET /api/libri, poi GET /api/libri?ordina=titolo, poi di nuovo GET /api/libri, e stampa gli id. Clicca le righe nell\'ordine in cui vengono stampate:',
+        code: `const libri = [
+  { id: 1, titolo: 'Marcovaldo' },
+  { id: 2, titolo: 'Il Gattopardo' },
+  { id: 3, titolo: 'La storia' },
+];
+
+app.get('/api/libri', (req, res) => {
+  let risultato = libri;
+  if (req.query.ordina === 'titolo') {
+    risultato = risultato.sort((a, b) => a.titolo.localeCompare(b.titolo));
+  }
+  res.json(risultato.map((l) => l.id));
+});`,
+        chips: ['[ 1, 2, 3 ]', '[ 2, 3, 1 ]', '[ 2, 3, 1 ]', '[ 3, 2, 1 ]', '[ 1, 3, 2 ]'],
+        answer: ['[ 1, 2, 3 ]', '[ 2, 3, 1 ]', '[ 2, 3, 1 ]'],
+        explain: '`risultato` **è** l\'array `libri` e `sort()` lo ordina sul posto: da quel momento il catalogo resta ordinato per titolo per tutti. Con `toSorted()` la terza richiesta tornerebbe `[ 1, 2, 3 ]`.',
+      },
+      {
+        title: 'Oltre l\'ultima pagina',
+        cmd: '$ node prove.mjs',
+        prompt: 'Il client chiede ?pagina=1, ?pagina=3, ?pagina=4 e ?pagina=2&limite=5, e ogni volta stampa corpo.ids. Clicca le righe nell\'ordine in cui vengono stampate:',
+        code: `// server: 7 libri, con id da 1 a 7
+app.get('/api/libri', (req, res) => {
+  const pagina = Number(req.query.pagina ?? 1);
+  const limite = Number(req.query.limite ?? 3);
+  const inizio = (pagina - 1) * limite;
+  res.json({
+    ids: libri.slice(inizio, inizio + limite).map((l) => l.id),
+    pagine: Math.ceil(libri.length / limite),
+  });
+});`,
+        chips: ['[ 1, 2, 3 ]', '[ 4, 5, 6 ]', '[ 7 ]', '[]', '[ 6, 7 ]', '404'],
+        answer: ['[ 1, 2, 3 ]', '[ 7 ]', '[]', '[ 6, 7 ]'],
+        explain: 'Pagina 3 da 3: indici 6–8, c\'è solo il libro **7**. La pagina 4 è oltre la fine: `slice` restituisce `[]` e la risposta resta un 200. Con limite 5 la pagina 2 contiene gli indici 5–9: i libri **6** e **7**.',
+      },
+      {
+        title: 'BOSS: `libri.length + 1`',
+        cmd: '$ node prove.mjs',
+        prompt: 'Il client fa DELETE /api/libri/1, poi POST { titolo: \'D\' } e stampa l\'id creato, poi GET /api/libri/3 e stampa il titolo. Clicca le righe nell\'ordine in cui vengono stampate:',
+        code: `let libri = [{ id: 1, titolo: 'A' }, { id: 2, titolo: 'B' }, { id: 3, titolo: 'C' }];
+
+app.delete('/api/libri/:id', (req, res) => {
+  libri = libri.filter((l) => l.id !== Number(req.params.id));
+  res.sendStatus(204);
+});
+
+app.post('/api/libri', (req, res) => {
+  const libro = { id: libri.length + 1, titolo: req.body.titolo };
+  libri.push(libro);
+  res.status(201).json(libro);
+});
+
+app.get('/api/libri/:id', (req, res) => {
+  res.json(libri.find((l) => l.id === Number(req.params.id)));
+});`,
+        chips: ['3', '4', 'C', 'D'],
+        answer: ['3', 'C'],
+        explain: 'Dopo la DELETE i libri sono 2: `length + 1` dà **3**, un id già usato! Ora ci sono due libri con id 3 e `find` restituisce sempre il primo, `\'C\'`: il libro `\'D\'` non si può più leggere.',
+      },
+    ], { id: 'm6-order' });
+
+    // ---------------------------------------------------------------- 3. biblioteca
+    NodeLab.inspector(document.getElementById('inspector'), {
+      id: 'm6-biblioteca-ex',
+      files: { 'server.js': M6_BIBLIOTECA.server },
+      fs: M6_BIBLIOTECA.fs,
+      entry: 'server.js', port: 3000, packages: ['express', 'morgan'],
+      persist: true, watch: 'data/libri.json',
+      missions: M6_BIBLIOTECA.missions,
+      presets: M6_BIBLIOTECA.presets,
+    });
+    document.getElementById('codice-server-src').textContent = M6_BIBLIOTECA.server;
+    document.getElementById('sol-a-json').textContent = M6_BIBLIOTECA.fs['data/libri.json'];
+
+    // ---------------------------------------------------------------- 4. laboratori
+    const labsBox = document.getElementById('labs');
+    for (const cfg of window.M6_LABS) {
+      const el = document.createElement('article');
+      el.id = cfg.id;
+      labsBox.appendChild(el);
+      NodeLab.mount(el, cfg);
+    }
+
+    // ---------------------------------------------------------------- 6. quiz
+    Quiz.mount(document.getElementById('quiz-box'), [
+      {
+        question: 'Quale di questi è un URL in stile REST per "il libro con id 7"?',
+        options: ['`/api/getLibro?id=7`', '`/api/libri/7`', '`/api/libro/leggi/7`', '`/api/libri?azione=leggi&id=7`'],
+        correct: 1,
+        explanation: 'Collezione al plurale + id nel percorso. L\'azione (leggere, modificare, eliminare) la dice il **metodo** HTTP, non l\'URL.',
+      },
+      {
+        question: 'Come si aggiunge un nuovo libro, in stile REST?',
+        options: ['`GET /api/libri/nuovo?titolo=Dune`', '`PUT /api/libri`', '`POST /api/libri` con il libro nel body', '`POST /api/creaLibro`'],
+        correct: 2,
+        explanation: 'Si crea con `POST` sulla **collezione**; l\'id lo sceglie il server e lo comunica nella risposta `201` (body e header `Location`).',
+      },
+      {
+        question: 'Qual è la differenza tra `PUT` e `PATCH`?',
+        options: ['Nessuna: sono sinonimi', '`PUT` crea, `PATCH` elimina', '`PATCH` si usa solo con i file', '`PUT` sostituisce l\'intera risorsa; `PATCH` modifica solo i campi inviati'],
+        correct: 3,
+        explanation: 'Con il PUT i campi non inviati tornano ai valori predefiniti; con il PATCH restano com\'erano.',
+      },
+      {
+        question: 'La seconda `DELETE /api/libri/7` risponde 404. DELETE è ancora "idempotente"?',
+        options: ['Sì: lo stato del server dopo 1 o 2 DELETE è lo stesso (il libro non c\'è), anche se la risposta cambia', 'No: le risposte devono essere identiche', 'No: solo GET è idempotente', 'Sì, ma solo se risponde 204 entrambe le volte'],
+        correct: 0,
+        explanation: 'Idempotenza riguarda l\'**effetto** sul server, non la risposta. GET, PUT e DELETE sono idempotenti; POST no (due POST = due risorse).',
+      },
+      {
+        question: 'Quale risposta è più corretta dopo una `POST` riuscita?',
+        options: ['`200` con `{ "ok": true }`', '`201 Created`, il libro creato (con il suo id) e l\'header `Location`', '`204 No Content`', '`302` verso la lista dei libri'],
+        correct: 1,
+        explanation: '`201` dice che una risorsa è stata creata; `Location` dice dove trovarla, il body la mostra con l\'id deciso dal server.',
+      },
+      {
+        question: 'Che cosa succede con questo filtro e la richiesta `GET /api/libri?disponibile=false`?',
+        code: "risultato = libri.filter((l) => l.disponibile === Boolean(req.query.disponibile));",
+        options: ['Restituisce i libri in prestito', 'Va in errore', 'Restituisce i libri **disponibili**: `Boolean(\'false\')` vale `true`', 'Restituisce un array vuoto'],
+        correct: 2,
+        explanation: 'Nella query string tutto è stringa, e ogni stringa non vuota è "vera". Si confronta con `=== \'true\'`.',
+      },
+      {
+        question: 'Perché `id: libri.length + 1` è un errore?',
+        options: ['Perché è lento', 'Perché dopo una DELETE può creare un id già esistente', 'Perché gli id devono essere stringhe', 'Non è un errore'],
+        correct: 1,
+        explanation: 'Con `[1, 2, 3]`, eliminando il 2 restano 2 libri: il prossimo id sarebbe 3, già usato. Serve un contatore che va solo avanti (o un UUID).',
+      },
+      {
+        question: 'In `GET /api/libri?autore=calvino&ordina=-anno&pagina=2`, in che ordine si applicano le operazioni?',
+        options: ['Impagina → filtra → ordina', 'Ordina → impagina → filtra', 'Filtra → ordina → impagina, e il `totale` conta i libri filtrati', 'L\'ordine non conta'],
+        correct: 2,
+        explanation: 'Impaginando prima, si filtrerebbero e ordinerebbero solo i libri di una pagina. Il totale deve dire quanti risultati ha la **ricerca**.',
+      },
+      {
+        question: 'Quando è giusto rispondere `405 Method Not Allowed`?',
+        options: ['Quando l\'URL esiste ma non accetta quel metodo, per esempio `DELETE /api/libri`', 'Quando la risorsa non esiste', 'Quando manca la chiave API', 'Quando il JSON del body è rotto'],
+        correct: 0,
+        explanation: 'La 404 dice "qui non c\'è niente", la 405 "qui c\'è qualcosa, ma non si fa così". L\'header `Allow` elenca i metodi permessi.',
+      },
+      {
+        question: 'Quale modifica alla risposta di `/api/v1/libri` richiede una nuova versione (v2)?',
+        options: ['Aggiungere il campo `pagine` al libro', 'Aggiungere un filtro facoltativo `?genere=`', 'Correggere un bug nell\'ordinamento', 'Sostituire `disponibile: true/false` con `stato: "disponibile" | "in prestito"`'],
+        correct: 3,
+        explanation: 'Togliere o rinominare un campo rompe i client esistenti, che cercano ancora `disponibile`. Aggiungere campi o filtri facoltativi è compatibile.',
+      },
+      {
+        question: 'Perché salvare su `libri.json.tmp` e poi fare `fs.rename` su `libri.json`?',
+        options: ['Perché `writeFile` non funziona sui file `.json`', 'Perché così il file vero non resta mai scritto a metà, nemmeno se il processo si ferma durante la scrittura', 'Per fare un backup automatico', 'Per renderlo più veloce'],
+        correct: 1,
+        explanation: 'La rinomina sostituisce il file in un colpo solo: chi legge trova o il file vecchio o quello nuovo, mai un JSON troncato.',
+      },
+      {
+        question: 'Che vantaggio dà un repository (`data/libriRepo.js`) con `tutti`, `trova`, `crea`, `aggiorna`, `elimina`?',
+        options: ['Le rotte diventano più veloci', 'Serve solo per i test', 'Le rotte non sanno dove stanno i dati: per passare a un database si cambia solo il repository', 'Permette di non usare Express'],
+        correct: 2,
+        explanation: 'Le rotte parlano HTTP, il repository parla di dati. Nel modulo 9 sostituiremo il file JSON con SQLite senza toccare le rotte.',
+      },
+    ], { id: 'm6-quiz' });
+
+    if (window.hljs) document.querySelectorAll('pre.code code').forEach((el) => { if (!el.dataset.highlighted) hljs.highlightElement(el); });
+    NodeLab.refreshProgress();
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

@@ -16,10 +16,11 @@ assets/
   runtime.js          Node.js simulato: fs, path, events, http, process… (window.NodeSim)
   lab.js              laboratori di codice + client HTTP + inspector (window.NodeLab)
   terminal.js         shell simulata con npm/npx/node/nano (window.NodeTerminal)
-  widgets.js          Quiz, EventLoopViz, OrderGame, PipelineViz, toggleSolution
+  widgets.js          Quiz, EventLoopViz, OrderGame, PipelineViz, RestGame, toggleSolution
   labs-mN.js          configurazione dei laboratori del modulo N (window.MN_LABS)
   m4-biblioteca.js    server Express + missioni della "Biblioteca" (modulo 4)
   m5-biblioteca.js    "Biblioteca 2.0" (morgan, cors, static, Router, errori) + scenario di PipelineViz (modulo 5)
+  m6-biblioteca.js    "Biblioteca 3.0" (API REST v1 con il catalogo su file JSON) + scenari di RestGame (modulo 6)
 tools/
   harness.js          esegue il runtime simulato dentro Node (senza browser)
   check-labs.js       verifica soluzioni e codice iniziale dei laboratori
@@ -85,13 +86,17 @@ NodeLab.mount(document.getElementById('lab1'), {
 
 - `NodeTerminal.mount(el, { id, title, intro, tasks: [{ text, check: (t) => bool }], files })` — shell con npm;
   nelle check: `t.exists`, `t.read`, `t.json`, `t.cwd`, `t.ran(/regex/)`, `t.dep`, `t.devDep`, `t.installed`, `t.script`.
-- `NodeLab.inspector(el, { id, files, entry, port, missions: [{ text, check: (req, res) => bool }], presets })` — server pronto + missioni HTTP.
+- `NodeLab.inspector(el, { id, files, entry, port, fs, packages, missions: [{ text, check: (req, res, { restarts }) => bool }], presets, persist, watch })` — server pronto + missioni HTTP.
+  Con `persist: true` il pulsante ↻ riavvia il server mantenendo i file scritti (un secondo pulsante rimette i dati iniziali);
+  con `watch: 'data/libri.json'` il contenuto di quel file compare sotto il log e si aggiorna dopo ogni richiesta.
 - `NodeLab.httpClient(el, { send, port, presets, onExchange })`.
 - `Quiz.mount(el, [{ question, code?, options, correct, explanation }], { id })`.
 - `OrderGame.mount(el, [{ title, code, chips, answer, explain, cmd?, prompt? }], { id })` — "indovina l'output"
   (`cmd` cambia la riga sopra il terminale, es. `$ curl localhost:3000/api/libri`).
 - `PipelineViz.mount(el, { code: [righe], layers: [{ id, label, lines: [da, a], kind: 'mw'|'route'|'err' }], requests: [{ label, steps: [{ layer, act, note, log?, badge? }], response: { status, text } }] })`
   — una richiesta attraverso i middleware, passo per passo (`act`: `next`, `skip`, `respond`, `error`, `errskip`, `hang`).
+- `RestGame.mount(el, [{ text, paths: [], statuses: [], answer: { method, path, status }, explain }], { id })`
+  — "progetta l'endpoint": per ogni scenario si scelgono metodo, URL e status code della risposta.
 - `EventLoopViz.mount(el, { code: [righe], steps: [{ line, stack, ticks, micro, timers, check, out, phase, note }] })`.
 
 I progressi degli studenti (codice, laboratori superati, quiz) sono salvati solo nel `localStorage` del loro browser.
@@ -104,6 +109,7 @@ iniziale ne fallisca almeno una (serve solo Node, niente browser):
 ```bash
 node tools/check-labs.js assets/labs-m4.js M4_LABS
 node tools/check-labs.js assets/labs-m5.js M5_LABS
+node tools/check-labs.js assets/labs-m6.js M6_LABS
 ```
 
 ## Note sul simulatore

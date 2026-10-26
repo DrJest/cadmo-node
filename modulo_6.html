@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 6 · API REST e CRUD — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="bg-gray-900">
+
+  <!-- ===================== Esempi di codice (testo puro, niente escape) ===================== -->
+  <script type="text/plain" id="c-rpc">
+GET   /api/getLibri
+GET   /api/getLibro?id=7
+POST  /api/creaLibro
+POST  /api/aggiornaLibro
+GET   /api/eliminaLibro?id=7      😱
+GET   /api/getLibriDiAutore?id=3
+</script>
+  <script type="text/plain" id="c-rest">
+GET     /api/libri
+GET     /api/libri/7
+POST    /api/libri
+PUT     /api/libri/7    (o PATCH)
+DELETE  /api/libri/7
+GET     /api/autori/3/libri
+</script>
+  <script type="text/plain" id="c-urls">
+# una collezione            # un elemento della collezione
+/api/libri                  /api/libri/7
+/api/autori                 /api/autori/3
+/api/prestiti               /api/prestiti/118
+
+# risorse annidate: "i libri DELL'autore 3"
+/api/autori/3/libri
+/api/libri/7/recensioni
+
+# ✅ nomi al plurale, minuscolo, parole-con-trattini
+/api/libri-rari
+
+# ❌ verbi, maiuscole, estensioni, slash finale
+/api/getLibri    /api/Libri    /api/libri.json    /api/libri/
+</script>
+  <script type="text/plain" id="c-put">
+PUT /api/libri/7
+{
+  "titolo": "Il Gattopardo",
+  "autore": "Giuseppe Tomasi di Lampedusa",
+  "anno": 1958
+}
+→ sostituisce TUTTO il libro:
+  i campi non inviati tornano
+  ai valori predefiniti
+</script>
+  <script type="text/plain" id="c-patch">
+PATCH /api/libri/7
+{
+  "disponibile": false
+}
+→ cambia SOLO i campi inviati:
+  tutto il resto
+  resta com'era
+</script>
+  <script type="text/plain" id="c-crud-status">
+// GET    /api/libri     → 200 + [ ... ]          (anche vuoto: [])
+// GET    /api/libri/7   → 200 + { ... }          oppure 404
+// POST   /api/libri     → 201 + { ... } + Location: /api/libri/16
+//                         400 se mancano dati · 409 se esiste già
+// PUT    /api/libri/7   → 200 + { ... }          oppure 400 / 404
+// PATCH  /api/libri/7   → 200 + { ... }          oppure 400 / 404
+// DELETE /api/libri/7   → 204 (body vuoto)       oppure 404
+
+router.post('/', (req, res) => {
+  // ... controlli e creazione ...
+  res.status(201)
+    .location(`/api/libri/${libro.id}`)   // dove trovare la nuova risorsa
+    .json(libro);                          // la risorsa creata, con il suo id
+});
+</script>
+  <script type="text/plain" id="c-errori">
+// ✅ un solo formato, per TUTTI gli errori
+{ "errore": "Libro non trovato" }
+{ "errore": "Dati non validi", "dettagli": ["titolo è obbligatorio", "anno deve essere un numero"] }
+
+// ❌ ogni rotta fa a modo suo…
+"not found"
+{ "ok": false, "msg": "manca il titolo" }      // …e con status 200!
+{ "error": { "code": 42 } }
+
+// lo standard: application/problem+json (RFC 9457)
+{ "type": "about:blank", "title": "Not Found", "status": 404, "detail": "Il libro 7 non esiste" }
+</script>
+  <script type="text/plain" id="c-crud-read">
+const express = require('express');
+const router = express.Router();
+
+const libri = [
+  { id: 1, titolo: 'Il nome della rosa', autore: 'Umberto Eco', anno: 1980, disponibile: true },
+  { id: 2, titolo: 'Il barone rampante', autore: 'Italo Calvino', anno: 1957, disponibile: false },
+];
+let prossimoId = 3;
+
+function trova(id) {
+  return libri.find((l) => l.id === Number(id));   // i params sono STRINGHE
+}
+
+router.get('/', (req, res) => {
+  res.json(libri);
+});
+
+router.get('/:id', (req, res) => {
+  const libro = trova(req.params.id);
+  if (!libro) return res.status(404).json({ errore: 'Libro non trovato' });
+  res.json(libro);
+});
+
+module.exports = router;     // in app.js: app.use('/api/libri', router)
+</script>
+  <script type="text/plain" id="c-crud-write">
+router.post('/', (req, res) => {
+  const { titolo, autore, anno } = req.body ?? {};
+  if (!titolo || !autore) {
+    return res.status(400).json({ errore: 'titolo e autore sono obbligatori' });
+  }
+  const libro = { id: prossimoId++, titolo, autore, anno: anno ?? null, disponibile: true };
+  libri.push(libro);
+  res.status(201).location(`/api/libri/${libro.id}`).json(libro);
+});
+
+router.delete('/:id', (req, res) => {
+  const i = libri.findIndex((l) => l.id === Number(req.params.id));
+  if (i === -1) return res.status(404).json({ errore: 'Libro non trovato' });
+  libri.splice(i, 1);
+  res.sendStatus(204);
+});
+</script>
+  <script type="text/plain" id="c-crud-write-out">
+$ curl -i --json '{"titolo":"Sostiene Pereira","autore":"Antonio Tabucchi"}' localhost:3000/api/libri
+HTTP/1.1 201 Created
+X-Powered-By: Express
+Location: /api/libri/3
+Content-Type: application/json; charset=utf-8
+
+{"id":3,"titolo":"Sostiene Pereira","autore":"Antonio Tabucchi","anno":null,"disponibile":true}
+
+$ curl -i -X DELETE localhost:3000/api/libri/3
+HTTP/1.1 204 No Content
+X-Powered-By: Express
+</script>
+  <script type="text/plain" id="c-crud-update">
+// i soli campi che il client può scrivere: niente id, niente "admin": true…
+const CAMPI = ['titolo', 'autore', 'anno', 'disponibile'];
+
+function scegliCampi(body) {
+  const dati = {};
+  for (const campo of CAMPI) {
+    if (body?.[campo] !== undefined) dati[campo] = body[campo];
+  }
+  return dati;
+}
+
+router.put('/:id', (req, res) => {             // sostituisce tutto
+  const libro = trova(req.params.id);
+  if (!libro) return res.status(404).json({ errore: 'Libro non trovato' });
+  const dati = scegliCampi(req.body);
+  if (!dati.titolo || !dati.autore) {
+    return res.status(400).json({ errore: 'titolo e autore sono obbligatori' });
+  }
+  Object.assign(libro, { anno: null, disponibile: true }, dati);
+  res.json(libro);
+});
+
+router.patch('/:id', (req, res) => {           // solo ciò che arriva
+  const libro = trova(req.params.id);
+  if (!libro) return res.status(404).json({ errore: 'Libro non trovato' });
+  Object.assign(libro, scegliCampi(req.body));
+  res.json(libro);
+});
+</script>
+  <script type="text/plain" id="c-ids">
+// ❌ libri.length + 1: dopo una DELETE l'id si ripete!
+//    id [1, 2, 3] → DELETE /2 → [1, 3] → POST → 2 + 1 = 3   💥 doppione
+function nuovoIdSbagliato() { return libri.length + 1; }
+
+// ✅ un contatore che va solo avanti
+let prossimoId = 4;
+function nuovoId() { return prossimoId++; }
+
+// ✅ oppure un UUID: unico al mondo, senza contatori
+function nuovoUuid() { return crypto.randomUUID(); }   // '3b241101-e2bb-4255-8caf-4136c566a962'
+
+// ❌ mai usare l'id (o altri campi "riservati") mandati dal client
+const sbagliato = { id: nuovoId(), ...req.body };      // il body { "id": 1 } vince!
+const giusto = { ...scegliCampi(req.body), id: nuovoId() };
+</script>
+  <script type="text/plain" id="c-405">
+function nonPermesso(metodi) {
+  return (req, res) => {
+    res.set('Allow', metodi)
+      .status(405)
+      .json({ errore: `${req.method} non è permesso su ${req.originalUrl}` });
+  };
+}
+
+router.route('/')
+  .get(elenco)
+  .post(crea)
+  .all(nonPermesso('GET, POST'));
+
+router.route('/:id')
+  .get(dettaglio)
+  .put(sostituisci)
+  .patch(modifica)
+  .delete(elimina)
+  .all(nonPermesso('GET, PUT, PATCH, DELETE'));
+</script>
+  <script type="text/plain" id="c-405-out">
+$ curl -i -X DELETE localhost:3000/api/libri
+HTTP/1.1 405 Method Not Allowed
+X-Powered-By: Express
+Allow: GET, POST
+Content-Type: application/json; charset=utf-8
+
+{"errore":"DELETE non è permesso su /api/libri"}
+</script>
+  <script type="text/plain" id="c-filtri">
+// GET /api/libri?autore=calvino&genere=romanzo&disponibile=true
+router.get('/', (req, res) => {
+  let risultato = libri;
+  const { autore, genere, disponibile } = req.query;
+
+  if (autore) {
+    risultato = risultato.filter((l) => l.autore.toLowerCase().includes(autore.toLowerCase()));
+  }
+  if (genere) {
+    risultato = risultato.filter((l) => l.genere === genere);
+  }
+  if (disponibile !== undefined) {
+    // ⚠️ nella query è tutto STRINGA: 'false' è una stringa "vera"!
+    risultato = risultato.filter((l) => l.disponibile === (disponibile === 'true'));
+  }
+  res.json(risultato);
+});
+
+// ?autore=calvino&anno=1957&tag=a&tag=b
+// req.query → { autore: 'calvino', anno: '1957', tag: ['a', 'b'] }
+</script>
+  <script type="text/plain" id="c-ordina">
+// GET /api/libri?ordina=anno     crescente
+// GET /api/libri?ordina=-anno    decrescente (il "-" davanti)
+const ORDINABILI = ['titolo', 'autore', 'anno'];
+
+function ordina(lista, criterio) {
+  const campo = criterio.replace(/^-/, '');
+  if (!ORDINABILI.includes(campo)) {
+    throw creaErrore(400, `Si può ordinare per: ${ORDINABILI.join(', ')}`);
+  }
+  const verso = criterio.startsWith('-') ? -1 : 1;
+  return lista.toSorted((a, b) => {        // una copia: l'originale non cambia
+    const x = a[campo];
+    const y = b[campo];
+    return (typeof x === 'string' ? x.localeCompare(y, 'it') : x - y) * verso;
+  });
+}
+</script>
+  <script type="text/plain" id="c-pagina">
+// GET /api/libri?pagina=2&limite=5
+router.get('/', (req, res) => {
+  const pagina = Number(req.query.pagina ?? 1);
+  const limite = Number(req.query.limite ?? 10);
+  if (!Number.isInteger(pagina) || pagina < 1) {
+    return res.status(400).json({ errore: 'pagina deve essere un intero ≥ 1' });
+  }
+  if (!Number.isInteger(limite) || limite < 1 || limite > 50) {
+    return res.status(400).json({ errore: 'limite deve essere un intero tra 1 e 50' });
+  }
+  const inizio = (pagina - 1) * limite;
+  res.json({
+    dati: libri.slice(inizio, inizio + limite),
+    pagina,
+    limite,
+    totale: libri.length,
+    pagine: Math.ceil(libri.length / limite),
+  });
+});
+</script>
+  <script type="text/plain" id="c-pagina-out">
+$ curl "localhost:3000/api/libri?pagina=2&limite=5"
+{
+  "dati": [
+    { "id": 6, "titolo": "La coscienza di Zeno", … },
+    { "id": 7, "titolo": "Il Gattopardo", … },
+    …
+  ],
+  "pagina": 2,
+  "limite": 5,
+  "totale": 15,
+  "pagine": 3
+}
+</script>
+  <script type="text/plain" id="c-query-all">
+router.get('/', (req, res) => {
+  let risultato = filtra(libri, req.query);               // 1. filtra
+  if (req.query.ordina) {
+    risultato = ordina(risultato, req.query.ordina);      // 2. ordina
+  }
+  res.json(impagina(risultato, req.query));               // 3. impagina (per ultimo!)
+});
+
+// GET /api/libri?autore=calvino&ordina=-anno&pagina=1&limite=2
+// {
+//   "dati": [ Le città invisibili (1972), Il barone rampante (1957) ],
+//   "pagina": 1, "limite": 2,
+//   "totale": 3,        ← i libri di Calvino, non tutto il catalogo
+//   "pagine": 2
+// }
+</script>
+  <script type="text/plain" id="c-versioni">
+// app.js — v1 e v2 convivono
+const libriV1 = require('./routes/v1/libri');
+const libriV2 = require('./routes/v2/libri');
+
+app.use('/api/v1/libri', libriV1);   // i client di ieri continuano a funzionare
+app.use('/api/v2/libri', libriV2);   // i nuovi usano il formato nuovo
+
+// GET /api/v1/libri → [ { "id": 2, "disponibile": false, … } ]
+// GET /api/v2/libri → { "dati": [ { "id": 2, "stato": "in prestito", … } ],
+//                       "totale": 15 }
+
+// la v1 avvisa che verrà spenta (header Sunset, RFC 8594)
+libriV1.use((req, res, next) => {
+  res.set('Sunset', 'Thu, 31 Dec 2026 23:59:59 GMT');
+  next();
+});
+</script>
+  <script type="text/plain" id="c-file">
+const fs = require('fs/promises');
+const path = require('path');
+
+const FILE = path.join(__dirname, 'data', 'libri.json');
+
+async function leggiLibri() {
+  const testo = await fs.readFile(FILE, 'utf8');
+  return JSON.parse(testo);
+}
+
+async function salvaLibri(libri) {
+  // null, 2 → JSON indentato: leggibile anche a occhio
+  await fs.writeFile(FILE, JSON.stringify(libri, null, 2));
+}
+</script>
+  <script type="text/plain" id="c-file-out">
+$ cat data/libri.json
+[
+  {
+    "id": 1,
+    "titolo": "Il nome della rosa",
+    "autore": "Umberto Eco",
+    "anno": 1980,
+    "genere": "giallo",
+    "disponibile": true
+  },
+  …
+]
+</script>
+  <script type="text/plain" id="c-file-crud">
+router.get('/', async (req, res) => {
+  res.json(await leggiLibri());
+});
+
+router.post('/', async (req, res) => {
+  const { titolo, autore } = req.body ?? {};
+  if (!titolo || !autore) return res.status(400).json({ errore: 'titolo e autore sono obbligatori' });
+
+  const libri = await leggiLibri();                        // 1. leggi
+  const id = Math.max(0, ...libri.map((l) => l.id)) + 1;   //    l'id più alto + 1
+  const libro = { id, titolo, autore, disponibile: true };
+  libri.push(libro);                                       // 2. modifica
+  await salvaLibri(libri);                                 // 3. scrivi
+  res.status(201).location(`/api/libri/${id}`).json(libro);
+});
+
+router.delete('/:id', async (req, res) => {
+  const libri = await leggiLibri();
+  const i = libri.findIndex((l) => l.id === Number(req.params.id));
+  if (i === -1) return res.status(404).json({ errore: 'Libro non trovato' });
+  libri.splice(i, 1);
+  await salvaLibri(libri);
+  res.sendStatus(204);
+});
+</script>
+  <script type="text/plain" id="c-file-traps">
+// ❌ 1. scrittura a metà: se il processo muore durante writeFile, il file resta rotto
+// ✅ scrivi su un file temporaneo, poi rinominalo (rename è "atomico")
+async function salvaLibri(libri) {
+  await fs.writeFile(FILE + '.tmp', JSON.stringify(libri, null, 2));
+  await fs.rename(FILE + '.tmp', FILE);
+}
+
+// ❌ 2. due POST insieme: entrambe leggono [1, 2]…
+//      POST A: legge → aggiunge 3 → scrive [1, 2, 3]
+//      POST B: legge → aggiunge 3 → scrive [1, 2, 3']   → il libro di A è sparito!
+// ✅ una scrittura alla volta (una "coda")… oppure un database
+
+// ❌ 3. nodemon riavvia il server a ogni scrittura di data/libri.json
+// ✅ nodemon --ignore data/      (node --watch guarda solo i file require-ati)
+
+// ❌ 4. require('./data/libri.json') legge il file UNA volta sola (cache)
+// ✅ fs.readFile a ogni richiesta
+</script>
+  <script type="text/plain" id="c-repo">
+// data/libriRepo.js — l'UNICO file che sa dove stanno i libri
+const fs = require('fs/promises');
+const path = require('path');
+
+const FILE = path.join(__dirname, 'libri.json');
+
+async function tutti() {
+  return JSON.parse(await fs.readFile(FILE, 'utf8'));
+}
+
+async function salva(libri) {
+  await fs.writeFile(FILE + '.tmp', JSON.stringify(libri, null, 2));
+  await fs.rename(FILE + '.tmp', FILE);
+}
+
+async function trova(id) {
+  return (await tutti()).find((l) => l.id === id) ?? null;
+}
+
+async function crea(dati) {
+  const libri = await tutti();
+  const libro = { id: Math.max(0, ...libri.map((l) => l.id)) + 1, ...dati };
+  libri.push(libro);
+  await salva(libri);
+  return libro;
+}
+
+// aggiorna(id, dati) ed elimina(id): stessa idea (leggi → modifica → salva)
+
+module.exports = { tutti, trova, crea, aggiorna, elimina };
+</script>
+  <script type="text/plain" id="c-repo-out">
+// routes/libri.js — parla solo HTTP, e non sa niente di file
+const repo = require('../data/libriRepo');
+
+router.get('/:id', async (req, res) => {
+  const libro = await repo.trova(Number(req.params.id));
+  if (!libro) return res.status(404).json({ errore: 'Libro non trovato' });
+  res.json(libro);
+});
+
+router.post('/', async (req, res) => {
+  // ... controlli ...
+  const libro = await repo.crea(dati);
+  res.status(201).location(`/api/v1/libri/${libro.id}`).json(libro);
+});
+</script>
+  <script type="text/plain" id="c-http">
+@base = http://localhost:3000/api/v1
+
+### Elenco: seconda pagina
+GET {{base}}/libri?pagina=2&limite=5
+
+### Crea un libro
+# @name nuovo
+POST {{base}}/libri
+Content-Type: application/json
+
+{
+  "titolo": "Sostiene Pereira",
+  "autore": "Antonio Tabucchi",
+  "anno": 1994
+}
+
+### Rileggi il libro appena creato (usa la risposta di "nuovo")
+GET {{base}}/libri/{{nuovo.response.body.$.id}}
+
+### Segnalo come in prestito
+PATCH {{base}}/libri/{{nuovo.response.body.$.id}}
+Content-Type: application/json
+
+{ "disponibile": false }
+
+### Eliminalo
+DELETE {{base}}/libri/{{nuovo.response.body.$.id}}
+</script>
+  <script type="text/plain" id="c-curl">
+# -i mostra anche status e header della risposta
+curl -i localhost:3000/api/v1/libri/3
+
+# le virgolette servono: senza, la shell interpreta "&"
+curl "localhost:3000/api/v1/libri?autore=calvino&ordina=-anno"
+
+# POST con un body JSON (--json imposta Content-Type e Accept)
+curl -i --json '{"titolo":"Sostiene Pereira","autore":"Antonio Tabucchi"}' \
+     localhost:3000/api/v1/libri
+
+# PUT, PATCH, DELETE: -X sceglie il metodo
+curl -i -X PATCH --json '{"disponibile":false}' localhost:3000/api/v1/libri/16
+curl -i -X DELETE localhost:3000/api/v1/libri/16
+</script>
+
+  <!-- ===================== Motori ===================== -->
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m6-biblioteca.js"></script>
+  <script>
+    // nei blocchi text/plain il tag di chiusura degli script è scritto con la barra "escapata"
+    const C = (id) => document.getElementById(id).textContent.replace(/^\n/, '').replace(/<\\\/script>/g, '<\/script>');
+
+    const code = (s) => `<code class="inline">${s}</code>`;
+    const METODO = { GET: 'text-green-300', POST: 'text-yellow-300', PUT: 'text-blue-300', PATCH: 'text-purple-300', DELETE: 'text-red-300' };
+    const M = (m) => `<span class="font-mono font-bold ${METODO[m]}">${m}</span>`;
+    const TABLE = (head, rows) => `<div class="overflow-x-auto rounded-xl border border-gray-700"><table class="w-full text-left text-sm md:text-lg">
+      <thead class="bg-gray-800 text-gray-300"><tr>${head.map((h) => `<th class="px-4 py-2 font-semibold">${h}</th>`).join('')}</tr></thead>
+      <tbody class="divide-y divide-gray-800 text-gray-200">${rows.map((r) => `<tr class="bg-gray-900/60">${r.map((c) => `<td class="px-4 py-2.5">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    const NOTE = (items) => `<ul class="slide-items space-y-3 text-base md:text-xl text-gray-300 mt-6">${items.map((t) => `<li class="flex"><span class="text-green-500 mr-4 font-mono">$</span><span>${t}</span></li>`).join('')}</ul>`;
+
+    const CRUD_HTML = TABLE(['Operazione', 'Metodo', 'URL', 'Che cosa fa', 'Risposta tipica'], [
+      ['<strong>C</strong>reate', M('POST'), code('/api/libri'), 'crea un libro', `${code('201')} + ${code('Location')}`],
+      ['<strong>R</strong>ead', M('GET'), code('/api/libri'), 'l\'elenco (con filtri e pagine)', code('200')],
+      ['', M('GET'), code('/api/libri/7'), 'un libro', `${code('200')} · ${code('404')}`],
+      ['<strong>U</strong>pdate', M('PUT'), code('/api/libri/7'), 'sostituisce tutto il libro', `${code('200')} · ${code('400')} · ${code('404')}`],
+      ['', M('PATCH'), code('/api/libri/7'), 'modifica alcuni campi', `${code('200')} · ${code('400')} · ${code('404')}`],
+      ['<strong>D</strong>elete', M('DELETE'), code('/api/libri/7'), 'elimina il libro', `${code('204')} · ${code('404')}`],
+    ]) + NOTE([
+      '<strong>Due</strong> URL (la collezione e l\'elemento) e <strong>cinque</strong> metodi: bastano per quasi ogni operazione.',
+      'Stessi verbi del modulo 3: ora sappiamo <strong>che cosa</strong> deve fare ciascuno.',
+    ]);
+
+    const SAFE_HTML = TABLE(['Metodo', 'Sicuro', 'Idempotente', 'Ripeterlo 2 volte…'], [
+      [M('GET'), '✅', '✅', 'non cambia niente: si può ripetere, mettere in cache, precaricare'],
+      [M('PUT'), '❌', '✅', 'stessi dati due volte = il libro è uguale a dopo la prima'],
+      [M('DELETE'), '❌', '✅', 'la seconda risponde 404, ma il libro resta eliminato'],
+      [M('PATCH'), '❌', '⚠️', 'dipende: ' + code('{ "anno": 1958 }') + ' sì, ' + code('{ "copie": "+1" }') + ' no'],
+      [M('POST'), '❌', '❌', 'due POST = <strong>due</strong> libri'],
+    ]) + NOTE([
+      '<strong>Sicuro</strong>: non modifica niente sul server. <strong>Idempotente</strong>: farlo 1 o 10 volte lascia il server nello stesso stato.',
+      'Se la rete cade, il client può ripetere un PUT o una DELETE senza paura; una POST ripetuta crea un doppione.',
+      '<strong>Mai</strong> modificare dati con una GET: browser, motori di ricerca e anteprime dei link le ripetono di continuo.',
+    ]);
+
+    window.DECK = {
+      module: 'MODULO 6',
+      title: 'API REST e CRUD',
+      prompt: 'modulo-6',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover', icon: 'server',
+          title: 'API REST e CRUD',
+          subtitle: 'Progettare un\'API **prevedibile**: risorse, verbi e status code giusti, filtri e pagine, e un catalogo che sopravvive al riavvio.',
+          meta: ['5 ore', 'Modulo 6'],
+        },
+        {
+          type: 'agenda', part: 'PROGRAMMA', title: 'Agenda', icon: 'list-checks',
+          rows: [
+            ['Cos\'è REST: risorse, URL e verbi', 'teoria'],
+            ['Sicuro e idempotente, `PUT` o `PATCH`', 'teoria'],
+            ['Status code e formato degli errori', 'teoria'],
+            ['Simulazione: progetta l\'endpoint', 'demo'],
+            ['Il CRUD completo con un Router', 'teoria'],
+            ['Pausa', 'pausa'],
+            ['Filtri, ordinamento e paginazione', 'teoria'],
+            ['Versionare un\'API', 'teoria'],
+            ['Il catalogo su file JSON e il repository', 'teoria'],
+            ['Client HTTP: curl, Bruno, Postman, REST Client', 'demo'],
+            ['Biblioteca 3.0 + 8 laboratori', 'lab'],
+            ['Quiz', 'quiz'],
+          ],
+        },
+        {
+          part: 'RIPASSO', title: 'Dove eravamo rimasti', icon: 'rewind', iconColor: 'text-gray-400',
+          items: [
+            'La pipeline di Express: middleware in ordine, `next()`, poi le rotte, la 404 e il gestore degli errori.',
+            '`express.Router()` per dividere le rotte, montato con `app.use(\'/api/libri\', router)`.',
+            'Errori con `err.status`, anche dalle funzioni `async` (Express 5).',
+            'Oggi non impariamo funzioni nuove di Express: impariamo a **progettare** l\'API, cioè a scegliere bene URL, metodi, status e formati.',
+          ],
+        },
+
+        /* ------------------------------------------------ REST */
+        {
+          part: 'REST', title: 'Cos\'è REST', icon: 'network', iconColor: 'text-orange-400',
+          items: [
+            '**RE**presentational **S**tate **T**ransfer: uno **stile** per progettare API, descritto da Roy Fielding nel 2000. Non è una libreria né un protocollo.',
+            'Ogni cosa è una **risorsa** con il suo indirizzo: `/api/libri/7`.',
+            'Si agisce sulle risorse con i **metodi HTTP** standard, non con verbi nell\'URL.',
+            'Si scambiano **rappresentazioni** della risorsa: per noi, JSON.',
+            '**Senza stato** (stateless): ogni richiesta contiene tutto quello che serve; il server non "ricorda" le richieste precedenti.',
+            'Il risultato: API **prevedibili**. Chi ne conosce una le conosce (quasi) tutte.',
+          ],
+        },
+        {
+          type: 'compare', part: 'REST', title: 'Verbi nell\'URL o verbi HTTP?', icon: 'git-compare',
+          columns: [
+            { title: 'Stile "RPC": un URL per azione', color: 'red', icon: 'x-circle', code: C('c-rpc'), lang: 'plaintext' },
+            { title: 'Stile REST: risorse + metodi', color: 'green', icon: 'check-circle', code: C('c-rest'), lang: 'plaintext' },
+          ],
+          footer: 'A sinistra ogni API inventa i suoi nomi, e una GET che **elimina** è un disastro annunciato. A destra il metodo dice **che cosa** fare, l\'URL dice **su che cosa**.',
+        },
+        {
+          type: 'code', part: 'REST', title: 'Risorse e URL', icon: 'link', iconColor: 'text-orange-400',
+          items: [
+            '**Collezione**: il nome al plurale (`/api/libri`). **Elemento**: la collezione + l\'id (`/api/libri/7`).',
+            'Le risorse "figlie" si annidano: `/api/autori/3/libri`. Basta un livello: oltre diventa scomodo.',
+            'Nomi, non verbi: l\'azione la dice il metodo HTTP.',
+            'Minuscolo, parole separate da trattini, niente estensioni.',
+            'Il prefisso `/api` separa le API dal sito (`express.static`, modulo 5).',
+          ],
+          code: C('c-urls'), lang: 'plaintext',
+        },
+        {
+          type: 'custom', part: 'REST', title: 'Il CRUD con i metodi HTTP', icon: 'table',
+          html: CRUD_HTML,
+        },
+        {
+          type: 'custom', part: 'REST', title: 'Sicuro e idempotente', icon: 'repeat', iconColor: 'text-orange-400',
+          html: SAFE_HTML,
+        },
+        {
+          type: 'compare', part: 'REST', title: '`PUT` o `PATCH`?', icon: 'pencil',
+          columns: [
+            { title: 'PUT: sostituisce', color: 'blue', icon: 'replace', code: C('c-put'), lang: 'plaintext' },
+            { title: 'PATCH: modifica', color: 'purple', icon: 'pencil-line', code: C('c-patch'), lang: 'plaintext' },
+          ],
+          footer: 'Con il PUT il client manda la risorsa **intera**; con il PATCH solo le differenze. Molte API offrono solo il PATCH: l\'importante è che il comportamento sia **documentato** e **coerente**.',
+        },
+
+        /* ------------------------------------------------ STATUS */
+        {
+          type: 'compare', part: 'STATUS CODE', title: 'Gli status code di un\'API', icon: 'traffic-cone',
+          columns: [
+            { title: '2xx: tutto bene', color: 'green', icon: 'check-circle', items: ['`200 OK`: lettura o modifica riuscita', '`201 Created`: risorsa creata (+ `Location`)', '`204 No Content`: fatto, niente da restituire (DELETE)'] },
+            { title: '4xx: colpa del client', color: 'yellow', icon: 'user-x', items: ['`400`: dati mancanti o sbagliati, JSON rotto', '`401` / `403`: chi sei? / non puoi (modulo 5)', '`404`: la risorsa non esiste', '`405`: l\'URL esiste, il metodo no (+ `Allow`)', '`409 Conflict`: lo stato lo impedisce (doppione, già in prestito)', '`415`: `Content-Type` sbagliato'] },
+            { title: '5xx: colpa del server', color: 'red', icon: 'server-crash', items: ['`500`: un bug o un guasto', 'Mai dettagli interni al client: lo stack resta nel log', 'Un\'API ben fatta risponde 500 solo per gli errori **imprevisti**'] },
+          ],
+          footer: 'Alcune API usano `422 Unprocessable Entity` per i dati che non passano la validazione. Nel corso usiamo `400`: scegliete una convenzione e rispettatela **sempre**.',
+        },
+        {
+          type: 'code', part: 'STATUS CODE', title: 'Le risposte del CRUD', icon: 'reply-all', iconColor: 'text-yellow-400',
+          items: [
+            'Una lista vuota non è un errore: `200` con `[]`.',
+            'La `POST` restituisce la risorsa creata **con l\'id** scelto dal server, più l\'header `Location`.',
+            '`204` non ha body: anche se scrivete `res.json(…)`, Express lo toglie.',
+            'Status e body vanno d\'accordo: niente `200` con `{ "ok": false }`!',
+          ],
+          code: C('c-crud-status'),
+        },
+        {
+          type: 'code', part: 'STATUS CODE', title: 'Il formato degli errori', icon: 'message-square-warning', iconColor: 'text-yellow-400',
+          items: [
+            'Lo status code dice **che cosa** è successo; il body spiega **perché**.',
+            'Un formato unico per tutti gli errori → il frontend scrive un solo `if (!risposta.ok)`.',
+            'I client, i log e i sistemi di monitoraggio guardano lo **status**, non il body.',
+            'Esiste anche uno standard, `application/problem+json` (RFC 9457): utile per API pubbliche.',
+          ],
+          code: C('c-errori'), lang: 'json',
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Progetta l\'endpoint', icon: 'drafting-compass', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Per ogni richiesta scegli il metodo, l\'URL e lo status code della risposta. Attenzione ai casi in cui qualcosa va storto!</p><div class="rest"></div>',
+          mount: (el) => RestGame.mount(el.querySelector('.rest'), M6_REST),
+        },
+
+        /* ------------------------------------------------ CRUD */
+        {
+          type: 'code', part: 'CRUD', title: 'Il CRUD in memoria: la lettura', icon: 'book-open', iconColor: 'text-blue-400',
+          items: [
+            'Una risorsa = un **Router** (modulo 5), montato su `/api/libri`.',
+            '`req.params.id` è sempre una **stringa**: `Number()` prima di confrontarlo con gli id.',
+            'Libro inesistente → `404` con un JSON che lo spiega.',
+          ],
+          code: C('c-crud-read'), file: 'routes/libri.js',
+        },
+        {
+          type: 'code', part: 'CRUD', title: 'Creare ed eliminare', icon: 'plus-circle', iconColor: 'text-blue-400',
+          items: [
+            'In Express 5 `req.body` è `undefined` se non arriva un body JSON: `req.body ?? {}` evita il crash.',
+            'I campi facoltativi prendono un valore **predefinito** (`anno: null`).',
+            '`201` + `Location` + il libro creato; `204` senza body dopo la DELETE.',
+          ],
+          code: C('c-crud-write'), file: 'routes/libri.js', output: C('c-crud-write-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'CRUD', title: 'Modificare: `PUT` e `PATCH`', icon: 'pencil', iconColor: 'text-blue-400',
+          items: [
+            'Dal body si prendono **solo i campi ammessi**: una lista bianca, come per l\'ordinamento.',
+            '`PUT`: stessi controlli della POST, poi i valori predefiniti, poi i dati nuovi.',
+            '`PATCH`: si uniscono al libro solo i campi arrivati.',
+            'L\'`id` non è nella lista bianca: nessuno può cambiarlo.',
+          ],
+          code: C('c-crud-update'), file: 'routes/libri.js',
+        },
+        {
+          type: 'code', part: 'CRUD', title: 'Gli id li decide il server', icon: 'fingerprint', iconColor: 'text-blue-400',
+          items: [
+            'Un id identifica la risorsa **per sempre**: non si riusa e non si cambia.',
+            '`libri.length + 1` sembra funzionare… finché qualcuno non elimina un libro.',
+            'Contatore (`1, 2, 3…`): corto e leggibile. UUID: unico anche tra server diversi, ma lungo.',
+            'I database veri gestiscono gli id da soli (modulo 9).',
+          ],
+          code: C('c-ids'),
+        },
+        {
+          type: 'code', part: 'CRUD', title: '405 e `router.route()`', icon: 'ban', iconColor: 'text-blue-400',
+          items: [
+            '`router.route(percorso)` raggruppa i metodi di un indirizzo.',
+            '`404`: l\'indirizzo non esiste. `405`: l\'indirizzo esiste, ma non con quel metodo.',
+            '`.all()` in fondo raccoglie **tutti gli altri** metodi; l\'header `Allow` dice quali sono permessi.',
+            '`nonPermesso(…)` è una fabbrica di middleware, come `richiedeChiave` nel modulo 5.',
+          ],
+          code: C('c-405'), file: 'routes/libri.js', output: C('c-405-out'), reveal: true,
+        },
+
+        /* ------------------------------------------------ QUERY */
+        {
+          type: 'code', part: 'QUERY STRING', title: 'Filtri', icon: 'filter', iconColor: 'text-cyan-400',
+          items: [
+            'I filtri sono parametri **facoltativi** nella query string, combinabili tra loro.',
+            'Filtrare **non** è una risorsa nuova: `/api/libri?autore=calvino` ✅, `/api/libri/calvino` ❌.',
+            'I valori sono sempre **stringhe**: `Number(…)`, `=== \'true\'`.',
+            'Un parametro ripetuto (`?tag=a&tag=b`) diventa un **array**.',
+          ],
+          code: C('c-filtri'),
+        },
+        {
+          type: 'code', part: 'QUERY STRING', title: 'Ordinamento', icon: 'arrow-down-wide-narrow', iconColor: 'text-cyan-400',
+          items: [
+            'Una **lista bianca** dei campi ordinabili: niente sorprese, niente campi inesistenti.',
+            'Il `-` davanti significa decrescente (come in molte API reali).',
+            '`sort()` **modifica** l\'array originale: usate `toSorted()` (Node 20+) oppure `[...lista].sort()`.',
+            '`localeCompare(…, \'it\')` ordina bene maiuscole e lettere accentate.',
+          ],
+          code: C('c-ordina'),
+        },
+        {
+          type: 'code', part: 'QUERY STRING', title: 'Paginazione', icon: 'book-open-text', iconColor: 'text-cyan-400',
+          items: [
+            'Mai restituire 10.000 righe in una volta: sono lente da inviare e da mostrare.',
+            'Valori **predefiniti** (pagina 1, 10 per pagina) e un **limite massimo**: `?limite=1000000` non deve passare.',
+            'La "busta" con `totale` e `pagine` serve al frontend per disegnare i numeri di pagina.',
+            'Una pagina oltre la fine non è un errore: `200` con `dati: []`.',
+          ],
+          code: C('c-pagina'), output: C('c-pagina-out'), reveal: true,
+        },
+        {
+          type: 'compare', part: 'QUERY STRING', title: 'Metadati: nel body o negli header?', icon: 'mail',
+          columns: [
+            { title: 'Nel body: la "busta"', color: 'green', icon: 'package', items: ['`{ "dati": [...], "totale": 15, "pagine": 2 }`', 'Facilissimo da leggere per il frontend', 'Es. PokeAPI: `{ count, next, previous, results }`'] },
+            { title: 'Negli header', color: 'blue', icon: 'tags', items: ['Il body resta solo l\'array', '`X-Total-Count: 15`', '`Link: <…?pagina=3>; rel="next"`', 'Es. l\'API di GitHub'] },
+          ],
+          footer: '`pagina/limite`, `page/per_page`, `offset/limit`: i nomi cambiano, l\'idea è la stessa. Per elenchi lunghissimi o che cambiano spesso si usa la paginazione **a cursore** (`?dopo=<id>`).',
+        },
+        {
+          type: 'code', part: 'QUERY STRING', title: 'Tutto insieme: l\'ordine conta', icon: 'list-ordered', iconColor: 'text-cyan-400',
+          items: [
+            '**Prima** si filtra, **poi** si ordina, **per ultimo** si taglia la pagina.',
+            'Il `totale` conta i risultati **filtrati**, non tutto il catalogo.',
+            'Impaginare prima di ordinare = ordinare solo i 10 libri della pagina 😬.',
+          ],
+          code: C('c-query-all'),
+        },
+
+        /* ------------------------------------------------ VERSIONI */
+        {
+          type: 'code', part: 'VERSIONI', title: 'Versionare un\'API', icon: 'git-branch', iconColor: 'text-purple-400',
+          items: [
+            'Un\'API pubblicata è un **contratto**: app e siti di altri dipendono da lei.',
+            'Per cambiare formato si crea una **nuova versione**, accanto alla vecchia.',
+            'La versione nell\'URL (`/api/v1`) è la scelta più semplice e diffusa; GitHub, per esempio, usa un header (`X-GitHub-Api-Version`).',
+            'Con i Router è facile: un router per versione, sugli **stessi** dati.',
+            'La vecchia versione si spegne con calma, dopo aver avvisato i client.',
+          ],
+          code: C('c-versioni'), file: 'app.js',
+        },
+        {
+          type: 'compare', part: 'VERSIONI', title: 'Serve una nuova versione?', icon: 'scale',
+          columns: [
+            { title: 'Compatibile: stessa versione', color: 'green', icon: 'check-circle', items: ['Aggiungere un **campo** alla risposta', 'Aggiungere un endpoint nuovo', 'Aggiungere un filtro **facoltativo**', 'Correggere un bug'] },
+            { title: 'Incompatibile: nuova versione', color: 'red', icon: 'alert-triangle', items: ['Rinominare o togliere un campo', 'Cambiare un tipo (`anno` da numero a stringa)', 'Rendere **obbligatorio** un campo nuovo', 'Cambiare il formato della lista o degli errori'] },
+          ],
+          footer: 'La domanda giusta è: "un client scritto **ieri** funziona ancora **domani**?" Se la risposta è no, serve la v2.',
+        },
+
+        /* ------------------------------------------------ FILE JSON */
+        {
+          part: 'PERSISTENZA', title: 'Il problema: la memoria si azzera', icon: 'battery-warning', iconColor: 'text-emerald-400',
+          items: [
+            'I dati in un array vivono nella **RAM** del processo.',
+            'Ogni riavvio (un crash, un aggiornamento, `node --watch` a ogni salvataggio!) e si riparte dai dati iniziali.',
+            'Soluzione minima: salvare il catalogo in un **file JSON** e rileggerlo.',
+            'È il "mini-database" del modulo 2, ora dietro un\'API.',
+            'Per i progetti veri useremo un database: SQLite nel modulo 9, MongoDB nel modulo 11.',
+          ],
+        },
+        {
+          type: 'code', part: 'PERSISTENZA', title: 'Leggere e scrivere il file', icon: 'file-json', iconColor: 'text-emerald-400',
+          items: [
+            '`fs/promises` + `async`/`await`: il server non si blocca mentre legge il disco.',
+            '`path.join(__dirname, …)`: funziona da qualunque cartella lanciate `node`.',
+            '`JSON.stringify(dati, null, 2)` scrive un file leggibile (e facile da controllare con Git).',
+          ],
+          code: C('c-file'), output: C('c-file-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'PERSISTENZA', title: 'Il CRUD su file', icon: 'hard-drive', iconColor: 'text-emerald-400',
+          items: [
+            'Ogni modifica segue lo schema **leggi → modifica → scrivi**.',
+            'Rotte `async`: con Express 5 un file illeggibile o un JSON rovinato arriva da solo al gestore degli errori (500).',
+            'Senza un contatore salvato si usa `Math.max(…) + 1`, come fa SQLite (senza `AUTOINCREMENT`): se eliminate l\'ultimo libro, il suo id può tornare.',
+          ],
+          code: C('c-file-crud'), file: 'routes/libri.js',
+        },
+        {
+          type: 'code', part: 'PERSISTENZA', title: 'Le trappole del file JSON', icon: 'alert-octagon', iconColor: 'text-red-400',
+          items: [
+            'Il file JSON va benissimo per prototipi, esercizi e piccoli strumenti.',
+            'Non cresce bene: ogni richiesta rilegge e riscrive **tutto** il file.',
+            'Richieste contemporanee e crash a metà scrittura sono proprio i problemi che i database risolvono per noi (transazioni, modulo 9).',
+          ],
+          code: C('c-file-traps'),
+        },
+        {
+          type: 'code', part: 'PERSISTENZA', title: 'Un livello in più: il repository', icon: 'layers', iconColor: 'text-emerald-400',
+          items: [
+            'Le rotte parlano **HTTP** (status, `req`, `res`); il repository parla di **dati**.',
+            'Le rotte non sanno se i libri stanno in un array, in un file o in un database.',
+            'Nel modulo 9 cambieremo **solo** questo file per passare a SQLite.',
+            'È il primo passo verso l\'architettura a livelli del modulo 7.',
+          ],
+          code: C('c-repo'), file: 'data/libriRepo.js', output: C('c-repo-out'), reveal: true,
+        },
+
+        /* ------------------------------------------------ CLIENT */
+        {
+          type: 'compare', part: 'CLIENT HTTP', title: 'Provare un\'API', icon: 'send',
+          columns: [
+            { title: 'curl', color: 'gray', icon: 'terminal', items: ['Nel terminale, già installato (Windows: `curl.exe`)', 'Perfetto per script, documentazione, server remoti', 'Scomodo per body lunghi'] },
+            { title: 'Bruno · Postman', color: 'orange', icon: 'app-window', items: ['App grafiche: collezioni di richieste, variabili, ambienti', 'Bruno salva le collezioni come **file** nel progetto: si versionano con Git', 'Postman: molto diffuso, con account e cloud'] },
+            { title: 'REST Client (VS Code)', color: 'blue', icon: 'file-code-2', items: ['Un file `.http` accanto al codice', '"Send Request" sopra ogni richiesta', 'Simile: Thunder Client, e il client HTTP di IntelliJ'] },
+          ],
+          footer: 'Qualunque strumento scegliate: tenete le richieste **salvate** insieme al progetto. Sono la prima documentazione della vostra API (e un test da rifare a ogni modifica).',
+        },
+        {
+          type: 'code', part: 'CLIENT HTTP', title: 'Un file `.http`', icon: 'file-text', iconColor: 'text-blue-400',
+          items: [
+            'Con l\'estensione **REST Client**: una richiesta per blocco, separati da `###`.',
+            'Variabili (`@base`) per non ripetere l\'indirizzo.',
+            '`# @name nuovo` dà un nome a una richiesta: le successive usano la sua risposta.',
+            'Il file si mette in Git insieme al codice.',
+          ],
+          code: C('c-http'), file: 'biblioteca.http', lang: 'plaintext',
+        },
+        {
+          type: 'code', part: 'CLIENT HTTP', title: '`curl` per il CRUD', icon: 'terminal', iconColor: 'text-gray-400',
+          items: [
+            '`-i`: mostra status e header, non solo il body.',
+            '`--json \'…\'` (curl 7.82+): imposta da solo `Content-Type: application/json` e usa POST.',
+            '`-X` sceglie un altro metodo: `PUT`, `PATCH`, `DELETE`.',
+            'Su Windows (PowerShell o cmd) gli apici singoli danno problemi: meglio un client grafico o un file `.http`.',
+          ],
+          code: C('c-curl'), lang: 'bash',
+        },
+
+        /* ------------------------------------------------ CHIUSURA */
+        {
+          part: 'RIEPILOGO', title: 'Cosa portiamo a casa', icon: 'check-circle', iconColor: 'text-green-400',
+          items: [
+            'Risorse al plurale (`/api/libri`, `/api/libri/7`) e metodi HTTP al posto dei verbi.',
+            '`201` + `Location`, `204`, `400`, `404`, `405`, `409`: lo status dice che cosa è successo, il JSON spiega perché.',
+            '`PUT` sostituisce, `PATCH` modifica; gli id li decide il server; una lista bianca dei campi ammessi.',
+            'Query string: filtra → ordina → impagina, con valori predefiniti e limiti.',
+            'Versione nell\'URL; dati su file con leggi → modifica → scrivi; un repository che nasconde dove stanno i dati.',
+          ],
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Biblioteca 3.0: mettiti alla prova', icon: 'library', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">L\'API completa gira qui nel browser, con il catalogo nel file <code class="inline">data/libri.json</code> (guardalo cambiare a sinistra). Il pulsante ↻ riavvia il server mantenendo i file: i dati restano!</p><div class="biblio"></div>',
+          mount: (el) => NodeLab.inspector(el.querySelector('.biblio'), {
+            id: 'm6-biblioteca-slide',
+            files: { 'server.js': M6_BIBLIOTECA.server },
+            fs: M6_BIBLIOTECA.fs,
+            entry: 'server.js', port: 3000, packages: ['express', 'morgan'],
+            persist: true, watch: 'data/libri.json',
+            missions: M6_BIBLIOTECA.missions,
+            presets: M6_BIBLIOTECA.presets,
+          }),
+        },
+        {
+          type: 'custom', part: 'ORA TOCCA A VOI', title: 'Esercitazioni e laboratori', icon: 'flask-conical',
+          html: `<div class="grid md:grid-cols-2 gap-6 items-center">
+            <ul class="space-y-3 text-lg md:text-xl text-gray-300">
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Progetta l'endpoint + "che cosa stampa il client?"</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Biblioteca 3.0: 14 missioni</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>8 laboratori con verifica automatica (un boss multi-file)</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Missioni sul vostro PC + quiz</li>
+            </ul>
+            <div class="text-center">
+              <a href="modulo_6_ex.html" class="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold hover:bg-green-500 transition-colors">
+                <i data-lucide="flask-conical" class="w-6 h-6"></i> Apri le esercitazioni</a>
+              <p class="mt-6 text-gray-500 font-mono text-sm">Prossimo modulo: Validazione, errori e configurazione</p>
+            </div></div>`,
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>

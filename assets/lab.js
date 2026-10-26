@@ -14,7 +14,7 @@
  * })
  *
  * NodeLab.httpClient(el, { send, port, presets, onExchange })
- * NodeLab.inspector(el, { id, files, entry, port, missions, presets, intro })
+ * NodeLab.inspector(el, { id, files, entry, port, missions, presets, intro, fs, packages, persist, watch })
  * ========================================================================== */
 (function () {
   'use strict';
@@ -518,6 +518,8 @@
 
   /* ------------------------------------------------------- Inspector
    * Un server già pronto (nascosto) + missioni da completare con il client HTTP.
+   * Opzioni: persist (il riavvio mantiene i file scritti dal server), watch: 'data/x.json' (mostra il file dal vivo).
+   * Le missioni ricevono check(req, res, { restarts }).
    */
   function inspector(el, cfg) {
     const id = cfg.id;
@@ -529,14 +531,47 @@
           <ol class="insp-missions space-y-2 text-sm"></ol>
         </div>
         <div class="term flex flex-col overflow-hidden">
-          <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700 flex items-center gap-2"><i data-lucide="server" class="w-3.5 h-3.5"></i>Log del server<button class="insp-restart ml-auto text-gray-500 hover:text-white" title="Riavvia il server"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i></button></div>
+          <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700 flex items-center gap-2"><i data-lucide="server" class="w-3.5 h-3.5"></i>Log del server
+            <button class="insp-restart ml-auto text-gray-500 hover:text-white" title="${cfg.persist ? 'Riavvia il server (i file restano)' : 'Riavvia il server'}"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i></button>
+            ${cfg.persist ? '<button class="insp-reset text-gray-500 hover:text-white" title="Ripristina i dati iniziali"><i data-lucide="database" class="w-3.5 h-3.5"></i></button>' : ''}</div>
           <div class="h-40 overflow-auto p-2 insp-scroll"><div class="term-out insp-out text-xs text-gray-300"></div></div>
         </div>
+        ${cfg.watch ? `<div class="term flex flex-col overflow-hidden insp-watchbox transition-shadow">
+          <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700 flex items-center gap-2"><i data-lucide="file-json" class="w-3.5 h-3.5 text-yellow-400"></i><span class="font-mono">${esc(cfg.watch)}</span><span class="insp-watchstate ml-auto text-gray-600">sul disco</span></div>
+          <pre class="insp-watch h-48 overflow-auto p-2 text-xs text-gray-300 whitespace-pre-wrap"></pre>
+        </div>` : ''}
       </div>
       <div class="lg:col-span-3 insp-client"></div></div>`;
     const $ = (s) => el.querySelector(s);
     const term = makeTerminal($('.insp-out'));
     let proc = null;
+    let lastFs = null;
+    let restarts = 0;
+    let watched = null;
+    function drawWatch(snap) {
+      if (!cfg.watch) return;
+      const f = snap ? snap['/progetto/' + cfg.watch] : null;
+      const text = f ? f.content : snap ? null : (cfg.fs || {})[cfg.watch];
+      const changed = snap && text !== watched;
+      watched = text;
+      $('.insp-watch').textContent = text === null ? '(il file non esiste)' : text;
+      if (changed) {
+        const box = $('.insp-watchbox');
+        box.classList.add('ring-2', 'ring-yellow-400/60');
+        $('.insp-watchstate').textContent = '✎ modificato';
+        setTimeout(() => { box.classList.remove('ring-2', 'ring-yellow-400/60'); $('.insp-watchstate').textContent = 'sul disco'; }, 1500);
+      }
+    }
+    // dallo snapshot del file system ai file iniziali del prossimo avvio (il codice resta quello di cfg.files)
+    function fsFromSnapshot(snap) {
+      const out = {};
+      for (const [p, info] of Object.entries(snap)) {
+        const rel = p.replace(/^\/progetto\/?/, '');
+        if (!rel || rel === 'node_modules' || rel in cfg.files) continue;
+        out[info.type === 'dir' ? rel + '/' : rel] = info.content;
+      }
+      return out;
+    }
     function drawMissions() {
       $('.insp-missions').innerHTML = cfg.missions.map((m, i) => `<li class="flex gap-2 items-start ${done.has(i) ? 'text-green-300' : 'text-gray-300'}">
         <span class="mt-0.5 w-5 h-5 shrink-0 rounded-full border flex items-center justify-center text-[11px] ${done.has(i) ? 'bg-green-500 border-green-500 text-gray-900 font-bold' : 'border-gray-600 text-gray-500'}">${done.has(i) ? '✓' : i + 1}</span>
@@ -544,18 +579,30 @@
       $('.insp-count').textContent = `${done.size}/${cfg.missions.length}`;
       if (done.size === cfg.missions.length && cfg.missions.length) $('.insp-count').innerHTML = '<span class="text-green-400">✓ tutte completate!</span>';
     }
-    function start() {
+    function start(keepFiles) {
       if (proc) proc.kill(true);
+      const fsInit = keepFiles && lastFs ? fsFromSnapshot(lastFs) : cfg.fs || {};
+      if (!keepFiles) lastFs = null;
       term.clear();
       term.write('prompt', '$ ');
       term.write('cmd', `node ${cfg.entry || 'server.js'}\n`);
-      proc = new NodeProcess({
-        files: cfg.files, entry: cfg.entry || 'server.js', fs: cfg.fs || {}, packages: cfg.packages || [],
-        onOutput: (s, t) => term.write(s, t),
-        onIdle: (ports) => client.setState(`<span class="text-green-400">● in ascolto su :${ports.join(', :')}</span>`),
-        onExit: () => client.setState('<span class="text-red-400">● server spento</span>'),
+      const p = new NodeProcess({
+        files: cfg.files, entry: cfg.entry || 'server.js', fs: fsInit, packages: cfg.packages || [],
+        onOutput: (s, t) => { if (p === proc) term.write(s, t); },
+        onIdle: (ports, snap) => {
+          if (p !== proc) return;
+          client.setState(`<span class="text-green-400">● in ascolto su :${ports.join(', :')}</span>`);
+          lastFs = snap;
+          drawWatch(snap);
+        },
+        onExit: (info) => {
+          if (p !== proc) return;
+          if (info.fs) { lastFs = info.fs; drawWatch(info.fs); }
+          client.setState('<span class="text-red-400">● server spento</span>');
+        },
       });
-      proc.start();
+      proc = p;
+      p.start();
     }
     const client = httpClient($('.insp-client'), {
       port: cfg.port || 3000,
@@ -564,15 +611,17 @@
       onExchange: (req, res) => {
         cfg.missions.forEach((m, i) => {
           if (done.has(i)) return;
-          try { if (m.check(req, res)) done.add(i); } catch (e) { /* ignora */ }
+          try { if (m.check(req, res, { restarts })) done.add(i); } catch (e) { /* ignora */ }
         });
         store.set('insp:' + id, Array.from(done));
         drawMissions();
       },
     });
-    $('.insp-restart').onclick = start;
+    $('.insp-restart').onclick = () => { if (cfg.persist) restarts++; start(!!cfg.persist); };
+    if ($('.insp-reset')) $('.insp-reset').onclick = () => { start(false); drawWatch(null); };
     drawMissions();
-    start();
+    drawWatch(null);
+    start(false);
     icons();
   }
 
