@@ -7,14 +7,16 @@
  *   files: { 'app.js': '...' }, entry: 'app.js',
  *   fs: { 'dati/studenti.json': '...' },      // file già presenti nel progetto
  *   argv: '5 + 3',                             // mostra il campo argomenti
- *   env: {},
+ *   env: {},                                   // variabili d'ambiente "vere" (vincono sul file .env)
+ *   node: '--env-file=.env',                   // opzioni di node, mostrate nel comando
  *   server: { port: 3000, presets: [{ method, path, body, headers: 'Nome: valore\n…' }] },
- *   tests: [{ name, argv: [] | 'stringa', fs: {}, check: async (ctx) => {} }],
+ *   tests: [{ name, argv: [] | 'stringa', fs: {}, env: {}, check: async (ctx) => {} }],
  *   hints: ['...'], solution: { 'app.js': '...' },
  * })
  *
  * NodeLab.httpClient(el, { send, port, presets, onExchange })
- * NodeLab.inspector(el, { id, files, entry, port, missions, presets, intro, fs, packages, persist, watch })
+ * NodeLab.inspector(el, { id, files, entry, port, missions, presets, intro, fs, packages, persist, watch, node, env })
+ * NodeLab.playground(el, { code, inputs: [{ label, value }], packages, file })   // "prova lo schema" con input JSON
  * ========================================================================== */
 (function () {
   'use strict';
@@ -22,6 +24,11 @@
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const inline = (s) => esc(s).replace(/`([^`]+)`/g, '<code class="inline">$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   const icons = () => window.lucide && window.lucide.createIcons();
+  // modalità di CodeMirror e linguaggio di highlight.js dal nome del file
+  const isJs = (n) => /\.(c|m)?js$/.test(n);
+  const cmMode = (n) => (n.endsWith('.json') ? { name: 'javascript', json: true } : isJs(n) ? 'javascript' : 'text/plain');
+  const hlLang = (n) => (n.endsWith('.json') ? 'json' : isJs(n) ? 'javascript' : /(^|\/)\.env/.test(n) ? 'ini' : 'plaintext');
+  const fileIcon = (n) => (n.endsWith('.json') ? 'file-json' : isJs(n) ? 'file-code-2' : /(^|\/)\.env/.test(n) ? 'key-round' : 'file-text');
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem('nodelab:' + k)); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem('nodelab:' + k, JSON.stringify(v)); } catch (e) { /* storage non disponibile */ } },
@@ -289,7 +296,7 @@
               <div class="mx-auto text-gray-400 text-xs">studente@nodelab: ~/progetto</div>
               <button class="lab-stop hidden text-xs px-2 py-0.5 rounded bg-red-600/80 hover:bg-red-500 text-white" title="Ctrl+C">■ Stop</button>
             </div>
-            ${cfg.argv !== undefined ? `<div class="flex items-center gap-2 px-3 py-2 border-b border-gray-800 bg-gray-950"><span class="text-green-400 whitespace-nowrap">$ node ${esc(entry)}</span>
+            ${cfg.argv !== undefined ? `<div class="flex items-center gap-2 px-3 py-2 border-b border-gray-800 bg-gray-950"><span class="text-green-400 whitespace-nowrap">$ node ${cfg.node ? esc(cfg.node) + ' ' : ''}${esc(entry)}</span>
               <input class="lab-args flex-1 bg-transparent text-white font-mono focus:outline-none min-w-0" value="${esc(cfg.argv)}" spellcheck="false" placeholder="argomenti…"></div>` : ''}
             <div class="lab-scroll h-64 overflow-auto p-3"><div class="term-out lab-out text-gray-200"></div></div>
           </div>
@@ -321,7 +328,7 @@
     const save = () => { clearTimeout(saveT); saveT = setTimeout(() => store.set('code:' + id, files), 300); };
     function drawTabs() {
       tabs.innerHTML = names.map((n) => `<button data-f="${esc(n)}" class="px-3 py-1.5 text-sm font-mono rounded-t-lg flex items-center gap-1.5 ${n === current ? 'bg-[#0b1220] text-white border border-gray-700 border-b-0' : 'text-gray-500 hover:text-gray-200'}">
-        <i data-lucide="${n.endsWith('.json') ? 'file-json' : 'file-code-2'}" class="w-3.5 h-3.5"></i>${esc(n)}${n === entry && names.length > 1 ? '<span class="text-[10px] text-green-500 ml-1">main</span>' : ''}</button>`).join('');
+        <i data-lucide="${fileIcon(n)}" class="w-3.5 h-3.5"></i>${esc(n)}${n === entry && names.length > 1 ? '<span class="text-[10px] text-green-500 ml-1">main</span>' : ''}</button>`).join('');
       icons();
     }
     tabs.onclick = (e) => {
@@ -335,7 +342,7 @@
     const run = () => runProgram();
     if (window.CodeMirror) {
       for (const n of names) {
-        docs[n] = window.CodeMirror.Doc(files[n], n.endsWith('.json') ? { name: 'javascript', json: true } : 'javascript');
+        docs[n] = window.CodeMirror.Doc(files[n], cmMode(n));
         docs[n].on('change', (d) => { files[n] = d.getValue(); save(); });
       }
       cm = window.CodeMirror($('.lab-editor'), {
@@ -400,11 +407,11 @@
       term.clear();
       const argStr = $('.lab-args') ? $('.lab-args').value : '';
       term.write('prompt', 'studente@nodelab:~/progetto$ ');
-      term.write('cmd', `node ${entry}${argStr ? ' ' + argStr : ''}\n`);
+      term.write('cmd', `node ${cfg.node ? cfg.node + ' ' : ''}${entry}${argStr ? ' ' + argStr : ''}\n`);
       setRunning(true);
       if (client) client.setState('<span class="text-yellow-400">● avvio…</span>');
       const p = new NodeProcess({
-        files: Object.assign({}, files), entry, argv: parseArgs(argStr), env: cfg.env || {}, fs: cfg.fs || {}, packages: cfg.packages || [],
+        files: Object.assign({}, files), entry, argv: parseArgs(argStr), env: cfg.env || {}, fs: cfg.fs || {}, packages: cfg.packages || [], nodeOptions: parseArgs(cfg.node || ''),
         onOutput: (stream, text) => { if (p === proc) term.write(stream, text); },
         onClear: () => { if (p === proc) term.clear(); },
         onIdle: (ports, snap) => {
@@ -452,7 +459,7 @@
         li.innerHTML = `<span class="text-gray-500 mt-0.5">…</span><div class="flex-1"><div class="text-gray-300">${inline(t.name)}</div></div>`;
         list.appendChild(li);
         const argv = Array.isArray(t.argv) ? t.argv : t.argv ? parseArgs(t.argv) : [];
-        const p = new NodeProcess({ files: Object.assign({}, files), entry, argv, env: Object.assign({}, cfg.env || {}, t.env || {}), fs: t.replaceFs ? t.fs || {} : Object.assign({}, cfg.fs || {}, t.fs || {}), packages: cfg.packages || [] });
+        const p = new NodeProcess({ files: Object.assign({}, files), entry, argv, env: Object.assign({}, cfg.env || {}, t.env || {}), fs: t.replaceFs ? t.fs || {} : Object.assign({}, cfg.fs || {}, t.fs || {}), packages: cfg.packages || [], nodeOptions: parseArgs(cfg.node || '') });
         p.start();
         await p.settled(t.wait || 3000);
         let r = p.state === 'exited' && p.exitInfo && p.exitInfo.hung ? { ok: false, message: 'Il programma non risponde (ciclo infinito?).' } : await p.test(fnSource(t.check));
@@ -497,7 +504,7 @@
       sol.innerHTML = `<div class="bg-gray-950 p-4 rounded-xl border border-green-900/50">
         <div class="flex items-center justify-between mb-2"><span class="text-sm text-green-400 font-semibold">Una possibile soluzione</span>
         <button class="lab-sol-use text-xs px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-white">Copia nell'editor</button></div>
-        ${Object.entries(cfg.solution).map(([n, c]) => `<div class="text-xs font-mono text-gray-500 mt-2 mb-1">${esc(n)}</div><pre class="code small"><code class="language-${n.endsWith('.json') ? 'json' : 'javascript'}">${esc(c.trim())}</code></pre>`).join('')}</div>`;
+        ${Object.entries(cfg.solution).map(([n, c]) => `<div class="text-xs font-mono text-gray-500 mt-2 mb-1">${esc(n)}</div><pre class="code small"><code class="language-${hlLang(n)}">${esc(c.trim())}</code></pre>`).join('')}</div>`;
       if (window.hljs) sol.querySelectorAll('pre code').forEach((c) => window.hljs.highlightElement(c));
       $('.lab-sol').onclick = () => {
         if (!sol.classList.contains('open') && !passed() && !confirm('Vuoi davvero vedere la soluzione? Prova prima con gli aiutini 😉')) return;
@@ -585,9 +592,9 @@
       if (!keepFiles) lastFs = null;
       term.clear();
       term.write('prompt', '$ ');
-      term.write('cmd', `node ${cfg.entry || 'server.js'}\n`);
+      term.write('cmd', `node ${cfg.node ? cfg.node + ' ' : ''}${cfg.entry || 'server.js'}\n`);
       const p = new NodeProcess({
-        files: cfg.files, entry: cfg.entry || 'server.js', fs: fsInit, packages: cfg.packages || [],
+        files: cfg.files, entry: cfg.entry || 'server.js', fs: fsInit, packages: cfg.packages || [], env: cfg.env || {}, nodeOptions: parseArgs(cfg.node || ''),
         onOutput: (s, t) => { if (p === proc) term.write(s, t); },
         onIdle: (ports, snap) => {
           if (p !== proc) return;
@@ -625,6 +632,68 @@
     icons();
   }
 
+  /* ------------------------------------------------------- Playground
+   * Un pezzo di codice già scritto + un input da scegliere o modificare: ▶ lo esegue con quel valore.
+   * Il codice vede la costante `input` (il testo dell'area di input, JSON o un valore JavaScript).
+   * NodeLab.playground(el, { code, inputs: [{ label, value }], packages: ['zod'], file: 'prova.js' })
+   */
+  function playground(el, cfg) {
+    const file = cfg.file || 'prova.js';
+    const inputs = cfg.inputs || [];
+    const shown = `const input = …;   // ← il valore che scegli qui accanto\n${cfg.code.replace(/^\n/, '').replace(/\s+$/, '')}`;
+    el.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-7 min-w-0">
+        <div class="flex items-center gap-1.5 text-xs font-mono text-gray-500 mb-1 ml-1"><i data-lucide="file-code-2" class="w-3.5 h-3.5"></i>${esc(file)}</div>
+        <pre class="code small pg-code overflow-auto" style="font-size:0.74rem;max-height:${cfg.height || '24rem'}"><code class="language-javascript">${esc(shown)}</code></pre>
+      </div>
+      <div class="lg:col-span-5 flex flex-col gap-3 min-w-0">
+        <div>
+          <div class="flex flex-wrap items-center gap-1.5 mb-2"><span class="text-xs text-gray-500 mr-1">input =</span>${inputs.map((x, i) => `<button data-i="${i}" class="pg-preset text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-950 text-gray-300 hover:border-cyan-500 hover:text-white">${esc(x.label)}</button>`).join('')}</div>
+          <textarea class="pg-input w-full h-28 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-100 focus:outline-none focus:border-cyan-500" spellcheck="false"></textarea>
+          <button class="pg-run mt-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium flex items-center gap-2" title="Ctrl+Invio"><i data-lucide="play" class="w-4 h-4"></i>Esegui</button>
+        </div>
+        <div class="term flex flex-col overflow-hidden">
+          <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700 font-mono">$ node ${esc(file)}</div>
+          <div class="pg-scroll h-52 overflow-auto p-2"><div class="term-out pg-out text-xs text-gray-200"></div></div>
+        </div>
+      </div></div>`;
+    const $ = (s) => el.querySelector(s);
+    const term = makeTerminal($('.pg-out'));
+    if (window.hljs) window.hljs.highlightElement($('.pg-code code'));
+    let proc = null;
+    let current = -1;
+    const drawPresets = () => el.querySelectorAll('.pg-preset').forEach((b) => {
+      const on = Number(b.dataset.i) === current;
+      b.className = `pg-preset text-xs font-mono px-2 py-1 rounded border ${on ? 'border-cyan-400 bg-cyan-500/15 text-white' : 'border-gray-700 bg-gray-950 text-gray-300 hover:border-cyan-500 hover:text-white'}`;
+    });
+    function run() {
+      if (proc) proc.kill(true);
+      term.clear();
+      const text = $('.pg-input').value.trim() || 'undefined';
+      try { new Function(`return (\n${text}\n);`); } catch (e) {
+        term.write('stderr', `SyntaxError: ${e.message}\n`);
+        term.write('info', '\n💡 Il valore di input non è JavaScript valido: controlla virgolette, virgole e parentesi.\n');
+        return;
+      }
+      const p = new NodeProcess({
+        files: { 'input.js': `module.exports = (\n${text}\n);\n`, [file]: `const input = require('./input.js');\n${cfg.code.replace(/^\n/, '')}` },
+        entry: file, packages: cfg.packages || [], fs: cfg.fs || {},
+        onOutput: (stream, t) => { if (p === proc) term.write(stream, t); },
+      });
+      proc = p;
+      p.start();
+    }
+    el.querySelectorAll('.pg-preset').forEach((b) => {
+      b.onclick = () => { current = Number(b.dataset.i); $('.pg-input').value = inputs[current].value; drawPresets(); run(); };
+    });
+    $('.pg-input').addEventListener('input', () => { current = -1; drawPresets(); });
+    $('.pg-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); } });
+    $('.pg-run').onclick = run;
+    if (inputs.length) { current = 0; $('.pg-input').value = inputs[0].value; drawPresets(); }
+    icons();
+    return { run };
+  }
+
   /* ------------------------------------------- progresso nella pagina */
   function refreshProgress() {
     document.querySelectorAll('[data-lab-progress]').forEach((badge) => {
@@ -637,5 +706,5 @@
   document.addEventListener('nodelab:progress', refreshProgress);
   document.addEventListener('DOMContentLoaded', refreshProgress);
 
-  window.NodeLab = { mount, httpClient, inspector, ansiToHtml, fnSource, refreshProgress, store };
+  window.NodeLab = { mount, httpClient, inspector, playground, ansiToHtml, fnSource, refreshProgress, store };
 })();

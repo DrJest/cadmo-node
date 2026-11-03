@@ -16,11 +16,12 @@ assets/
   runtime.js          Node.js simulato: fs, path, events, http, process… (window.NodeSim)
   lab.js              laboratori di codice + client HTTP + inspector (window.NodeLab)
   terminal.js         shell simulata con npm/npx/node/nano (window.NodeTerminal)
-  widgets.js          Quiz, EventLoopViz, OrderGame, PipelineViz, RestGame, toggleSolution
+  widgets.js          Quiz, EventLoopViz, OrderGame, PipelineViz, RestGame, SortGame, toggleSolution
   labs-mN.js          configurazione dei laboratori del modulo N (window.MN_LABS)
   m4-biblioteca.js    server Express + missioni della "Biblioteca" (modulo 4)
   m5-biblioteca.js    "Biblioteca 2.0" (morgan, cors, static, Router, errori) + scenario di PipelineViz (modulo 5)
   m6-biblioteca.js    "Biblioteca 3.0" (API REST v1 con il catalogo su file JSON) + scenari di RestGame (modulo 6)
+  m7-biblioteca.js    "Biblioteca 4.0" (zod, classi di errore, .env, livelli) + PipelineViz, SortGame e playground (modulo 7)
 tools/
   harness.js          esegue il runtime simulato dentro Node (senza browser)
   check-labs.js       verifica soluzioni e codice iniziale dei laboratori
@@ -67,10 +68,11 @@ NodeLab.mount(document.getElementById('lab1'), {
   files: { 'app.js': '// codice iniziale' }, entry: 'app.js',
   fs: { 'dati/studenti.json': '[...]' },        // file già presenti in /progetto
   argv: '5 + 3',                                 // mostra il campo argomenti
-  env: { PORT: '3000' },
+  env: { PORT: '3000' },                         // variabili d'ambiente "vere" (vincono sul file .env)
+  node: '--env-file=.env',                       // opzioni di node, mostrate nel comando del terminale
   packages: ['express', 'morgan', 'cors'],       // pacchetti npm presenti in node_modules
   server: { port: 3000, presets: [{ method: 'GET', path: '/' }, { method: 'POST', path: '/x', body: '{}', headers: 'X-Api-Key: abc', send: false }] },
-  tests: [{ name: '...', argv: [], fs: {}, check: async (ctx) => { ctx.assert(...); } }],
+  tests: [{ name: '...', argv: [], fs: {}, env: { PORT: '4000' }, check: async (ctx) => { ctx.assert(...); } }],
   hints: ['...'], solution: { 'app.js': '...' },
 });
 ```
@@ -86,10 +88,12 @@ NodeLab.mount(document.getElementById('lab1'), {
 
 - `NodeTerminal.mount(el, { id, title, intro, tasks: [{ text, check: (t) => bool }], files })` — shell con npm;
   nelle check: `t.exists`, `t.read`, `t.json`, `t.cwd`, `t.ran(/regex/)`, `t.dep`, `t.devDep`, `t.installed`, `t.script`.
-- `NodeLab.inspector(el, { id, files, entry, port, fs, packages, missions: [{ text, check: (req, res, { restarts }) => bool }], presets, persist, watch })` — server pronto + missioni HTTP.
+- `NodeLab.inspector(el, { id, files, entry, port, fs, packages, node, env, missions: [{ text, check: (req, res, { restarts }) => bool }], presets, persist, watch })` — server pronto + missioni HTTP.
   Con `persist: true` il pulsante ↻ riavvia il server mantenendo i file scritti (un secondo pulsante rimette i dati iniziali);
   con `watch: 'data/libri.json'` il contenuto di quel file compare sotto il log e si aggiorna dopo ogni richiesta.
 - `NodeLab.httpClient(el, { send, port, presets, onExchange })`.
+- `NodeLab.playground(el, { code, inputs: [{ label, value }], packages, file })` — codice fisso + un valore `input` da scegliere
+  o modificare; ▶ lo esegue nel simulatore (es. per provare uno schema zod).
 - `Quiz.mount(el, [{ question, code?, options, correct, explanation }], { id })`.
 - `OrderGame.mount(el, [{ title, code, chips, answer, explain, cmd?, prompt? }], { id })` — "indovina l'output"
   (`cmd` cambia la riga sopra il terminale, es. `$ curl localhost:3000/api/libri`).
@@ -97,6 +101,8 @@ NodeLab.mount(document.getElementById('lab1'), {
   — una richiesta attraverso i middleware, passo per passo (`act`: `next`, `skip`, `respond`, `error`, `errskip`, `hang`).
 - `RestGame.mount(el, [{ text, paths: [], statuses: [], answer: { method, path, status }, explain }], { id })`
   — "progetta l'endpoint": per ogni scenario si scelgono metodo, URL e status code della risposta.
+- `SortGame.mount(el, { categories: [{ id, label, short?, icon, color }], items: [{ text?, code?, answer, explain }] }, { id })`
+  — "dove va?": per ogni elemento si sceglie la categoria giusta (livelli, tipi di errore, configurazione…).
 - `EventLoopViz.mount(el, { code: [righe], steps: [{ line, stack, ticks, micro, timers, check, out, phase, note }] })`.
 
 I progressi degli studenti (codice, laboratori superati, quiz) sono salvati solo nel `localStorage` del loro browser.
@@ -110,6 +116,7 @@ iniziale ne fallisca almeno una (serve solo Node, niente browser):
 node tools/check-labs.js assets/labs-m4.js M4_LABS
 node tools/check-labs.js assets/labs-m5.js M5_LABS
 node tools/check-labs.js assets/labs-m6.js M6_LABS
+node tools/check-labs.js assets/labs-m7.js M7_LABS
 ```
 
 ## Note sul simulatore
@@ -118,10 +125,17 @@ node tools/check-labs.js assets/labs-m6.js M6_LABS
 - **Express 5** è disponibile con `packages: ['express']` (in un lab, nell'inspector o nel terminale dopo `npm install express`):
   rotte con la sintassi di Express 5 (`:param`, `*splat`, `{opzionale}`), `req.params/query/body`, `express.json/urlencoded/static`,
   `express.Router`, `res.json/status/send/sendStatus/redirect/location/sendFile`, errori async, 404 e pagine d'errore come l'originale.
-  Non ci sono template engine (`res.render`).
+  Non ci sono template engine (`res.render`). Come in Express 5, `req.query` è in sola lettura: `req.query = …` viene ignorato.
 - **morgan** (formati `dev`, `tiny`, `short`, `common`, `combined`, token personalizzati, opzioni `skip`, `stream`, `immediate`)
   e **cors** (porting fedele: `origin` stringa/array/RegExp/funzione, preflight `OPTIONS`) sono integrati come express:
   `packages: ['express', 'morgan', 'cors']` oppure `npm install` nel terminale.
+- **zod 4** (`packages: ['zod']`): porting essenziale con gli stessi messaggi e la stessa forma degli issue — string/number/int/boolean,
+  enum, array, object/strictObject/looseObject, union, optional/nullable/default/catch, coerce, stringbool, refine, transform/pipe,
+  partial/pick/omit/extend, `z.config({ customError })`, ZodError, `flattenError`/`treeifyError`/`prettifyError`.
+  Le traduzioni (`z.locales`) non sono incluse: i messaggi predefiniti restano in inglese.
+- **File .env**: `node: '--env-file=.env'` (anche `--env-file-if-exists`, più file), `process.loadEnvFile()`, `util.parseEnv()`
+  e **dotenv 18** (`packages: ['dotenv']`, anche `require('dotenv/config')`). Le variabili dell'ambiente vincono sul file.
+  Nel terminale: `node --env-file=.env server.js` e `PORT=4000 node server.js` (anche negli script npm).
 - Moduli disponibili: `fs`, `fs/promises`, `path`, `events`, `os`, `util`, `http`, `url`, `querystring`,
   `crypto` (parziale), `assert`, `buffer`, `timers`, `timers/promises`, `stream` (minimo), `string_decoder`.
 - Il file system è virtuale (radice `/progetto`) e si azzera a ogni esecuzione.

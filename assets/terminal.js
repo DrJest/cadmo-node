@@ -23,7 +23,9 @@
     express: { v: '5.3.0', majors: { 4: '4.21.2', 5: '5.3.0' }, n: 65, deps: ['accepts', 'body-parser', 'content-disposition', 'content-type', 'cookie', 'cookie-signature', 'debug', 'encodeurl', 'escape-html', 'etag', 'finalhandler', 'fresh', 'http-errors', 'merge-descriptors', 'mime-types', 'on-finished', 'once', 'parseurl', 'proxy-addr', 'qs', 'range-parser', 'router', 'send', 'serve-static', 'statuses', 'type-is', 'vary'], desc: 'Fast, unopinionated, minimalist web framework' },
     nodemon: { v: '3.1.10', majors: { 2: '2.0.22', 3: '3.1.10' }, n: 28, deps: ['chokidar', 'debug', 'ignore-by-default', 'minimatch', 'pstree.remy', 'semver', 'simple-update-notifier', 'supports-color', 'touch', 'undefsafe'], desc: 'Simple monitor script for use during development of a Node.js app.', bin: 'nodemon' },
     chalk: { v: '5.6.2', majors: { 4: '4.1.2', 5: '5.6.2' }, n: 1, deps: [], desc: 'Terminal string styling done right' },
-    dotenv: { v: '17.2.3', n: 1, deps: [], desc: 'Loads environment variables from .env file' },
+    dotenv: { v: '18.0.9', n: 1, deps: [], desc: 'Loads environment variables from .env file' },
+    zod: { v: '4.6.7', majors: { 3: '3.25.76', 4: '4.6.7' }, n: 1, deps: [], desc: 'TypeScript-first schema declaration and validation library with static type inference' },
+    'express-validator': { v: '7.3.2', n: 3, deps: ['lodash', 'validator'], desc: 'Express middleware for the validator module.' },
     lodash: { v: '4.17.21', n: 1, deps: [], desc: 'Lodash modular utilities.' },
     dayjs: { v: '1.11.18', n: 1, deps: [], desc: '2KB immutable date time library alternative to Moment.js' },
     cowsay: { v: '1.6.0', n: 41, deps: ['get-stdin', 'string-width', 'strip-final-newline', 'yargs'], desc: 'cowsay is a configurable talking cow', bin: 'cowsay' },
@@ -236,7 +238,15 @@
         redirect = { append: toks[ri].op === '>>', file: normPath(toks[ri + 1], st.cwd) };
         toks = toks.slice(0, ri);
       }
+      // VAR=valore node file.js → variabili d'ambiente solo per quel comando
+      const envAssign = {};
+      while (toks.length > 1 && typeof toks[0] === 'string' && /^[A-Za-z_][A-Za-z0-9_]*=/.test(toks[0])) {
+        const i = toks[0].indexOf('=');
+        envAssign[toks[0].slice(0, i)] = toks[0].slice(i + 1);
+        toks = toks.slice(1);
+      }
       const [cmd, ...args] = toks;
+      if (Object.keys(envAssign).length && cmd !== 'node') { err(`[NodeLab] Nel simulatore le variabili prima del comando (${esc(Object.keys(envAssign).join(', '))}=…) funzionano solo con node.`); return 1; }
       if (redirect) {
         if (cmd !== 'echo') { err('[NodeLab] Nel simulatore la redirezione > funziona solo con echo.'); return 1; }
         const dir = redirect.file.slice(0, redirect.file.lastIndexOf('/')) || '/';
@@ -253,7 +263,7 @@
   ${w('pwd, ls [-a] [-l], cd, mkdir [-p], touch, cat, rm [-r], tree')}
   ${w('echo "testo" &gt; file')}      scrive un file (&gt;&gt; per aggiungere in fondo)
   ${w('nano &lt;file&gt;')}             apre un piccolo editor (anche: code &lt;file&gt;)
-  ${w('node -v')} · ${w('node file.js')} · ${w('node --watch file.js')}
+  ${w('node -v')} · ${w('node file.js')} · ${w('node --watch file.js')} · ${w('node --env-file=.env file.js')} · ${w('PORT=4000 node file.js')}
   ${w('npm init [-y]')} · ${w('npm install [pacchetto] [-D]')} · ${w('npm uninstall')} · ${w('npm ci')}
   ${w('npm run &lt;script&gt;')} · ${w('npm start')} · ${w('npm test')} · ${w('npm ls')} · ${w('npm view &lt;pacchetto&gt;')}
   ${w('npm pkg set scripts.dev="nodemon index.js"')} · ${w('npm pkg get name')}
@@ -373,7 +383,7 @@
           await openEditor(a);
           return 0;
         }
-        case 'node': return cmdNode(args);
+        case 'node': return cmdNode(args, envAssign);
         case 'nodemon': {
           const proj = findProjectDir(st.cwd);
           const local = proj && isDir(proj + '/node_modules/nodemon');
@@ -405,7 +415,8 @@ module.exports = chalk;
 module.exports.default = chalk;`,
       cowsay: `exports.say = ({ text }) => { const t = ' ' + text + ' '; return ' ' + '_'.repeat(t.length) + '\\n<' + t + '>\\n ' + '-'.repeat(t.length) + '\\n        \\\\   ^__^\\n         \\\\  (oo)\\\\_______\\n            (__)\\\\       )\\\\/\\\\\\n                ||----w |\\n                ||     ||'; };`,
     };
-    const BUILTIN = ['express', 'morgan', 'cors'];   // implementati dentro runtime.js
+    const BUILTIN = ['express', 'morgan', 'cors', 'zod', 'dotenv'];   // implementati dentro runtime.js
+    const BUILTIN_SUB = { zod: { 'v4.js': 'zod' }, dotenv: { 'config.js': 'dotenv/config' } };   // require('zod/v4'), require('dotenv/config')
     const stubFor = (n) => (BUILTIN.includes(n) ? `/* nodelab:builtin ${n} */` : STUBS[n]) || `throw new Error('[NodeLab] Il pacchetto "${n}" è installato nel simulatore, ma il suo codice non è disponibile qui. Provalo sul tuo PC!');`;
     function collectProjectFiles(baseDir) {
       const files = {};
@@ -428,6 +439,7 @@ module.exports.default = chalk;`,
             if (!relBase) continue;
             files[relBase + '/package.json'] = JSON.stringify({ name: n, version: REGISTRY[n].v, main: 'index.js' });
             files[relBase + '/index.js'] = stubFor(n);
+            for (const [sub, name] of Object.entries(BUILTIN_SUB[n] || {})) files[relBase + '/' + sub] = `/* nodelab:builtin ${name} */`;
           }
         }
         if (d === '/') break;
@@ -454,6 +466,8 @@ module.exports.default = chalk;`,
           files,
           entry: rel,
           argv: extraArgs,
+          env: opts.env || {},
+          nodeOptions: opts.nodeOptions || [],
           onOutput: (stream, text) => {
             if (!lineBuf.cur) lineBuf.cur = print('', stream === 'stderr' ? 'text-red-400' : stream === 'info' ? 'text-blue-300' : '');
             const parts = text.split('\n');
@@ -475,7 +489,27 @@ module.exports.default = chalk;`,
         proc.start();
       });
     }
-    async function cmdNode(args) {
+    async function cmdNode(args, env) {
+      // opzioni prima del file: --watch, --env-file=.env, --env-file-if-exists=.env (anche separate da uno spazio)
+      const nodeOptions = [];
+      let watch = false;
+      while (args.length && /^--(watch|env-file(-if-exists)?)(=|$)/.test(args[0])) {
+        const a = args.shift();
+        if (a === '--watch') { watch = true; continue; }
+        if (!a.includes('=')) {
+          if (!args.length) { err(`node: ${a} requires an argument`); return 9; }
+          nodeOptions.push(a, args.shift());
+        } else nodeOptions.push(a);
+      }
+      if (nodeOptions.length || watch || (env && Object.keys(env).length)) {
+        if (!args.length) { err(watch ? 'node: --watch richiede un file' : 'node: manca il file da eseguire'); return 9; }
+        if (args[0].startsWith('-')) { err(`node: bad option: ${args[0]}`); return 9; }
+        const runOpts = { nodeOptions, env };
+        if (!watch) return runNodeFile(args[0], args.slice(1), runOpts);
+        await runNodeFile(args[0], args.slice(1), runOpts);
+        out(`<span class="text-gray-400">Completed running '${esc(args[0])}'. Waiting for file changes before restarting...</span>`);
+        return waitCtrlC();
+      }
       if (!args.length) { out('Welcome to Node.js ' + NODE_VERSION + '.\nType ".help" for more information.\n<span class="text-gray-500">[NodeLab] Il REPL interattivo non è disponibile qui: esegui un file con node nomefile.js</span>'); return 0; }
       if (args[0] === '-v' || args[0] === '--version') { out(NODE_VERSION); return 0; }
       if (args[0] === '-e' || args[0] === '-p') {

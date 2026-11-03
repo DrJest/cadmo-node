@@ -25,7 +25,8 @@ const parseArgs = (s) => (s ? s.match(/"[^"]*"|'[^']*'|\S+/g).map((x) => x.repla
       for (const t of lab.tests) {
         const argv = Array.isArray(t.argv) ? t.argv : t.argv ? parseArgs(t.argv) : [];
         const fsInit = t.replaceFs ? t.fs || {} : Object.assign({}, lab.fs || {}, t.fs || {});
-        const r = await runLab(files, { entry, argv, fs: fsInit, env: lab.env || {}, packages: lab.packages || [] }, fnSource(t.check));
+        const env = Object.assign({}, lab.env || {}, t.env || {});
+        const r = await runLab(files, { entry, argv, fs: fsInit, env, packages: lab.packages || [], nodeOptions: parseArgs(lab.node || ''), wait: t.wait }, fnSource(t.check));
         if (r.ok) pass++;
         else fails.push(`   ✗ ${t.name}: ${r.message.split('\n').slice(0, 3).join(' | ')}`);
       }

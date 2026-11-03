@@ -1,6 +1,7 @@
 /* ==========================================================================
  * NodeLab Widgets: Quiz, EventLoopViz (passo-passo), OrderGame (indovina l'output),
- * PipelineViz (la richiesta attraverso i middleware di Express), RestGame (progetta l'endpoint REST)
+ * PipelineViz (la richiesta attraverso i middleware di Express), RestGame (progetta l'endpoint REST),
+ * SortGame (classifica: "dove va questo codice?")
  * ========================================================================== */
 (function () {
   'use strict';
@@ -426,6 +427,76 @@
     draw();
   }
 
+  /* ----------------------------------------------------------- SortGame
+   * "Dove va?": per ogni elemento si sceglie la categoria giusta, poi Verifica.
+   * SortGame.mount(el, { categories: [{ id, label, icon, color }], items: [{ text?, code?, answer, explain }] }, { id })
+   */
+  function mountSortGame(el, cfg, opts) {
+    opts = opts || {};
+    const cats = cfg.categories;
+    const items = cfg.items;
+    const picks = new Array(items.length).fill(null);
+    const solvedBefore = !!(opts.id && store.get('sort:' + opts.id));
+    let checked = false;
+    const cat = (id) => cats.find((c) => c.id === id) || {};
+    el.innerHTML = `<div class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6 space-y-4">
+      <div class="flex flex-wrap items-center gap-2 text-sm">${cats.map((c) => `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-${c.color}-500/40 bg-${c.color}-500/10 text-${c.color}-300">${c.icon ? `<i data-lucide="${c.icon}" class="w-3.5 h-3.5"></i>` : ''}${inline(c.label)}</span>`).join('')}
+        <span class="sg-score ml-auto text-xs font-mono"></span></div>
+      <div class="sg-list space-y-2"></div>
+      <div class="flex flex-wrap gap-2 items-center">
+        <button class="sg-check px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium">Verifica</button>
+        <button class="sg-reset px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm">Ricomincia</button>
+        <span class="sg-fb text-sm"></span>
+      </div></div>`;
+    const $ = (s) => el.querySelector(s);
+    function draw() {
+      $('.sg-list').innerHTML = items.map((it, i) => {
+        const p = picks[i];
+        const ok = checked && p === it.answer;
+        const ko = checked && p !== null && p !== it.answer;
+        const border = ok ? 'border-green-500/60 bg-green-500/5' : ko ? 'border-red-500/60 bg-red-500/5' : 'border-gray-700 bg-gray-900/60';
+        const btns = cats.map((c) => {
+          const on = p === c.id;
+          const cls = on ? `border-${c.color}-400 bg-${c.color}-500/20 text-white` : 'border-gray-700 bg-gray-950 text-gray-400 hover:text-white hover:border-gray-500';
+          return `<button data-i="${i}" data-c="${esc(c.id)}" class="text-xs px-2 py-1 rounded-md border whitespace-nowrap ${cls}">${inline(c.short || c.label)}</button>`;
+        }).join('');
+        const right = checked && p !== it.answer ? `<div class="text-xs text-gray-400 mt-2">${p === null ? '' : '✗ '}Risposta: <strong class="text-${cat(it.answer).color}-300">${inline(cat(it.answer).label || '')}</strong>${it.explain ? ' — ' + inline(it.explain) : ''}</div>`
+          : checked && it.explain ? `<div class="text-xs text-green-300/80 mt-2">✓ ${inline(it.explain)}</div>` : '';
+        const body = it.code ? `<pre class="code small !my-0" style="font-size:0.72rem"><code class="language-javascript">${esc(it.code.trim())}</code></pre>` : '';
+        return `<div class="rounded-xl border ${border} p-3">
+          <div class="flex flex-col md:flex-row md:items-center gap-3">
+            <div class="flex-1 min-w-0 text-gray-200">${it.text ? `<div class="${it.code ? 'mb-1.5 text-sm' : ''}">${inline(it.text)}</div>` : ''}${body}</div>
+            <div class="flex flex-wrap gap-1.5 md:justify-end md:max-w-[45%]">${btns}</div>
+          </div>${right}</div>`;
+      }).join('');
+      const n = picks.filter((p, i) => p === items[i].answer).length;
+      $('.sg-score').innerHTML = checked ? `<span class="${n === items.length ? 'text-green-400' : 'text-gray-400'}">${n}/${items.length} giuste</span>` : solvedBefore ? '<span class="text-green-400">✓ già completato</span>' : `<span class="text-gray-500">${picks.filter((p) => p !== null).length}/${items.length} scelti</span>`;
+      highlight($('.sg-list'));
+    }
+    el.onclick = (e) => {
+      const b = e.target.closest('[data-c]');
+      if (!b) return;
+      picks[Number(b.dataset.i)] = b.dataset.c;
+      checked = false;
+      $('.sg-fb').textContent = '';
+      draw();
+    };
+    $('.sg-check').onclick = () => {
+      const missing = picks.filter((p) => p === null).length;
+      if (missing) { $('.sg-fb').innerHTML = `<span class="text-yellow-300">Mancano ancora ${missing} risposte.</span>`; return; }
+      checked = true;
+      const n = picks.filter((p, i) => p === items[i].answer).length;
+      if (n === items.length) {
+        $('.sg-fb').innerHTML = '<span class="text-green-400 font-semibold">✓ Tutto giusto!</span>';
+        if (opts.id) store.set('sort:' + opts.id, true);
+      } else $('.sg-fb').innerHTML = `<span class="text-red-300">${items.length - n} da rivedere: leggi le spiegazioni e correggi.</span>`;
+      draw();
+    };
+    $('.sg-reset').onclick = () => { picks.fill(null); checked = false; $('.sg-fb').textContent = ''; draw(); };
+    draw();
+    icons();
+  }
+
   /* ------------------------------------------------- Soluzioni a scomparsa */
   function toggleSolution(id) { document.getElementById(id).classList.toggle('open'); }
 
@@ -434,6 +505,7 @@
   window.OrderGame = { mount: mountOrderGame };
   window.PipelineViz = { mount: mountPipeline };
   window.RestGame = { mount: mountRestGame };
+  window.SortGame = { mount: mountSortGame };
   window.toggleSolution = toggleSolution;
   window.NodeLabStore = store;
 })();

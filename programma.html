@@ -77,7 +77,7 @@
         <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>gestire progetti e dipendenze con npm e organizzare il codice in moduli;</li>
         <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>conoscere il protocollo HTTP e progettare API REST coerenti, validate e documentate;</li>
         <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>sviluppare applicazioni con Express usando routing, middleware e gestione centralizzata degli errori;</li>
-        <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>persistere i dati su database relazionali (SQL, SQLite, Prisma) e documentali (MongoDB);</li>
+        <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>persistere i dati su database relazionali (SQL, SQLite, TypeORM) e documentali (MongoDB);</li>
         <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>implementare autenticazione e autorizzazione e applicare le principali misure di sicurezza;</li>
         <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>scrivere test automatici e pubblicare un'applicazione in produzione (Docker, cloud).</li>
       </ul>
@@ -175,7 +175,8 @@
             <tr><td class="px-4 py-2 font-mono">3</td><td class="px-4 py-2">3</td><td class="px-4 py-2">Modulo 3 — Il protocollo HTTP e il modulo http <span class="text-xs text-gray-500">(svolta)</span></td></tr>
             <tr><td class="px-4 py-2 font-mono">4</td><td class="px-4 py-2">2</td><td class="px-4 py-2">Modulo 4 — Express: le basi <span class="text-xs text-gray-500">(svolta)</span></td></tr>
             <tr><td class="px-4 py-2 font-mono">5</td><td class="px-4 py-2">6</td><td class="px-4 py-2">Modulo 5 — Middleware, file statici e Router <span class="text-xs text-gray-500">(svolta)</span></td></tr>
-            <tr><td class="px-4 py-2 font-mono">6</td><td class="px-4 py-2">5</td><td class="px-4 py-2">Modulo 6 — API REST e CRUD</td></tr>
+            <tr><td class="px-4 py-2 font-mono">6</td><td class="px-4 py-2">5</td><td class="px-4 py-2">Modulo 6 — API REST e CRUD <span class="text-xs text-gray-500">(svolta)</span></td></tr>
+            <tr><td class="px-4 py-2 font-mono">7</td><td class="px-4 py-2">4</td><td class="px-4 py-2">Modulo 7 — Validazione, errori e configurazione</td></tr>
             <tr><td class="px-4 py-2 font-mono text-gray-500">…</td><td class="px-4 py-2 text-gray-500" colspan="2">Le lezioni successive sono da definire.</td></tr>
           </tbody>
         </table>
@@ -204,14 +205,14 @@
         o: ['servire file statici', 'organizzare le rotte con Router', 'spiegare il flusso dei middleware', 'scrivere middleware personalizzati', 'centralizzare la gestione degli errori'] },
       { n: 6, t: 'API REST e CRUD', h: 5, c: 'Principi REST, risorse e verbi, status code corretti, paginazione, filtri e ordinamento, versionamento, client HTTP (Postman, Bruno, REST Client), CRUD in memoria e su file JSON.',
         o: ['progettare endpoint REST coerenti', 'implementare un CRUD completo', 'testare le API con un client HTTP'] },
-      { n: 7, t: 'Validazione, errori e configurazione', h: 4, c: 'Validazione dell\'input (zod / express-validator), classi di errore, error handler, variabili d\'ambiente (.env, node --env-file), architettura a livelli (routes, controllers, services).',
+      { n: 7, t: 'Validazione, errori e configurazione', h: 4, c: 'Validazione dell\'input (zod / express-validator) di body, query string e params, classi di errore, error handler centralizzato, variabili d\'ambiente (.env, node --env-file, config.js validato all\'avvio), architettura a livelli (routes, controllers, services, repository).',
         o: ['validare i dati in ingresso', 'restituire errori chiari e coerenti', 'separare configurazione e codice', 'strutturare il progetto a livelli'] },
       { n: 8, t: 'Template engine e form', h: 3, c: 'Rendering lato server con EJS, layout e partials, form POST urlencoded, pattern Post/Redirect/Get, file statici.',
         o: ['generare pagine HTML dinamiche', 'gestire l\'invio di form', 'applicare il pattern PRG'] },
       { n: 9, t: 'Database relazionali: SQL e SQLite', h: 7, c: 'Modello relazionale, SQL (CREATE, INSERT, SELECT, JOIN, UPDATE, DELETE), node:sqlite / better-sqlite3, query parametrizzate e SQL injection, repository pattern, migrazioni e seed, cenni a PostgreSQL.',
         o: ['progettare tabelle e relazioni', 'scrivere query SQL, anche con JOIN', 'collegare Express a un database in sicurezza', 'gestire migrazioni e dati di esempio'] },
-      { n: 10, t: 'ORM con Prisma', h: 3, c: 'Schema, migrazioni, Prisma Client, relazioni 1-N e N-N, transazioni.',
-        o: ['descrivere il modello dati con uno schema', 'eseguire query tipizzate con un ORM', 'gestire relazioni e transazioni'] },
+      { n: 10, t: 'ORM con TypeORM', h: 3, c: 'Il pattern Data Mapper, DataSource e connessione a SQLite, entità definite in JavaScript con EntitySchema (senza decoratori né TypeScript), migrazioni, Repository e QueryBuilder, relazioni 1-N e N-N, transazioni.',
+        o: ['descrivere il modello dati con le entità di un ORM', 'eseguire query con Repository e QueryBuilder', 'gestire relazioni, migrazioni e transazioni'] },
       { n: 11, t: 'MongoDB e Mongoose', h: 6, c: 'Database NoSQL documentali, MongoDB Atlas e Compass, CRUD, schemi e validazione con Mongoose, relazioni e populate, aggregazioni di base.',
         o: ['confrontare modello relazionale e documentale', 'modellare dati con Mongoose', 'eseguire query e aggregazioni di base'] },
       { n: 12, t: 'Autenticazione e autorizzazione', h: 7, c: 'Hashing delle password (bcrypt/argon2), sessioni e cookie, JWT (access e refresh token), middleware di protezione, ruoli e permessi, registrazione, login e logout.',

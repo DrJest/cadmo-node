@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 7 · Validazione, errori e configurazione — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="bg-gray-900">
+
+  <!-- ===================== Esempi di codice (testo puro, niente escape) ===================== -->
+  <script type="text/plain" id="c-fiducia">
+POST /api/libri
+
+{ "titolo": "Dune", "autore": "Frank Herbert" }            ✅ quello che ci aspettiamo
+
+{ "titolo": "   ", "autore": "Frank Herbert" }             solo spazi
+{ "titolo": 42, "anno": "millenovecento" }                 tipi sbagliati
+{ "titolo": "Dune", "autore": "F. H.", "admin": true }     campi in più
+{ "titolo": "Dune", "autore": "F. H.", "id": 1 }           l'id lo decide il server!
+[ "Dune" ]     "Dune"     null     (nessun body)           non è un oggetto
+{ "titolo": "AAAAAAAA… un milione di caratteri" }          enorme
+{ titolo: "Dune" }                                         non è nemmeno JSON
+</script>
+  <script type="text/plain" id="c-mano">
+function validaLibro(body) {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return ['il body deve essere un oggetto'];
+  }
+  const errori = [];
+  if (typeof body.titolo !== 'string' || body.titolo.trim() === '') errori.push('titolo obbligatorio');
+  else if (body.titolo.length > 200) errori.push('titolo troppo lungo');
+  if (typeof body.autore !== 'string' || body.autore.trim() === '') errori.push('autore obbligatorio');
+  if (body.anno !== undefined && (!Number.isInteger(body.anno) || body.anno < 1450 || body.anno > 2100)) {
+    errori.push('anno non valido');
+  }
+  if (body.genere !== undefined && !['romanzo', 'giallo', 'poesia'].includes(body.genere)) {
+    errori.push('genere non valido');
+  }
+  if (body.disponibile !== undefined && typeof body.disponibile !== 'boolean') {
+    errori.push('disponibile deve essere true o false');
+  }
+  return errori;
+  // …e poi bisogna ancora togliere gli spazi, scartare i campi in più, mettere i predefiniti…
+}
+</script>
+  <script type="text/plain" id="c-zod">
+// npm install zod
+const { z } = require('zod');
+
+const libroSchema = z.object({
+  titolo: z.string().trim().min(1).max(200),
+  autore: z.string().trim().min(1).max(200),
+  anno: z.int().min(1450).max(2100).optional(),
+  genere: z.enum(['romanzo', 'giallo', 'poesia']).optional(),
+  disponibile: z.boolean().default(true),
+});
+
+const libro = libroSchema.parse({ titolo: '  Dune ', autore: 'Frank Herbert', admin: true });
+console.log(libro);
+</script>
+  <script type="text/plain" id="c-zod-out">
+{ titolo: 'Dune', autore: 'Frank Herbert', disponibile: true }
+</script>
+  <script type="text/plain" id="c-parse">
+// parse: restituisce i dati puliti, oppure LANCIA uno ZodError
+try {
+  libroSchema.parse({ titolo: '', anno: '1965' });
+} catch (err) {
+  console.log(err instanceof z.ZodError);
+}
+
+// safeParse: non lancia mai; restituisce un risultato da controllare
+const r = libroSchema.safeParse({ titolo: '', anno: '1965' });
+if (r.success) {
+  console.log(r.data);              // i dati puliti
+} else {
+  console.log(r.error.issues);      // TUTTI i problemi, non solo il primo
+}
+</script>
+  <script type="text/plain" id="c-parse-out">
+true
+[
+  {
+    origin: 'string',
+    code: 'too_small',
+    minimum: 1,
+    inclusive: true,
+    path: [ 'titolo' ],
+    message: 'Too small: expected string to have >=1 characters'
+  },
+  {
+    expected: 'string',
+    code: 'invalid_type',
+    path: [ 'autore' ],
+    message: 'Invalid input: expected string, received undefined'
+  },
+  {
+    expected: 'number',
+    code: 'invalid_type',
+    path: [ 'anno' ],
+    message: 'Invalid input: expected number, received string'
+  }
+]
+</script>
+  <script type="text/plain" id="c-issues">
+const r = libroSchema.safeParse({ titolo: '', anno: '1965' });
+
+// 1. un elenco di messaggi per ogni campo (comodo per un form)
+z.flattenError(r.error).fieldErrors;
+// { titolo: [ 'Too small: …' ], autore: [ 'Invalid input: …' ], anno: [ … ] }
+
+// 2. un testo leggibile, per il terminale o il log
+console.log(z.prettifyError(r.error));
+
+// 3. il formato della nostra API: { errore, dettagli: [{ campo, messaggio }] }
+const dettagli = r.error.issues.map((i) => ({
+  campo: i.path.join('.'),            // [ 'autore', 'nome' ] → 'autore.nome'
+  messaggio: i.message,
+}));
+res.status(400).json({ errore: 'Dati non validi', dettagli });
+</script>
+  <script type="text/plain" id="c-issues-out">
+✖ Too small: expected string to have >=1 characters
+  → at titolo
+✖ Invalid input: expected string, received undefined
+  → at autore
+✖ Invalid input: expected number, received string
+  → at anno
+</script>
+  <script type="text/plain" id="c-messaggi">
+// 1. per una regola: il messaggio come argomento
+z.string().trim().min(1, 'Il titolo non può essere vuoto');
+
+// 2. per il tipo (campo mancante o sbagliato): nel costruttore
+z.string({ error: 'Il titolo è obbligatorio' });
+z.int('anno deve essere un numero intero');             // forma breve
+
+// 3. una funzione: messaggi diversi a seconda del problema
+z.string({
+  error: (iss) => (iss.input === undefined ? 'Campo obbligatorio' : 'Deve essere un testo'),
+});
+
+// 4. una volta per tutta l'applicazione (prima di creare gli schemi)
+z.config({
+  customError: (iss) => {
+    if (iss.code === 'invalid_type' && iss.input === undefined) return 'Campo obbligatorio';
+    if (iss.code === 'too_small' && iss.origin === 'string') return `Almeno ${iss.minimum} caratteri`;
+    // undefined → il messaggio standard
+  },
+});
+// sul vostro PC ci sono anche le traduzioni già pronte: z.config(z.locales.it())
+</script>
+  <script type="text/plain" id="c-strip">
+z.object({ titolo: z.string() })
+  .parse({ titolo: 'Dune', admin: true });
+
+// { titolo: 'Dune' }
+// admin sparisce in silenzio
+</script>
+  <script type="text/plain" id="c-strict">
+z.strictObject({ titolo: z.string() })
+  .parse({ titolo: 'Dune', titlo: 'x' });
+
+// ZodError:
+// Unrecognized key: "titlo"
+</script>
+  <script type="text/plain" id="c-loose">
+z.looseObject({ titolo: z.string() })
+  .parse({ titolo: 'Dune', admin: true });
+
+// { titolo: 'Dune', admin: true }
+// ⚠️ passa tutto
+</script>
+  <script type="text/plain" id="c-varianti">
+// lo schema "base": i campi che il client può scrivere, SENZA .default()
+const libro = z.strictObject({
+  titolo: z.string().trim().min(1),
+  autore: z.string().trim().min(1),
+  anno: z.int().min(1450).max(2100).nullable().optional(),
+  disponibile: z.boolean().optional(),
+});
+
+const creaLibro = libro;                                   // POST e PUT
+const modificaLibro = libro.partial();                     // PATCH: tutto facoltativo
+const soloTitolo = libro.pick({ titolo: true });           // solo alcuni campi
+const senzaAnno = libro.omit({ anno: true });              // tutti tranne alcuni
+const conIsbn = libro.extend({ isbn: z.string().length(13) });
+
+// ⚠️ zod 4 applica i .default() anche dentro .partial():
+//    con disponibile: z.boolean().default(true), il PATCH { "anno": 1990 }
+//    rimetterebbe disponibile a true! I valori predefiniti si danno alla CREAZIONE.
+</script>
+  <script type="text/plain" id="c-refine">
+// una regola su più campi: refine sull'oggetto intero
+const periodo = z.object({
+  annoDa: z.coerce.number().int().optional(),
+  annoA: z.coerce.number().int().optional(),
+}).refine((q) => q.annoDa === undefined || q.annoA === undefined || q.annoDa <= q.annoA, {
+  error: 'annoDa deve essere minore o uguale ad annoA',
+  path: ['annoDa'],                      // il campo a cui "appartiene" l'errore
+});
+
+// PATCH: tutto facoltativo, ma almeno un campo
+const modificaLibro = libro.partial()
+  .refine((dati) => Object.keys(dati).length > 0, 'Nessun campo da modificare');
+
+// transform + pipe: trasformare e poi validare di nuovo
+const isbn = z.string()
+  .transform((s) => s.replaceAll('-', ''))
+  .pipe(z.string().length(13));
+
+isbn.parse('978-88-06-21945-6');        // '9788806219456'
+</script>
+  <script type="text/plain" id="c-query">
+// GET /api/libri?pagina=2&limite=abc&disponibile=false
+// req.query → { pagina: '2', limite: 'abc', disponibile: 'false' }   tutto STRINGA
+
+const filtri = z.object({
+  pagina: z.coerce.number().int().min(1).default(1),        // '2' → 2
+  limite: z.coerce.number().int().min(1).max(50).default(10),
+  disponibile: z.stringbool().optional(),                    // 'false' → false
+  ordina: z.enum(['titolo', 'anno', '-anno']).optional(),
+});
+
+// anche i params: GET /api/libri/abc
+const idParam = z.object({ id: z.coerce.number().int().positive() });
+
+// ⚠️ z.coerce.boolean() usa Boolean(), e Boolean('false') === true
+z.coerce.boolean().parse('false');     // true   😱
+z.stringbool().parse('false');         // false  ✅  (anche '1'/'0', 'yes'/'no', 'on'/'off'…)
+</script>
+  <script type="text/plain" id="c-query-out">
+> filtri.parse({ pagina: '2', disponibile: 'false' })
+{ pagina: 2, limite: 10, disponibile: false }
+
+> console.log(z.prettifyError(filtri.safeParse({ pagina: '2', limite: 'abc' }).error))
+✖ Invalid input: expected number, received NaN
+  → at limite
+</script>
+  <script type="text/plain" id="c-valida">
+// middleware/valida.js — una fabbrica di middleware (come richiedeChiave nel modulo 5)
+function valida(schemi) {
+  return (req, res, next) => {
+    req.valido = {};
+    for (const parte of ['params', 'query', 'body']) {
+      if (!schemi[parte]) continue;
+      const r = schemi[parte].safeParse(req[parte] ?? {});
+      if (!r.success) {
+        return res.status(400).json({
+          errore: 'Dati non validi',
+          dettagli: r.error.issues.map((i) => ({
+            campo: i.path.length ? i.path.join('.') : parte,
+            messaggio: i.message,
+          })),
+        });
+      }
+      req.valido[parte] = r.data;     // ⚠️ req.query = r.data NON funziona in Express 5
+    }
+    next();
+  };
+}
+</script>
+  <script type="text/plain" id="c-prima">
+router.post('/', (req, res) => {
+  const dati = scegliCampi(req.body);
+  if (!dati.titolo || !dati.autore) {
+    return res.status(400).json({ errore: '…' });
+  }
+  if (dati.anno != null && !Number.isInteger(dati.anno)) {
+    return res.status(400).json({ errore: '…' });
+  }
+  // … e altri if …
+  const libro = repo.crea(dati);
+  res.status(201).json(libro);
+});
+</script>
+  <script type="text/plain" id="c-dopo">
+router.get('/', valida({ query: filtri }), elenco);
+router.post('/', valida({ body: creaLibro }), crea);
+router.get('/:id', valida({ params: idParam }), dettaglio);
+router.patch('/:id',
+  valida({ params: idParam, body: modificaLibro }), modifica);
+
+async function crea(req, res) {
+  const libro = await repo.crea(req.valido.body);  // già puliti
+  res.status(201).json(libro);
+}
+</script>
+  <script type="text/plain" id="c-expval">
+// npm install express-validator
+const { body, validationResult, matchedData } = require('express-validator');
+
+router.post('/',
+  body('titolo').isString().trim().notEmpty().withMessage('Il titolo è obbligatorio'),
+  body('anno').optional().isInt({ min: 1450, max: 2100 }).toInt(),
+  (req, res) => {
+    const errori = validationResult(req);
+    if (!errori.isEmpty()) return res.status(400).json({ dettagli: errori.array() });
+    const dati = matchedData(req);      // solo i campi validati
+    // …
+  });
+</script>
+  <script type="text/plain" id="c-zodcmp">
+// lo stesso schema, ovunque serva
+const r = creaLibro.safeParse(req.body);           // un body
+const config = configSchema.parse(process.env);    // la configurazione
+const meteo = meteoSchema.parse(await risposta.json());   // un'API esterna
+const libri = z.array(creaLibro).parse(JSON.parse(testo)); // un file
+</script>
+  <script type="text/plain" id="c-classi">
+// errori.js
+class ErroreApi extends Error {
+  constructor(status, messaggio, dettagli) {
+    super(messaggio);                    // message (e lo stack)
+    this.name = this.constructor.name;   // 'NonTrovato', 'Conflitto'…
+    this.status = status;
+    this.dettagli = dettagli;
+  }
+}
+class RichiestaNonValida extends ErroreApi {
+  constructor(messaggio = 'Dati non validi', dettagli) { super(400, messaggio, dettagli); }
+}
+class NonAutorizzato extends ErroreApi {
+  constructor(messaggio = 'Chiave API mancante o non valida') { super(401, messaggio); }
+}
+class NonTrovato extends ErroreApi {
+  constructor(messaggio = 'Risorsa non trovata') { super(404, messaggio); }
+}
+class Conflitto extends ErroreApi {
+  constructor(messaggio) { super(409, messaggio); }
+}
+
+const e = new NonTrovato('Il libro 7 non esiste');
+console.log(e instanceof NonTrovato, e instanceof ErroreApi, e instanceof Error);
+console.log(e.name, e.status, e.message);
+</script>
+  <script type="text/plain" id="c-classi-out">
+true true true
+NonTrovato 404 Il libro 7 non esiste
+</script>
+  <script type="text/plain" id="c-lancia">
+// ❌ prima: ogni rotta sceglie lo status… e deve avere res a portata di mano
+router.get('/:id', async (req, res) => {
+  const libro = await repo.trova(Number(req.params.id));
+  if (!libro) return res.status(404).json({ errore: 'Libro non trovato' });
+  res.json(libro);
+});
+
+// ✅ ora: chi scopre il problema LANCIA un errore che sa già come rispondere
+async function leggi(id) {
+  const libro = await repo.trova(id);
+  if (!libro) throw new NonTrovato(`Il libro ${id} non esiste`);
+  return libro;
+}
+
+router.get('/:id', valida({ params: idParam }), async (req, res) => {
+  res.json(await leggi(req.valido.params.id));    // se lancia: Express 5 → next(err)
+});
+
+// e anche valida() lancia, invece di rispondere da solo:
+if (!r.success) throw new RichiestaNonValida('Dati non validi', dettagli);
+</script>
+  <script type="text/plain" id="c-gestore">
+// middleware/errori.js — l'UNICO posto che trasforma un errore in una risposta
+function nonTrovato(req, res, next) {
+  next(new NonTrovato(`Rotta non trovata: ${req.method} ${req.originalUrl}`));
+}
+
+// 4 parametri: obbligatori, anche se next non si usa!
+function gestoreErrori(err, req, res, next) {
+  // risposta già partita: non si può più cambiare, ci pensa Express
+  if (res.headersSent) return next(err);
+
+  // 1. errori previsti: il loro status, il loro messaggio
+  if (err instanceof ErroreApi) {
+    const corpo = { errore: err.message };
+    if (err.dettagli) corpo.dettagli = err.dettagli;
+    return res.status(err.status).json(corpo);
+  }
+  // 2. JSON rotto (da express.json)
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ errore: 'JSON non valido' });
+  }
+  // 3. un bug: tutto nel log con un id, al client niente dettagli
+  const id = crypto.randomUUID().slice(0, 8);
+  console.error(`💥 [${id}] ${req.method} ${req.originalUrl}`, err);
+  res.status(500).json({ errore: 'Errore interno del server', id });
+}
+
+// app.js, in fondo a tutto:
+// app.use(nonTrovato);
+// app.use(gestoreErrori);
+</script>
+  <script type="text/plain" id="c-gestore-out">
+$ curl localhost:3000/api/v1/libri/99
+{"errore":"Il libro 99 non esiste"}
+
+$ curl localhost:3000/api/v1/debug/bug
+{"errore":"Errore interno del server","id":"3f9a1c2e"}
+
+# intanto, nel terminale del server:
+💥 [3f9a1c2e] GET /api/v1/debug/bug TypeError: Cannot read properties of undefined (reading 'titolo')
+    at /progetto/app.js:21:30
+</script>
+  <script type="text/plain" id="c-processo">
+// errori FUORI da una richiesta: nessun gestore di Express li vede
+setTimeout(() => JSON.parse('{ rotto'), 1000);            // 💥 uncaughtException
+fetch('http://localhost:9999').then((r) => r.json());     // 💥 unhandledRejection
+
+// l'ultima rete di sicurezza: registrare l'errore e USCIRE
+process.on('uncaughtException', (err) => {
+  console.error('💥 Errore non gestito:', err);
+  process.exit(1);                     // lo stato del programma ora è sconosciuto
+});
+process.on('unhandledRejection', (motivo) => {
+  console.error('💥 Promise rifiutata e non gestita:', motivo);
+  process.exit(1);
+});
+// …poi qualcuno lo riavvia: node --watch in sviluppo, PM2 o Docker in produzione (modulo 17)
+</script>
+  <script type="text/plain" id="c-env">
+// $ PORT=4000 DEBUG=false MAX=3 node server.js
+console.log(process.env.PORT);                  // '4000'    ← una STRINGA
+console.log(process.env.NON_ESISTE);            // undefined
+console.log(process.env.PORT + 1);              // '40001'   😬
+console.log(Number(process.env.MAX) + 1);       // 4
+
+if (process.env.DEBUG) console.log('debug!');   // stampa: 'false' è una stringa "vera"!
+const debug = process.env.DEBUG === 'true';     // ✅
+
+// Windows (PowerShell):  $env:PORT=4000; node server.js
+</script>
+  <script type="text/plain" id="c-dotenv">
+# .env — la configurazione di QUESTO computer
+PORT=3000
+NODE_ENV=development
+# con gli spazi servono le virgolette
+BIBLIOTECA_NOME="Biblioteca CADMO"
+API_KEY=cadmo-chiave-segreta-2026
+LIMITE_MASSIMO=20
+</script>
+  <script type="text/plain" id="c-dotenv-example">
+# .env.example — VA su Git
+# l'elenco delle variabili, senza segreti
+PORT=3000
+NODE_ENV=development
+BIBLIOTECA_NOME="Biblioteca CADMO"
+API_KEY=
+LIMITE_MASSIMO=20
+</script>
+  <script type="text/plain" id="c-gitignore">
+# .gitignore
+node_modules/
+.env
+.env.*
+!.env.example
+</script>
+  <script type="text/plain" id="c-carica-node">
+node --env-file=.env server.js
+
+# se il file manca: avviso, ma si parte
+node --env-file-if-exists=.env server.js
+
+# più file: i successivi vincono
+node --env-file=.env --env-file=.env.locale server.js
+</script>
+  <script type="text/plain" id="c-carica-load">
+// dal codice, prima di usare process.env
+process.loadEnvFile();          // ./.env
+process.loadEnvFile('.env.test');
+
+// solo leggere, senza toccare process.env
+const { parseEnv } = require('util');
+parseEnv('PORT=3000\nNOME=Bib');
+</script>
+  <script type="text/plain" id="c-carica-dotenv">
+// npm install dotenv
+require('dotenv').config();
+
+// v18: stampa su stderr
+// ◇ injected env (5) from .env
+require('dotenv').config({ quiet: true });
+</script>
+  <script type="text/plain" id="c-config">
+// config.js — l'UNICO file che legge process.env
+const { z } = require('zod');
+
+const schema = z.object({
+  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  BIBLIOTECA_NOME: z.string().min(1).default('Biblioteca'),
+  API_KEY: z.string().min(16, 'API_KEY deve avere almeno 16 caratteri'),
+  LIMITE_MASSIMO: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+const risultato = schema.safeParse(process.env);
+if (!risultato.success) {
+  console.error('❌ Configurazione non valida:\n' + z.prettifyError(risultato.error));
+  process.exit(1);                         // fail fast: meglio non partire che partire male
+}
+
+module.exports = Object.freeze(risultato.data);
+</script>
+  <script type="text/plain" id="c-config-out">
+$ PORT=tremila API_KEY=corta node --env-file=.env server.js
+❌ Configurazione non valida:
+✖ Invalid input: expected number, received NaN
+  → at PORT
+✖ API_KEY deve avere almeno 16 caratteri
+  → at API_KEY
+
+$ echo $?
+1
+</script>
+  <script type="text/plain" id="c-config-uso">
+// ovunque serva: un require, niente process.env sparsi nel codice
+const config = require('./config');
+
+app.listen(config.PORT, () => console.log(`In ascolto sulla ${config.PORT}`));
+
+if (config.NODE_ENV === 'development') {
+  app.get('/api/v1/debug/bug', …);       // solo sul vostro PC
+}
+
+config.PORT = 80;                         // ignorato: l'oggetto è congelato
+
+// package.json
+"scripts": {
+  "dev": "node --watch --env-file-if-exists=.env server.js",
+  "start": "node server.js"               // in produzione le variabili le dà la piattaforma
+}
+</script>
+  <script type="text/plain" id="c-albero">
+biblioteca/
+├── server.js             avvia (app.listen)
+├── app.js                compone: middleware, rotte, 404, errori
+├── config.js             legge e valida process.env
+├── errori.js             ErroreApi, NonTrovato, Conflitto…
+├── .env  .env.example  .gitignore
+├── schemi/
+│   └── libro.js          zod: la forma dei dati
+├── middleware/
+│   ├── valida.js         valida({ params, query, body })
+│   ├── chiave.js         richiedeChiave
+│   └── errori.js         nonTrovato, gestoreErrori
+├── routes/
+│   └── libri.js          URL + middleware → controller
+├── controllers/
+│   └── libriController.js     HTTP
+├── services/
+│   └── libriService.js        le regole
+├── repositories/
+│   └── libriRepo.js           i dati
+└── data/libri.json
+</script>
+  <script type="text/plain" id="c-rotte">
+// routes/libri.js — solo collegamenti
+router.get('/', valida({ query: filtri }), ctrl.elenco);
+router.post('/', richiedeChiave, valida({ body: creaLibro }), ctrl.crea);
+router.get('/:id', valida({ params: idParam }), ctrl.dettaglio);
+router.post('/:id/prestito', richiedeChiave, valida({ params: idParam }), ctrl.presta);
+
+// controllers/libriController.js — parla HTTP
+async function crea(req, res) {
+  const libro = await service.crea(req.valido.body);
+  res.status(201).location(`${req.baseUrl}/${libro.id}`).json(libro);
+}
+
+async function presta(req, res) {
+  res.json(await service.presta(req.valido.params.id));
+}
+</script>
+  <script type="text/plain" id="c-service">
+// services/libriService.js — le regole: niente req, niente res, niente status
+const repo = require('../repositories/libriRepo');
+const { NonTrovato, Conflitto } = require('../errori');
+
+async function leggi(id) {
+  const libro = await repo.trova(id);
+  if (!libro) throw new NonTrovato(`Il libro ${id} non esiste`);
+  return libro;
+}
+
+async function crea(dati) {
+  const libri = await repo.tutti();
+  if (libri.some((l) => stesso(l.titolo, dati.titolo) && stesso(l.autore, dati.autore))) {
+    throw new Conflitto('Questo libro è già in catalogo');
+  }
+  return repo.crea({ anno: null, genere: null, disponibile: true, ...dati });
+}
+
+async function presta(id) {
+  const libro = await leggi(id);
+  if (!libro.disponibile) throw new Conflitto(`"${libro.titolo}" è già in prestito`);
+  return repo.aggiorna(id, { ...libro, disponibile: false });
+}
+</script>
+  <script type="text/plain" id="c-tipo">
+src/
+├── routes/
+│   ├── libri.js
+│   └── prestiti.js
+├── controllers/
+│   ├── libriController.js
+│   └── prestitiController.js
+├── services/
+│   ├── libriService.js
+│   └── prestitiService.js
+└── repositories/
+    ├── libriRepo.js
+    └── prestitiRepo.js
+</script>
+  <script type="text/plain" id="c-feature">
+src/
+├── libri/
+│   ├── libri.routes.js
+│   ├── libri.controller.js
+│   ├── libri.service.js
+│   ├── libri.repo.js
+│   └── libri.schemi.js
+└── prestiti/
+    ├── prestiti.routes.js
+    ├── prestiti.controller.js
+    ├── prestiti.service.js
+    └── …
+</script>
+
+  <!-- ===================== Motori ===================== -->
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m7-biblioteca.js"></script>
+  <script>
+    // nei blocchi text/plain il tag di chiusura degli script è scritto con la barra "escapata"
+    const C = (id) => document.getElementById(id).textContent.replace(/^\n/, '').replace(/<\\\/script>/g, '<\/script>');
+
+    const code = (s) => `<code class="inline">${s}</code>`;
+    const TABLE = (head, rows) => `<div class="overflow-x-auto rounded-xl border border-gray-700"><table class="w-full text-left text-sm md:text-base">
+      <thead class="bg-gray-800 text-gray-300"><tr>${head.map((h) => `<th class="px-4 py-2 font-semibold">${h}</th>`).join('')}</tr></thead>
+      <tbody class="divide-y divide-gray-800 text-gray-200">${rows.map((r) => `<tr class="bg-gray-900/60">${r.map((c) => `<td class="px-4 py-2">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    const NOTE = (items) => `<ul class="slide-items space-y-3 text-base md:text-xl text-gray-300 mt-6">${items.map((t) => `<li class="flex"><span class="text-green-500 mr-4 font-mono">$</span><span>${t}</span></li>`).join('')}</ul>`;
+
+    const MATTONCINI_HTML = TABLE(['Schema', 'Accetta', 'Metodi utili'], [
+      [code('z.string()'), 'un testo', `${code('.trim()')} ${code('.min(n)')} ${code('.max(n)')} ${code('.regex(/…/)')} ${code('.toLowerCase()')}`],
+      [`${code('z.number()')} · ${code('z.int()')}`, 'un numero (finito) · un intero', `${code('.min(n)')} ${code('.max(n)')} ${code('.positive()')}`],
+      [code('z.boolean()'), '<code class="inline">true</code> o <code class="inline">false</code> (non "true"!)', ''],
+      [code("z.enum(['a', 'b'])"), 'uno dei valori dell\'elenco', code('.options')],
+      [code('z.array(schema)'), 'un array di elementi validi', `${code('.min(1)')} ${code('.max(n)')}`],
+      [code('z.object({ … })'), 'un oggetto con quei campi', `${code('.partial()')} ${code('.pick()')} ${code('.omit()')} ${code('.extend()')}`],
+      [`${code('z.email()')} · ${code('z.url()')} · ${code('z.uuid()')}`, 'testi con un formato preciso', ''],
+      ['<span class="text-gray-400">su qualunque schema</span>', '', `${code('.optional()')} può mancare · ${code('.nullable()')} può essere ${code('null')} · ${code('.default(v)')} se manca vale v`],
+    ]) + NOTE([
+      'I metodi si **concatenano** e si applicano **in ordine**: `z.string().trim().min(1)` toglie gli spazi e poi controlla.',
+      'Gli schemi sono **immutabili**: ogni metodo restituisce uno schema nuovo, quindi si possono riusare e combinare.',
+    ].map((t) => t.replace(/`([^`]+)`/g, '<code class="inline">$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')));
+
+    const LIVELLO = (color, icon, cartella, titolo, fa, nonfa) => `
+      <div class="flex-1 rounded-xl border border-${color}-500/40 bg-${color}-500/10 px-4 py-3">
+        <div class="flex items-center gap-2 mb-1"><i data-lucide="${icon}" class="w-5 h-5 text-${color}-400"></i><span class="font-mono text-sm text-${color}-300">${cartella}</span><span class="text-white font-bold ml-1">${titolo}</span></div>
+        <div class="text-sm text-gray-300">${fa}</div>
+        <div class="text-xs text-gray-500 mt-1">✗ ${nonfa}</div>
+      </div>`;
+    const FRECCIA = '<div class="flex justify-center text-gray-600"><i data-lucide="arrow-down" class="w-5 h-5"></i></div>';
+    const LIVELLI_HTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+      <div class="lg:col-span-8 flex flex-col gap-1">
+        <div class="text-center font-mono text-sm text-gray-400 border border-dashed border-gray-600 rounded-lg py-1.5">📨 POST /api/v1/libri/3/prestito</div>
+        ${FRECCIA}
+        ${LIVELLO('blue', 'signpost', 'routes/', 'Rotte', 'Quale URL e quali middleware: <code class="inline">valida()</code>, <code class="inline">richiedeChiave</code> → il controller giusto.', 'nessuna logica, nessuna risposta')}
+        ${FRECCIA}
+        ${LIVELLO('cyan', 'radio-tower', 'controllers/', 'Controller', 'Parla <strong>HTTP</strong>: prende <code class="inline">req.valido</code>, chiama il service, sceglie status, header e JSON.', 'nessuna regola della biblioteca')}
+        ${FRECCIA}
+        ${LIVELLO('yellow', 'brain', 'services/', 'Service', 'Le <strong>regole</strong>: "un libro in prestito non si presta", "niente doppioni". Lancia <code class="inline">NonTrovato</code>, <code class="inline">Conflitto</code>.', 'non conosce req, res, status: funziona anche da uno script')}
+        ${FRECCIA}
+        ${LIVELLO('emerald', 'database', 'repositories/', 'Repository', 'I <strong>dati</strong>: leggere e scrivere <code class="inline">data/libri.json</code> (nel modulo 9, SQLite).', 'nessuna regola: solo "trova", "crea", "aggiorna"')}
+      </div>
+      <div class="lg:col-span-4 flex flex-col gap-3">
+        <div class="rounded-xl border border-red-500/40 bg-red-500/10 p-4 flex-1">
+          <div class="flex items-center gap-2 mb-2"><i data-lucide="arrow-up" class="w-5 h-5 text-red-400"></i><span class="font-bold text-red-300">Gli errori risalgono</span></div>
+          <p class="text-sm text-gray-300">Da qualunque livello, un <code class="inline">throw</code> salta tutto il resto e arriva a <code class="inline">middleware/errori.js</code>, l'unico che sceglie la risposta.</p>
+        </div>
+        <div class="rounded-xl border border-gray-600 bg-gray-900/60 p-4 flex-1">
+          <div class="flex items-center gap-2 mb-2"><i data-lucide="settings" class="w-5 h-5 text-gray-300"></i><span class="font-bold text-gray-200">Di contorno</span></div>
+          <p class="text-sm text-gray-300"><code class="inline">config.js</code> (tutti), <code class="inline">schemi/</code> (rotte), <code class="inline">errori.js</code> (tutti). Ogni livello usa <strong>solo quello sotto</strong>.</p>
+        </div>
+      </div></div>`;
+
+    window.DECK = {
+      module: 'MODULO 7',
+      title: 'Validazione, errori e configurazione',
+      prompt: 'modulo-7',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover', icon: 'shield-check',
+          title: 'Validazione, errori e configurazione',
+          subtitle: 'Un\'API che **non si fida** del client, risponde con errori chiari, si configura senza toccare il codice ed è divisa in **livelli**.',
+          meta: ['4 ore', 'Modulo 7'],
+        },
+        {
+          type: 'agenda', part: 'PROGRAMMA', title: 'Agenda', icon: 'list-checks',
+          rows: [
+            ['Non fidarti del client: perché validare', 'teoria'],
+            ['zod: schemi, tipi, errori e messaggi', 'teoria'],
+            ['Simulazione: prova lo schema', 'demo'],
+            ['Query string, params e il middleware `valida()`', 'teoria'],
+            ['Pausa', 'pausa'],
+            ['Errori previsti e bug, classi di errore, il gestore centrale', 'teoria'],
+            ['Simulazione: il viaggio di un errore', 'demo'],
+            ['Configurazione: `process.env`, `.env`, `--env-file`, `config.js`', 'teoria'],
+            ['Architettura a livelli: rotte, controller, service, repository', 'teoria'],
+            ['Biblioteca 4.0 + 8 laboratori', 'lab'],
+            ['Quiz', 'quiz'],
+          ],
+        },
+        {
+          part: 'RIPASSO', title: 'Dove eravamo rimasti', icon: 'rewind', iconColor: 'text-gray-400',
+          items: [
+            'La Biblioteca 3.0: un CRUD REST con filtri, pagine, versioni e il catalogo su file JSON dietro un **repository**.',
+            'I dati in ingresso si controllano con `scegliCampi` e una serie di `if`; gli errori nascono con `creaErrore(status, messaggio)`.',
+            'La porta (`3000`) e la chiave API sono **scritte nel codice**; le rotte fanno un po\' di tutto.',
+            'Oggi: **zod** al posto degli `if`, **classi di errore** al posto di `creaErrore`, il file **.env** al posto dei valori nel codice, e il progetto diviso in **livelli**.',
+          ],
+        },
+
+        /* ------------------------------------------------ VALIDAZIONE */
+        {
+          type: 'code', part: 'VALIDAZIONE', title: 'Non fidarti mai del client', icon: 'shield-alert', iconColor: 'text-red-400',
+          items: [
+            'Il controllo nel frontend è una **cortesia** per l\'utente: curl, Postman o uno script lo saltano in un secondo.',
+            'Il server riceve **qualunque cosa**: tipi sbagliati, campi vuoti o in più, valori enormi, nemmeno un oggetto.',
+            'Senza controlli: dati sporchi nel catalogo, `TypeError` (500) e falle di sicurezza (il client sceglie l\'`id`, o `"admin": true`).',
+            'Regola: **validare tutto ciò che entra**, cioè body, query string, params, header… e anche la configurazione.',
+          ],
+          code: C('c-fiducia'), lang: 'plaintext',
+        },
+        {
+          type: 'code', part: 'VALIDAZIONE', title: 'Validare "a mano": la scala di `if`', icon: 'list-ordered', iconColor: 'text-red-400',
+          items: [
+            'Lunga e ripetitiva: per PUT e PATCH andrebbe riscritta (quasi uguale).',
+            'Facile dimenticare un caso, ed è difficile vedere a colpo d\'occhio **com\'è fatto** un libro valido.',
+            'Controlla soltanto: non toglie gli spazi, non converte i tipi, non scarta i campi in più.',
+            'Serve un modo per **descrivere** i dati una volta sola, e lasciare a una libreria il lavoro noioso.',
+          ],
+          code: C('c-mano'),
+        },
+        {
+          type: 'code', part: 'ZOD', title: 'zod: lo schema descrive i dati', icon: 'shapes', iconColor: 'text-blue-400',
+          items: [
+            'Uno **schema** dice com\'è fatto un dato valido; zod lo controlla e restituisce i dati **puliti**.',
+            '`.trim()` toglie gli spazi, `.default(true)` aggiunge ciò che manca, i campi sconosciuti (`admin`) **spariscono**.',
+            'La libreria di validazione più usata in JavaScript (oggi è alla versione 4); funziona anche nel browser e con TypeScript.',
+            'Nel simulatore è già installata: `const { z } = require(\'zod\')`.',
+          ],
+          code: C('c-zod'), output: C('c-zod-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'ZOD', title: 'I mattoncini di zod', icon: 'blocks', iconColor: 'text-blue-400',
+          html: MATTONCINI_HTML,
+        },
+        {
+          type: 'code', part: 'ZOD', title: '`parse` o `safeParse`?', icon: 'git-fork', iconColor: 'text-blue-400',
+          items: [
+            '`parse(dati)` restituisce i dati puliti, oppure **lancia** uno `ZodError`.',
+            '`safeParse(dati)` non lancia mai: `{ success: true, data }` oppure `{ success: false, error }`.',
+            'In `error.issues` ci sono **tutti** i problemi: per ognuno il `path` (il campo), un `code` e un `message`.',
+            'Nelle rotte di solito si usa `safeParse`: la risposta 400 la decidiamo noi.',
+          ],
+          code: C('c-parse'), output: C('c-parse-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Prova lo schema', icon: 'flask-conical', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Scegli un input (o scrivine uno tu) e premi <strong>Esegui</strong>: il codice gira davvero, con zod. Che cosa succede ai campi in più? E all\'anno scritto come stringa?</p><div class="pg"></div>',
+          mount: (el) => NodeLab.playground(el.querySelector('.pg'), Object.assign({ packages: ['zod'], file: 'libro.js', height: '20rem' }, M7_PLAY.libro)),
+        },
+        {
+          type: 'code', part: 'ZOD', title: 'Dagli issue alla risposta', icon: 'message-square-warning', iconColor: 'text-blue-400',
+          items: [
+            '`z.flattenError(err)`: gli errori raggruppati per campo.',
+            '`z.prettifyError(err)`: un testo leggibile, perfetto per il terminale.',
+            'Per la nostra API trasformiamo gli `issues` nel formato del modulo 6: `{ errore, dettagli: [{ campo, messaggio }] }`.',
+            'Il `path` è un array: per i campi annidati (`autore.nome`) o gli array (`tag.2`) si unisce con il punto.',
+          ],
+          code: C('c-issues'), output: C('c-issues-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'ZOD', title: 'Messaggi in italiano', icon: 'languages', iconColor: 'text-blue-400',
+          items: [
+            'I messaggi predefiniti sono in inglese e un po\' tecnici: vanno bene per gli sviluppatori, meno per un utente.',
+            'Il messaggio si può dare **per regola**, **per tipo** (`{ error }`), con una **funzione** che guarda il problema, oppure **per tutta l\'app** con `z.config`.',
+            'Nella funzione `iss` contiene `code`, `input`, `minimum`… e `iss.input === undefined` vuol dire "campo mancante".',
+            'In zod 3 si scriveva `{ message }` (funziona ancora, ma è deprecato) e `required_error`, che non esiste più.',
+          ],
+          code: C('c-messaggi'),
+        },
+        {
+          type: 'compare', part: 'ZOD', title: 'I campi in più: strip, strict, loose', icon: 'filter-x',
+          columns: [
+            { title: 'z.object: li toglie', color: 'green', icon: 'scissors', code: C('c-strip'), items: ['Il comportamento predefinito', 'Sostituisce `scegliCampi` del modulo 6'] },
+            { title: 'z.strictObject: errore', color: 'yellow', icon: 'octagon-alert', code: C('c-strict'), items: ['Trova anche gli errori di battitura', 'Ottimo per le API: il client sa subito che ha sbagliato'] },
+            { title: 'z.looseObject: li tiene', color: 'red', icon: 'door-open', code: C('c-loose'), items: ['Raramente utile in un\'API', 'Pericoloso: `admin` e `id` passano'] },
+          ],
+          footer: 'In zod 4 `.strict()` e `.passthrough()` esistono ancora, ma sono deprecati: si preferiscono `z.strictObject()` e `z.looseObject()`.',
+        },
+        {
+          type: 'code', part: 'ZOD', title: 'Uno schema, tante varianti', icon: 'copy', iconColor: 'text-blue-400',
+          items: [
+            'Uno schema "base" con i campi scrivibili, e da lì le varianti: niente regole copiate due volte.',
+            '`.partial()` rende tutto facoltativo: perfetto per il `PATCH`.',
+            '`.pick()`, `.omit()`, `.extend()` creano schemi nuovi a partire da quello base.',
+            '**Trappola di zod 4:** i `.default()` valgono anche dentro `.partial()`. I predefiniti vanno messi quando si **crea** il libro.',
+          ],
+          code: C('c-varianti'),
+        },
+        {
+          type: 'code', part: 'ZOD', title: 'Regole tra più campi: `refine`', icon: 'link-2', iconColor: 'text-blue-400',
+          items: [
+            '`.refine(funzione, messaggio)`: una regola libera, quando i metodi pronti non bastano.',
+            'Su un oggetto vede **tutti** i campi: `annoDa ≤ annoA`, "almeno un campo", "le due password coincidono"…',
+            '`path` dice a quale campo attribuire l\'errore (per i `dettagli`).',
+            '`.transform()` cambia il valore; `.pipe()` lo passa a un altro schema per validarlo di nuovo.',
+          ],
+          code: C('c-refine'),
+        },
+
+        /* ------------------------------------------------ QUERY E PARAMS */
+        {
+          type: 'code', part: 'QUERY E PARAMS', title: 'Query string e params: tutto è stringa', icon: 'whole-word', iconColor: 'text-cyan-400',
+          items: [
+            'In `req.query` e `req.params` arrivano **solo stringhe** (o `undefined`): serve convertirle.',
+            '`z.coerce.number()` fa `Number(valore)` e poi controlla: `"2"` → `2`, `"abc"` → `NaN` → errore.',
+            'Con `.default()` i parametri facoltativi prendono il loro valore; `.max(50)` blocca `?limite=1000000`.',
+            'Per i booleani **non** usate `z.coerce.boolean()`: `Boolean("false")` è `true`! C\'è `z.stringbool()`.',
+          ],
+          code: C('c-query'), output: C('c-query-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Prova i filtri', icon: 'flask-conical', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Ogni input è un <code class="inline">req.query</code> come lo prepara Express: solo stringhe. Guarda come diventano numeri e booleani, e che cosa fa <code class="inline">z.coerce.boolean()</code> con <code class="inline">"false"</code>.</p><div class="pg"></div>',
+          mount: (el) => NodeLab.playground(el.querySelector('.pg'), Object.assign({ packages: ['zod'], file: 'filtri.js', height: '20rem' }, M7_PLAY.query)),
+        },
+        {
+          type: 'code', part: 'QUERY E PARAMS', title: 'Il middleware `valida()`', icon: 'shield-check', iconColor: 'text-cyan-400',
+          items: [
+            'Una **fabbrica di middleware**: `valida({ params, query, body })` restituisce un `(req, res, next)`.',
+            'Controlla le parti della richiesta prima della rotta; se qualcosa non va risponde **400** con tutti i dettagli.',
+            'I dati validati e convertiti finiscono in `req.valido`: la rotta usa **solo** quelli.',
+            '**Express 5:** `req.query` è in sola lettura. `req.query = r.data` non dà errore… e non fa niente!',
+          ],
+          code: C('c-valida'), file: 'middleware/valida.js',
+        },
+        {
+          type: 'compare', part: 'QUERY E PARAMS', title: 'Le rotte diventano dichiarazioni', icon: 'sparkles',
+          columns: [
+            { title: 'Prima: la rotta controlla tutto', color: 'red', icon: 'x-circle', code: C('c-prima') },
+            { title: 'Dopo: la rotta si fida', color: 'green', icon: 'check-circle', code: C('c-dopo') },
+          ],
+          footer: 'Leggendo le rotte si vede subito **che cosa** accetta ogni endpoint. Gli schemi sono anche la miglior documentazione dell\'API (e si possono trasformare in OpenAPI).',
+        },
+        {
+          type: 'compare', part: 'QUERY E PARAMS', title: 'zod o express-validator?', icon: 'scale',
+          columns: [
+            { title: 'express-validator', color: 'purple', icon: 'link', code: C('c-expval'), items: ['Catene di middleware, nato per Express', 'Basato su validator.js: tantissimi controlli pronti (`isEmail`, `isISBN`…)', 'Valida solo dentro le richieste'] },
+            { title: 'zod', color: 'blue', icon: 'shapes', code: C('c-zodcmp'), items: ['Schemi riutilizzabili **ovunque**', 'Con TypeScript ricava i tipi dallo schema', 'Lo stesso schema anche nel frontend'] },
+          ],
+          footer: 'Altre librerie diffuse: Joi, Valibot (molto leggera), Ajv (JSON Schema). Le idee sono le stesse: **descrivere** i dati e validarli al confine.',
+        },
+
+        /* ------------------------------------------------ ERRORI */
+        {
+          type: 'compare', part: 'ERRORI', title: 'Due famiglie di errori', icon: 'split',
+          columns: [
+            { title: 'Previsti (operativi)', color: 'yellow', icon: 'user-x', items: ['Sappiamo che **possono** succedere', 'Dati non validi → 400 · chiave sbagliata → 401', 'Libro inesistente → 404 · già in prestito → 409', 'Si **gestiscono**: risposta chiara, niente panico', 'Anche i guasti esterni (disco pieno, database spento) sono previsti: 500 / 503'] },
+            { title: 'Bug (errori di programmazione)', color: 'red', icon: 'bug', items: ['Nessuno li ha voluti', '`TypeError: Cannot read properties of undefined`', '`ReferenceError: libri is not defined`', 'Non si "gestiscono": si **correggono**', 'Al client 500 e un messaggio generico; i dettagli nel log'] },
+          ],
+          footer: 'E c\'è un terzo caso: gli errori **all\'avvio** (configurazione mancante o sbagliata). Lì la cosa giusta è fermarsi subito, con un messaggio chiaro.',
+        },
+        {
+          type: 'custom', part: 'ERRORI', title: 'Di chi è la colpa?', icon: 'gavel', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Per ogni situazione scegli che tipo di errore è, poi premi Verifica.</p><div class="sg"></div>',
+          mount: (el) => SortGame.mount(el.querySelector('.sg'), M7_SORT.errori),
+        },
+        {
+          type: 'code', part: 'ERRORI', title: 'Classi di errore', icon: 'boxes', iconColor: 'text-red-400',
+          items: [
+            'Una classe per ogni errore previsto, tutte figlie di `ErroreApi`, a sua volta figlia di `Error`.',
+            'Ogni errore **sa** con che status rispondere; `dettagli` porta le informazioni in più (es. i problemi di validazione).',
+            '`instanceof` riconosce la famiglia: un `NonTrovato` è anche un `ErroreApi` e un `Error` (e ha lo stack).',
+            'Sostituiscono il `creaErrore(status, messaggio)` dei moduli 5 e 6: più leggibili e riconoscibili.',
+          ],
+          code: C('c-classi'), file: 'errori.js', output: C('c-classi-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'ERRORI', title: 'Lanciare, non rispondere', icon: 'arrow-up-from-line', iconColor: 'text-red-400',
+          items: [
+            'Chi scopre il problema (spesso lontano dalla rotta) fa `throw`: non deve conoscere `res`.',
+            'In Express 5 un errore lanciato in una funzione `async` arriva da solo al gestore degli errori.',
+            'In Express 4 serviva `try/catch` + `next(err)` (o il pacchetto `express-async-errors`).',
+            'Una scelta di progetto: qui la classe porta lo status (semplice). Altri progetti tengono gli errori "puri" e associano gli status nel gestore.',
+          ],
+          code: C('c-lancia'),
+        },
+        {
+          type: 'code', part: 'ERRORI', title: 'Il gestore centrale degli errori', icon: 'siren', iconColor: 'text-red-400',
+          items: [
+            'Un solo posto decide la forma di **tutte** le risposte di errore: stesso formato, sempre.',
+            'Anche la 404 diventa un errore (`next(new NonTrovato(…))`): così ha lo stesso formato.',
+            'Per i bug: lo stack nel log, al client un messaggio generico e un **id** per ritrovare l\'errore nel log.',
+            '`res.headersSent`: se la risposta è già partita non si può più cambiare, quindi si passa l\'errore a Express.',
+          ],
+          code: C('c-gestore'), file: 'middleware/errori.js', output: C('c-gestore-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Il viaggio di un errore', icon: 'route', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Scegli una richiesta e seguila passo passo: chi lancia l\'errore? Chi viene saltato? Chi risponde, e con quale status?</p><div class="pv"></div>',
+          mount: (el) => PipelineViz.mount(el.querySelector('.pv'), M7_PIPELINE),
+        },
+        {
+          part: 'ERRORI', title: 'Che cosa non mandare mai al client', icon: 'eye-off', iconColor: 'text-red-400',
+          items: [
+            'Lo **stack** e i messaggi interni (`Cannot read properties of undefined`, percorsi dei file, query SQL…): aiutano chi vuole attaccare.',
+            'Segreti, dati di altri utenti, dettagli della configurazione.',
+            'In produzione (`NODE_ENV=production`) la pagina d\'errore predefinita di Express nasconde lo stack; il **vostro** gestore deve fare lo stesso.',
+            'Nel log invece **tutto** (metodo, URL, stack, id), tranne password e token.',
+            'Lo status giusto conta più del testo: client, log e monitoraggio guardano lo status.',
+          ],
+        },
+        {
+          type: 'code', part: 'ERRORI', title: 'Fuori dalle richieste', icon: 'bomb', iconColor: 'text-red-400',
+          items: [
+            'Un errore in un timer, in un evento o in una promise senza `catch` non passa da Express: il processo **si ferma**.',
+            '`process.on(\'uncaughtException\')` e `\'unhandledRejection\'` sono l\'ultima rete: registrare l\'errore e **uscire**.',
+            'Mai "ignorare e continuare": dopo un errore imprevisto lo stato del programma è sconosciuto.',
+            'Un processo che si ferma va **riavviato** da qualcun altro (in produzione, modulo 17).',
+          ],
+          code: C('c-processo'),
+        },
+
+        /* ------------------------------------------------ CONFIGURAZIONE */
+        {
+          part: 'CONFIGURAZIONE', title: 'Codice e configurazione', icon: 'settings-2', iconColor: 'text-emerald-400',
+          items: [
+            'Lo **stesso codice** gira sul vostro PC, nei test e in produzione; cambia solo la **configurazione**.',
+            'Configurazione: porta, indirizzo del database, chiavi API, livello di log, `NODE_ENV`…',
+            'La regola delle "12-factor app": la configurazione sta nelle **variabili d\'ambiente**, non nel codice.',
+            'Il test: potreste pubblicare il codice su GitHub domani, **senza** rivelare nessun segreto?',
+          ],
+        },
+        {
+          type: 'code', part: 'CONFIGURAZIONE', title: '`process.env` (ripasso dal modulo 2)', icon: 'terminal', iconColor: 'text-emerald-400',
+          items: [
+            'Le variabili d\'ambiente arrivano in `process.env`: sono **sempre stringhe**, oppure `undefined`.',
+            'Si impostano davanti al comando (`PORT=4000 node server.js`) o le imposta la piattaforma (Render, Docker…).',
+            'Le solite trappole: `"4000" + 1`, `"false"` che è vera, i nomi scritti male (`undefined` in silenzio).',
+          ],
+          code: C('c-env'),
+        },
+        {
+          type: 'compare', part: 'CONFIGURAZIONE', title: 'Il file `.env`', icon: 'file-key',
+          columns: [
+            { title: '.env (solo sul vostro PC)', color: 'red', icon: 'lock', code: C('c-dotenv'), lang: 'ini', items: ['Una variabile per riga: `NOME=valore`', 'Mai su Git: contiene i segreti'] },
+            { title: '.env.example (su Git)', color: 'green', icon: 'file-check', code: C('c-dotenv-example'), lang: 'ini', items: ['Le stesse chiavi, senza segreti', 'Chi clona il progetto: `cp .env.example .env`'] },
+            { title: '.gitignore', color: 'gray', icon: 'eye-off', code: C('c-gitignore'), lang: 'plaintext', items: ['Prima di creare il `.env`!', '`!` = "questo invece sì"'] },
+          ],
+          footer: 'Il `.env` comodo è per lo **sviluppo**. In produzione di solito non esiste: le variabili le impostate nel pannello della piattaforma (o nei secret di Docker).',
+        },
+        {
+          type: 'compare', part: 'CONFIGURAZIONE', title: 'Caricare il `.env`', icon: 'upload',
+          columns: [
+            { title: 'node --env-file', color: 'green', icon: 'terminal', code: C('c-carica-node'), lang: 'bash', items: ['Integrato in Node (20.6+)', '`--env-file-if-exists` da Node 22.9', 'La scelta più semplice, nessun pacchetto'] },
+            { title: 'process.loadEnvFile()', color: 'blue', icon: 'file-code-2', code: C('c-carica-load'), items: ['Dal codice (Node 20.12+)', '`util.parseEnv()` legge senza caricare'] },
+            { title: 'dotenv', color: 'yellow', icon: 'package', code: C('c-carica-dotenv'), items: ['Il pacchetto storico, ancora diffusissimo', 'Utile con le versioni vecchie di Node'] },
+          ],
+          footer: 'In tutti e tre i casi le variabili **già presenti** nell\'ambiente vincono su quelle del file: `PORT=4000 node --env-file=.env server.js` ascolta sulla 4000.',
+        },
+        {
+          type: 'code', part: 'CONFIGURAZIONE', title: '`config.js`: validare all\'avvio', icon: 'badge-check', iconColor: 'text-emerald-400',
+          items: [
+            'Un solo file legge `process.env`, lo **valida con zod** e lo esporta già convertito (numeri, booleani, predefiniti).',
+            '**Fail fast**: se manca una variabile il server non parte, con un messaggio chiaro. Meglio subito che alle tre di notte, alla prima richiesta.',
+            '`z.object` tiene solo le chiavi dello schema: `HOME`, `PATH` e compagnia restano fuori.',
+            '`Object.freeze`: nessuno può cambiare la configurazione mentre l\'app gira.',
+          ],
+          code: C('c-config'), file: 'config.js', output: C('c-config-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'CONFIGURAZIONE', title: 'Usare la configurazione', icon: 'plug', iconColor: 'text-emerald-400',
+          items: [
+            '`require(\'./config\')` dove serve: un elenco unico di tutto ciò che è configurabile.',
+            '`NODE_ENV` (`development`, `production`, `test`) dice in che ambiente siamo. Express lo legge da solo: `app.get(\'env\')`.',
+            'Usatelo per poche cose (log, rotte di debug), non per cambiare la logica dell\'app.',
+            'Lo script `dev` carica il `.env`; lo script `start` no: in produzione le variabili arrivano dall\'ambiente.',
+          ],
+          code: C('c-config-uso'),
+        },
+        {
+          part: 'CONFIGURAZIONE', title: 'I segreti', icon: 'key-round', iconColor: 'text-red-400',
+          items: [
+            'Password, chiavi API, segreti per firmare i token: **mai** nel codice, **mai** su Git, **mai** nel frontend.',
+            'Un segreto finito su Git resta nella **storia** anche se cancellate il file: va considerato rubato e **sostituito** (si dice "ruotato").',
+            'Mai nei log e mai nelle risposte (nemmeno negli errori!). Attenzione ai `console.log(config)`…',
+            'GitHub blocca o segnala molti segreti nei push (secret scanning); in produzione si usano le variabili della piattaforma o un secret manager.',
+            'Ne riparleremo nel modulo 13 (sicurezza) e nel modulo 17 (deploy).',
+          ],
+        },
+        {
+          type: 'custom', part: 'CONFIGURAZIONE', title: 'Codice, configurazione o segreto?', icon: 'key-square', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Dove va ciascuna di queste informazioni?</p><div class="sg"></div>',
+          mount: (el) => SortGame.mount(el.querySelector('.sg'), M7_SORT.config),
+        },
+
+        /* ------------------------------------------------ ARCHITETTURA */
+        {
+          part: 'ARCHITETTURA', title: 'Il problema: la rotta che fa tutto', icon: 'layers', iconColor: 'text-purple-400',
+          items: [
+            'Nel modulo 6 una rotta leggeva la richiesta, controllava i dati, applicava le regole, leggeva e scriveva il file e sceglieva lo status.',
+            'Con 30 endpoint diventa un `server.js` da mille righe: difficile da leggere, da cambiare, da **testare**.',
+            'Le regole ("un libro in prestito non si presta") servono anche fuori da HTTP: uno script, un job notturno, un\'altra API.',
+            'La soluzione: dividere il codice in **livelli**, ognuno con un solo compito. Il repository del modulo 6 era il primo.',
+          ],
+        },
+        {
+          type: 'custom', part: 'ARCHITETTURA', title: 'L\'architettura a livelli', icon: 'layers-3', iconColor: 'text-purple-400',
+          html: LIVELLI_HTML,
+        },
+        {
+          type: 'code', part: 'ARCHITETTURA', title: 'Le cartelle della Biblioteca 4.0', icon: 'folder-tree', iconColor: 'text-purple-400',
+          items: [
+            '`server.js` avvia, `app.js` compone: così nei test (modulo 16) si usa `app` senza aprire porte.',
+            'Un file per ogni compito: chi cerca "dove si controlla il prestito?" sa dove guardare.',
+            'Ogni livello conosce **solo quello sotto**: le rotte non toccano il file JSON, il service non tocca `res`.',
+          ],
+          code: C('c-albero'), lang: 'plaintext',
+        },
+        {
+          type: 'code', part: 'ARCHITETTURA', title: 'Rotte e controller', icon: 'radio-tower', iconColor: 'text-purple-400',
+          items: [
+            'Le **rotte** sono un indice: metodo, URL, middleware, controller. Si leggono come una tabella.',
+            'Il **controller** traduce tra HTTP e il resto: prende `req.valido`, chiama il service, sceglie status e header.',
+            'Nessun `try/catch`: gli errori del service risalgono da soli fino al gestore.',
+          ],
+          code: C('c-rotte'),
+        },
+        {
+          type: 'code', part: 'ARCHITETTURA', title: 'Il service: le regole', icon: 'brain', iconColor: 'text-purple-400',
+          items: [
+            'Il **service** contiene le regole della biblioteca, scritte con le parole della biblioteca.',
+            'Lavora con dati già validati e lancia errori del dominio (`NonTrovato`, `Conflitto`).',
+            'Non conosce `req`, `res` o gli status: si può usare (e testare) senza un server.',
+            'Validazione della **forma** al confine (`valida`); regole che dipendono dai **dati** (doppioni, prestiti) nel service.',
+          ],
+          code: C('c-service'), file: 'services/libriService.js',
+        },
+        {
+          type: 'custom', part: 'ARCHITETTURA', title: 'Dove va questo codice?', icon: 'puzzle', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Per ogni riga (o regola) scegli il livello in cui la metteresti.</p><div class="sg"></div>',
+          mount: (el) => SortGame.mount(el.querySelector('.sg'), M7_SORT.livelli),
+        },
+        {
+          type: 'compare', part: 'ARCHITETTURA', title: 'Per tipo o per funzionalità?', icon: 'folders',
+          columns: [
+            { title: 'Per tipo (oggi)', color: 'blue', icon: 'layers', code: C('c-tipo'), lang: 'plaintext', items: ['Semplice e diffuso', 'Ottimo finché le risorse sono poche'] },
+            { title: 'Per funzionalità', color: 'purple', icon: 'boxes', code: C('c-feature'), lang: 'plaintext', items: ['Tutto ciò che riguarda i libri in un posto', 'Si fa preferire quando il progetto cresce'] },
+          ],
+          footer: 'Non esagerate: per tre rotte un solo file va benissimo. I livelli si **pagano** in file e passaggi; conviene quando le regole crescono, quando si lavora in tanti e quando si vuole testare.',
+        },
+
+        /* ------------------------------------------------ CHIUSURA */
+        {
+          part: 'RIEPILOGO', title: 'Cosa portiamo a casa', icon: 'check-circle', iconColor: 'text-green-400',
+          items: [
+            'Si valida **tutto ciò che entra**: schemi zod per body, query, params (con `coerce` e `stringbool`) e per la configurazione.',
+            '`safeParse` + un formato unico `{ errore, dettagli }`; `z.strictObject` contro i campi estranei; attenti a `default` dentro `partial`.',
+            'Errori previsti come **classi** (`NonTrovato`, `Conflitto`…) lanciate da chiunque; **un** gestore centrale; ai bug 500 generico + log.',
+            'Configurazione nel `.env` (mai su Git) caricata con `node --env-file`, validata in `config.js`: fail fast.',
+            'Livelli: rotte → controller → service → repository. Ogni livello usa solo quello sotto.',
+          ],
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Biblioteca 4.0: mettiti alla prova', icon: 'library', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">La Biblioteca 4.0 (validazione con zod, classi di errore, configurazione dal file <code class="inline">.env</code>, livelli) gira qui nel browser, avviata con <code class="inline">node --env-file=.env server.js</code>. Le scritture richiedono la chiave API: i preset la mettono già negli header.</p><div class="biblio"></div>',
+          mount: (el) => NodeLab.inspector(el.querySelector('.biblio'), {
+            id: 'm7-biblioteca-slide',
+            files: M7_BIBLIOTECA.files,
+            fs: M7_BIBLIOTECA.fs,
+            node: M7_BIBLIOTECA.node,
+            entry: 'server.js', port: 3000, packages: ['express', 'morgan', 'zod'],
+            persist: true, watch: 'data/libri.json',
+            missions: M7_BIBLIOTECA.missions,
+            presets: M7_BIBLIOTECA.presets,
+          }),
+        },
+        {
+          type: 'custom', part: 'ORA TOCCA A VOI', title: 'Esercitazioni e laboratori', icon: 'flask-conical',
+          html: `<div class="grid md:grid-cols-2 gap-6 items-center">
+            <ul class="space-y-3 text-lg md:text-xl text-gray-300">
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Playground di zod, "che cosa stampa?" e tre giochi di classificazione</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Biblioteca 4.0: 14 missioni</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>8 laboratori con verifica automatica (un boss a livelli)</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Missioni sul vostro PC + quiz</li>
+            </ul>
+            <div class="text-center">
+              <a href="modulo_7_ex.html" class="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold hover:bg-green-500 transition-colors">
+                <i data-lucide="flask-conical" class="w-6 h-6"></i> Apri le esercitazioni</a>
+              <p class="mt-6 text-gray-500 font-mono text-sm">Prossimo modulo: Template engine e form</p>
+            </div></div>`,
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>

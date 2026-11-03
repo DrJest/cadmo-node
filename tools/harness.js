@@ -37,7 +37,7 @@ function fnSource(fn) {
 
 /**
  * Avvia i file, aspetta exit o idle (server in ascolto), poi esegue la check nel worker.
- * opts: { entry, argv, fs, env, packages, wait }
+ * opts: { entry, argv, fs, env, packages, nodeOptions, wait }
  * → { ok, message, out }
  */
 function runLab(files, opts, check) {
@@ -52,7 +52,7 @@ function runLab(files, opts, check) {
     });
     const go = () => setTimeout(() => w.send({ type: 'test', id: 1, src: typeof check === 'string' ? check : fnSource(check) }), 20);
     setTimeout(() => { if (!done) { done = true; go(); } }, opts.wait || 3000);
-    w.send({ type: 'run', files, entry: opts.entry || Object.keys(files)[0], argv: opts.argv || [], fs: opts.fs || {}, env: opts.env || {}, packages: opts.packages || [] });
+    w.send({ type: 'run', files, entry: opts.entry || Object.keys(files)[0], argv: opts.argv || [], fs: opts.fs || {}, env: opts.env || {}, packages: opts.packages || [], nodeOptions: opts.nodeOptions || [] });
   });
 }
 

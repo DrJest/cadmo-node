@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esercitazioni Modulo 7 — CADMO NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white prose-code">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <div class="flex items-center gap-5 text-sm">
+          <a href="modulo_7.html" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="presentation" class="w-4 h-4"></i><span class="hidden sm:inline">Slide</span></a>
+          <a href="./" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Home</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="bg-gray-950 border-b border-gray-800 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center animate-fade-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-900/30 border border-red-500/30 text-xs text-red-300 font-mono mb-4 uppercase tracking-wider">
+        <i data-lucide="shield-check" class="w-4 h-4"></i> zod · errori · .env · config.js · livelli
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4">Esercitazioni Modulo 7</h1>
+      <p class="text-gray-400 text-lg">Prova gli schemi di zod, indovina che cosa succede, classifica errori e codice, esplora la Biblioteca 4.0 e completa otto laboratori con verifica automatica, fino al boss del servizio prestiti a livelli.</p>
+      <p class="mt-4 text-sm font-mono text-gray-500"><span data-lab-progress="m7-schema,m7-post,m7-query,m7-valida,m7-errori,m7-config,m7-trovabug,m7-boss"></span> · i progressi restano salvati in questo browser</p>
+    </div>
+  </header>
+
+  <!-- Indice -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+    <div class="flex flex-wrap gap-2 justify-center text-sm">
+      <a href="#guida" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">1 · Guida rapida</a>
+      <a href="#prova" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">2 · Prova e indovina</a>
+      <a href="#biblioteca" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">3 · Biblioteca 4.0</a>
+      <a href="#lab" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">4 · Laboratori</a>
+      <a href="#pc" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">5 · Sul tuo PC</a>
+      <a href="#quiz" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">6 · Quiz</a>
+    </div>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-20">
+
+    <!-- 1. GUIDA RAPIDA -->
+    <section id="guida" class="scroll-mt-20 animate-fade-in delay-100">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="book-open" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">1. Guida rapida</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-blue-400 mb-2">Uno schema zod</h3>
+          <pre class="code small"><code class="language-javascript">const { z } = require('zod');
+const libro = z.object({
+  titolo: z.string().trim().min(1, 'Il titolo è obbligatorio'),
+  anno: z.int().min(1450).max(2100).optional(),
+  genere: z.enum(['romanzo', 'giallo']).optional(),
+  disponibile: z.boolean().default(true),
+});
+const r = libro.safeParse(req.body);
+// { success: true, data } oppure { success: false, error }</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-yellow-400 mb-2">Gli errori di zod</h3>
+          <pre class="code small"><code class="language-javascript">r.error.issues           // [{ code, path: ['titolo'], message }, …]
+z.flattenError(r.error)  // { formErrors, fieldErrors: { titolo: [ … ] } }
+z.prettifyError(r.error) // ✖ …  → at titolo
+const dettagli = r.error.issues.map((i) =>
+  ({ campo: i.path.join('.'), messaggio: i.message }));
+// z.strictObject → errore sui campi sconosciuti
+// .partial() per la PATCH: ma niente .default() nello schema base!</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-cyan-400 mb-2">Query string e params</h3>
+          <pre class="code small"><code class="language-javascript">z.coerce.number().int().min(1).default(1)  // '2' → 2, 'abc' → errore
+z.stringbool().optional()                  // 'false' → false
+// ❌ z.coerce.boolean(): Boolean('false') === true
+// ❌ req.query = r.data  (Express 5: in sola lettura)
+router.get('/:id', valida({ params: idParam }), ctrl.dettaglio);
+const { id } = req.valido.params;          // già un numero</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-red-400 mb-2">Classi di errore</h3>
+          <pre class="code small"><code class="language-javascript">class ErroreApi extends Error {
+  constructor(status, messaggio, dettagli) {
+    super(messaggio);
+    this.name = this.constructor.name;
+    this.status = status;
+    this.dettagli = dettagli;
+  }
+}
+class NonTrovato extends ErroreApi { constructor(m = 'Risorsa non trovata') { super(404, m); } }
+throw new NonTrovato(`Il libro ${id} non esiste`);  // Express 5 → gestore</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-pink-400 mb-2">Il gestore centrale</h3>
+          <pre class="code small"><code class="language-javascript">app.use((req, res, next) => next(new NonTrovato('Rotta non trovata')));
+app.use((err, req, res, next) => {            // 4 parametri!
+  if (err instanceof ErroreApi) return res.status(err.status)
+    .json({ errore: err.message, dettagli: err.dettagli });
+  if (err.type === 'entity.parse.failed')
+    return res.status(400).json({ errore: 'JSON non valido' });
+  console.error(err);                                     // log: tutto
+  res.status(500).json({ errore: 'Errore interno del server' }); // client: niente
+});</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-emerald-400 mb-2">Configurazione</h3>
+          <pre class="code small"><code class="language-bash"># .env (mai su Git)  ·  .env.example (su Git)  ·  .gitignore: .env
+node --env-file=.env server.js
+node --watch --env-file-if-exists=.env server.js
+PORT=4000 node --env-file=.env server.js   # l'ambiente vince sul file
+# config.js: schema.safeParse(process.env)
+#   se fallisce → console.error + process.exit(1)   (fail fast)
+#   altrimenti → module.exports = Object.freeze(r.data)</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 md:col-span-2">
+          <h3 class="text-lg font-bold text-purple-400 mb-2">I livelli</h3>
+          <pre class="code small"><code class="language-plaintext">routes/        URL + middleware (valida, richiedeChiave) → controller          niente logica
+controllers/   req.valido → service → status, header e JSON                    niente regole
+services/      le regole: throw new NonTrovato(…), new Conflitto(…)            niente req, res, status
+repositories/  leggere e scrivere i dati (file JSON, poi SQLite)               niente regole
+middleware/errori.js   l'unico posto che trasforma un errore in una risposta
+config.js              l'unico che legge process.env</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. PROVA E INDOVINA -->
+    <section id="prova" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-round" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">2. Prova e indovina</h2>
+      </div>
+
+      <h3 class="text-xl font-bold text-white mt-6 mb-2">Il playground di zod</h3>
+      <p class="text-gray-400 mb-4">Il codice gira davvero nel simulatore. Scegli un input (o modificalo) e premi <kbd>▶ Esegui</kbd>. Prova anche a cambiare lo schema… nel laboratorio 1!</p>
+      <div id="play-libro" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <div id="play-query" class="mt-6 bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Che cosa stampa?</h3>
+      <p class="text-gray-400 mb-4">Clicca le righe nell'ordine in cui compaiono nel terminale (alcune possono comparire più di una volta, altre mai!).</p>
+      <div id="order-game"></div>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Classifica</h3>
+      <p class="text-gray-400 mb-4">Tre giochi per mettere ogni cosa al suo posto: che tipo di errore è, dove va un'informazione di configurazione, in quale livello sta un pezzo di codice.</p>
+      <div class="space-y-6">
+        <div id="sort-errori"></div>
+        <div id="sort-config"></div>
+        <div id="sort-livelli"></div>
+      </div>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Il viaggio di un errore</h3>
+      <p class="text-gray-400 mb-4">Segui ogni richiesta attraverso i middleware: chi lancia l'errore, chi viene saltato, chi risponde?</p>
+      <div id="pipeline" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+    </section>
+
+    <!-- 3. BIBLIOTECA 4.0 -->
+    <section id="biblioteca" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="library" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">3. Biblioteca 4.0</h2>
+      </div>
+      <p class="text-gray-400 mb-4">L'API del modulo 6, rifatta come un progetto vero: schemi zod per body, query e params, classi di errore e un gestore centrale, la configurazione nel file <code class="inline">.env</code> (avvio con <code class="inline">node --env-file=.env server.js</code>) e il codice diviso in rotte, controller, service e repository. Le operazioni che modificano il catalogo richiedono l'header <code class="inline">X-Api-Key</code>: i preset lo mettono già. Il pulsante <kbd>↻</kbd> riavvia il server mantenendo i file; quello con il database rimette i dati iniziali.</p>
+      <div id="inspector" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <button onclick="toggleSolution('codice-server')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="file-code-2" class="w-4 h-4"></i> Mostra il codice del progetto</button>
+      <div id="codice-server" class="solution-container mt-4">
+        <div id="codice-tabs" class="flex flex-wrap gap-1.5 mb-2"></div>
+        <pre class="code small"><code id="codice-src" class="language-javascript"></code></pre>
+      </div>
+    </section>
+
+    <!-- 4. LABORATORI -->
+    <section id="lab" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-conical" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">4. Laboratori nel browser</h2>
+      </div>
+      <div class="text-gray-400 mb-8 space-y-2">
+        <p>In ogni progetto <code class="inline">zod</code> (e, dove serve, <code class="inline">express</code>) è già installato. Premi <kbd>▶ Esegui</kbd>, prova il server con il client HTTP (per le richieste che modificano i dati premi tu <strong>Invia</strong>) e poi premi <kbd>Verifica</kbd>.</p>
+        <p class="text-sm">💡 Nei progetti con più file usa le tab sopra l'editor. Nei lab con il file <code class="inline">.env</code> guarda il comando nel terminale: il server parte con <code class="inline">node --env-file=.env</code>, e alcune verifiche lo avviano con variabili d'ambiente diverse.</p>
+      </div>
+      <div class="space-y-10" id="labs"></div>
+    </section>
+
+    <!-- 5. MISSIONI SUL PC -->
+    <section id="pc" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="laptop" class="w-6 h-6 text-emerald-400"></i>
+        <h2 class="text-2xl font-bold text-white">5. Missioni sul tuo PC</h2>
+      </div>
+      <div class="space-y-8">
+        <!-- Missione A -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-emerald-900/50 flex items-center justify-center border border-emerald-500/30"><i data-lucide="folder-tree" class="w-5 h-5 text-emerald-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione A: La Biblioteca 4.0 sul tuo PC</h3>
+              <p class="text-sm text-emerald-400 font-mono">Focus: struttura a livelli, .env, --env-file, fail fast, NODE_ENV</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-emerald-500">
+            <li>Crea <code class="inline">corso-node/lezione7</code>, installa <code class="inline">express</code>, <code class="inline">morgan</code> e <code class="inline">zod</code>, e aggiungi gli script <code class="inline">dev</code> (con <code class="inline">--watch</code> e <code class="inline">--env-file-if-exists=.env</code>) e <code class="inline">start</code>.</li>
+            <li>Crea <strong>prima</strong> <code class="inline">.gitignore</code> e <code class="inline">.env.example</code>, poi copia l'esempio in <code class="inline">.env</code>. Ricopia i file della Biblioteca 4.0 (sezione 3, una scheda per file) e <code class="inline">data/libri.json</code> della lezione 6.</li>
+            <li>Avvia con <code class="inline">npm run dev</code> e prova qualche richiesta. Poi: cancella <code class="inline">API_KEY</code> dal <code class="inline">.env</code>; avvia con <code class="inline">PORT=4000 npm run dev</code>; avvia con <code class="inline">NODE_ENV=production</code> e chiedi <code class="inline">/api/v1/debug/bug</code>. Che cosa succede ogni volta, e perché?</li>
+            <li>Bonus: in cima ad <code class="inline">app.js</code> aggiungi <code class="inline">z.config(z.locales.it())</code>. Quali messaggi diventano italiani e quali no?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-a')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-a" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-bash">mkdir -p corso-node/lezione7 && cd corso-node/lezione7
+npm init -y
+npm install express morgan zod
+npm pkg set scripts.dev="node --watch --env-file-if-exists=.env server.js"
+npm pkg set scripts.start="node server.js"
+mkdir -p schemi middleware routes controllers services repositories data
+
+printf 'node_modules/\n.env\n' > .gitignore
+code .env.example          # le chiavi del .env, con API_KEY vuota
+cp .env.example .env       # e nel .env metti una chiave vera (almeno 16 caratteri)
+npm run dev
+
+# 1. senza API_KEY il server NON parte:
+#    ❌ Configurazione non valida:
+#    ✖ Invalid input: expected string, received undefined
+#      → at API_KEY
+#    config.js se ne accorge all'avvio (fail fast), non alla prima POST.
+
+# 2. PORT=4000 npm run dev → ascolta sulla 4000: le variabili dell'ambiente
+#    vincono su quelle del file (npm passa l'ambiente agli script).
+
+# 3. NODE_ENV=production npm run dev → GET /api/v1/debug/bug risponde 404:
+#    la rotta di debug esiste solo in sviluppo. Anche "ambiente" nella home cambia.
+#    (In PowerShell: $env:NODE_ENV="production"; npm run dev)
+
+# Bonus: z.config(z.locales.it()) traduce i messaggi PREDEFINITI
+#    ("Input non valido: atteso number, ricevuto NaN"); quelli scritti da noi negli
+#    schemi ("titolo non può essere vuoto") restano come sono: hanno la precedenza.</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione B -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-purple-900/50 flex items-center justify-center border border-purple-500/30"><i data-lucide="scale" class="w-5 h-5 text-purple-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione B: express-validator a confronto</h3>
+              <p class="text-sm text-purple-400 font-mono">Focus: un'altra libreria, stessi principi</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-purple-500">
+            <li>Nel progetto della missione A installa <code class="inline">express-validator</code> e crea <code class="inline">routes/libriEV.js</code>, montato su <code class="inline">/api/v2/libri</code>, con una sola rotta <code class="inline">POST /</code>.</li>
+            <li>Valida il body con le catene di <code class="inline">body()</code>: le stesse regole di <code class="inline">creaLibro</code> (titolo e autore testi non vuoti di massimo 200 caratteri, anno intero facoltativo, genere tra quelli ammessi, disponibile booleano).</li>
+            <li>Rispondi con lo stesso formato della Biblioteca: <code class="inline">400 { errore, dettagli: [{ campo, messaggio }] }</code>. Usa <code class="inline">matchedData(req)</code> per tenere solo i campi validati.</li>
+            <li>Confronta: quante righe? Che messaggi ricevi se non ne scrivi tu? Che cosa succede a un campo in più? Come riuseresti le regole per la PATCH?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-b')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-b" class="solution-container mt-4">
+            <pre class="code small"><code class="language-javascript">// routes/libriEV.js — npm install express-validator
+const express = require('express');
+const { body, validationResult, matchedData } = require('express-validator');
+const service = require('../services/libriService');
+const { GENERI } = require('../schemi/libro');
+
+const router = express.Router();
+const testo = (campo) => body(campo).isString().withMessage(`${campo} deve essere un testo`)
+  .trim().notEmpty().withMessage(`${campo} non può essere vuoto`)
+  .isLength({ max: 200 }).withMessage(`${campo} può avere al massimo 200 caratteri`);
+
+router.post('/',
+  testo('titolo'),
+  testo('autore'),
+  body('anno').optional({ values: 'null' }).isInt({ min: 1450, max: new Date().getFullYear() }).withMessage('anno non valido').toInt(),
+  body('genere').optional({ values: 'null' }).isIn(GENERI).withMessage(`genere deve essere uno tra: ${GENERI.join(', ')}`),
+  body('disponibile').optional().isBoolean({ strict: true }).withMessage('disponibile deve essere true o false'),
+  async (req, res) => {
+    const risultato = validationResult(req);
+    if (!risultato.isEmpty()) {
+      return res.status(400).json({
+        errore: 'Dati non validi',
+        dettagli: risultato.array().map((e) => ({ campo: e.path, messaggio: e.msg })),
+      });
+    }
+    const libro = await service.crea(matchedData(req));   // solo i campi validati
+    res.status(201).location(`${req.baseUrl}/${libro.id}`).json(libro);
+  });
+
+module.exports = router;     // in app.js: app.use('/api/v2/libri', require('./routes/libriEV'));
+
+// Osservazioni:
+// - senza withMessage il messaggio predefinito è "Invalid value": poco utile;
+// - un campo in più ("prezzo") resta in req.body ma non in matchedData: viene ignorato,
+//   come con z.object (per rifiutarlo serve un controllo apposta, es. checkExact());
+// - "anno": "1965" passa (isInt accetta le stringhe) e toInt lo converte: utile per i form,
+//   ma in un'API JSON zod è più severo e chiaro (z.int() vuole un numero);
+// - per la PATCH bisogna duplicare le catene con .optional() (oppure usare checkSchema):
+//   con zod basta libro.partial().</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione C -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-red-900/50 flex items-center justify-center border border-red-500/30"><i data-lucide="bomb" class="w-5 h-5 text-red-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione C: Quando il processo cade</h3>
+              <p class="text-sm text-red-400 font-mono">Focus: uncaughtException, unhandledRejection, codici di uscita, riavvii</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-red-500">
+            <li>Crea <code class="inline">crash.js</code> con un server Express qualsiasi e un <code class="inline">setTimeout</code> che dopo 3 secondi esegue <code class="inline">JSON.parse('{ rotto')</code>. Lancialo con <code class="inline">node crash.js; echo "codice di uscita: $?"</code>. Il gestore degli errori di Express interviene?</li>
+            <li>Sostituisci il timer con una promise rifiutata e non gestita, per esempio <code class="inline">fetch('http://localhost:9999')</code>. Cambia qualcosa?</li>
+            <li>Aggiungi i gestori <code class="inline">process.on('uncaughtException')</code> e <code class="inline">process.on('unhandledRejection')</code> che scrivono l'errore (con data e ora) ed escono con codice 1.</li>
+            <li>Avvialo con <code class="inline">node --watch crash.js</code>: dopo il crash il server riparte da solo? E con nodemon? Chi lo farebbe ripartire in produzione?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-c')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-c" class="solution-container mt-4">
+            <pre class="code small"><code class="language-javascript">// crash.js
+const express = require('express');
+const app = express();
+app.get('/', (req, res) => res.send('ok'));
+app.use((err, req, res, next) => res.status(500).json({ errore: 'Errore interno del server' }));
+app.listen(3000, () => console.log('in ascolto'));
+
+// 1. un errore in un timer: non passa da nessuna richiesta, quindi NON arriva al gestore di Express
+setTimeout(() => JSON.parse('{ rotto'), 3000);
+//    → SyntaxError stampato e processo terminato: "codice di uscita: 1"
+
+// 2. una promise rifiutata e non gestita: stesso risultato (in Node 15+ termina il processo)
+// fetch('http://localhost:9999').then((r) => r.json());
+//    → TypeError: fetch failed … [cause]: connect ECONNREFUSED
+
+// 3. l'ultima rete di sicurezza: registrare e uscire (non continuare!)
+const ora = () => new Date().toISOString();
+process.on('uncaughtException', (err) => {
+  console.error(`${ora()} 💥 uncaughtException`, err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (motivo) => {
+  console.error(`${ora()} 💥 unhandledRejection`, motivo);
+  process.exit(1);
+});
+
+// 4. node --watch NON riavvia dopo un crash: aspetta che modifichi un file
+//    ("Failed running 'crash.js'. Waiting for file changes before restarting...").
+//    Anche nodemon: "[nodemon] app crashed - waiting for file changes before starting...".
+//    In produzione lo fa un "process manager": PM2, systemd, oppure Docker con
+//    restart: unless-stopped (modulo 17). Il codice di uscita 1 gli dice che qualcosa è andato storto.</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione D -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-yellow-900/50 flex items-center justify-center border border-yellow-500/30"><i data-lucide="key-round" class="w-5 h-5 text-yellow-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione D: Un segreto su Git (e come rimediare)</h3>
+              <p class="text-sm text-yellow-400 font-mono">Focus: .gitignore, git rm --cached, la storia di Git, rotazione dei segreti</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-yellow-500">
+            <li>In una cartella di prova (<strong>non</strong> nel progetto vero!) fai <code class="inline">git init</code>, crea <code class="inline">server.js</code> e un <code class="inline">.env</code> con <code class="inline">API_KEY=segreto-di-prova-123456</code>, poi <code class="inline">git add .</code> e <code class="inline">git commit</code>. Ops: niente <code class="inline">.gitignore</code>.</li>
+            <li>Ritrova la chiave nella storia con <code class="inline">git show HEAD:.env</code> (oppure <code class="inline">git log -p</code>).</li>
+            <li>Rimedia: aggiungi <code class="inline">.env</code> al <code class="inline">.gitignore</code>, togli il file dal repository <strong>senza</strong> cancellarlo dal disco e fai un nuovo commit. Ora la chiave è al sicuro?</li>
+            <li>Che cosa bisognerebbe fare con quella chiave se il repository fosse già su GitHub? Cerca che cosa fa la "push protection" di GitHub.</li>
+          </ol>
+          <button onclick="toggleSolution('sol-d')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-d" class="solution-container mt-4">
+            <pre class="code small"><code class="language-bash">mkdir prova-segreti && cd prova-segreti && git init
+echo "console.log('ciao')" > server.js
+echo "API_KEY=segreto-di-prova-123456" > .env
+git add . && git commit -m "primo commit"      # 😱 .env è nel commit
+
+git show HEAD:.env                              # API_KEY=segreto-di-prova-123456
+
+# 3. rimedio: smettere di tracciare il file (resta sul disco)
+echo ".env" >> .gitignore
+git rm --cached .env
+git add .gitignore && git commit -m "Non tracciare .env"
+
+git show HEAD:.env       # fatal: path '.env' exists on disk, but not in 'HEAD'
+git show HEAD~1:.env     # API_KEY=segreto-di-prova-123456   ← è ancora nella storia!
+
+# 4. la chiave va considerata RUBATA: si genera una chiave nuova e si disattiva la vecchia
+#    ("rotazione"). Riscrivere la storia (git filter-repo) non basta: chiunque abbia già
+#    clonato o scaricato il repository ha la vecchia copia.
+#    GitHub "push protection" blocca il push quando riconosce un segreto noto (chiavi di
+#    servizi come AWS, Stripe, GitHub…); il "secret scanning" avvisa per quelli già pubblicati.
+#    Abitudine sana: guardare git status prima di ogni git add .</code></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 6. QUIZ -->
+    <section id="quiz" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="check-square" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">6. Quiz di verifica</h2>
+      </div>
+      <div id="quiz-box"></div>
+    </section>
+  </main>
+
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm font-mono">studente@nodelab:~$ node --env-file=.env server.js</div>
+  </footer>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m7-biblioteca.js"></script>
+  <script src="assets/labs-m7.js"></script>
+  <script>
+    // ---------------------------------------------------------------- 2. prova e indovina
+    NodeLab.playground(document.getElementById('play-libro'), Object.assign({ packages: ['zod'], file: 'libro.js' }, M7_PLAY.libro));
+    NodeLab.playground(document.getElementById('play-query'), Object.assign({ packages: ['zod'], file: 'filtri.js' }, M7_PLAY.query));
+
+    OrderGame.mount(document.getElementById('order-game'), [
+      {
+        title: '`parse` o `safeParse`?',
+        cmd: '$ node prova.js',
+        code: `const { z } = require('zod');
+const schema = z.object({ titolo: z.string().min(1) });
+
+console.log(schema.safeParse({ titolo: 'Dune' }).success);
+console.log(schema.safeParse({ titolo: '' }).success);
+try {
+  schema.parse({});
+  console.log('ok');
+} catch (err) {
+  console.log(err.name);
+}
+console.log('fine');`,
+        chips: ['true', 'false', 'ok', 'ZodError', 'TypeError', 'fine'],
+        answer: ['true', 'false', 'ZodError', 'fine'],
+        explain: '`safeParse` non lancia mai: restituisce `success: true` o `false`. `parse({})` invece **lancia** uno `ZodError` (manca il titolo), quindi `\'ok\'` non viene mai stampato. Il programma continua dopo il `catch`.',
+      },
+      {
+        title: 'Che cosa resta dell\'oggetto?',
+        cmd: '$ node prova.js',
+        code: `const libro = z.object({
+  titolo: z.string().trim(),
+  anno: z.int().optional(),
+  disponibile: z.boolean().default(true),
+});
+
+const r = libro.parse({ titolo: ' Dune ', admin: true });
+console.log(r.titolo.length);
+console.log('anno' in r);
+console.log(r.disponibile);
+console.log(r.admin);`,
+        chips: ['4', '6', 'true', 'false', 'true', 'undefined'],
+        answer: ['4', 'false', 'true', 'undefined'],
+        explain: '`.trim()` toglie gli spazi: `\'Dune\'` ha **4** caratteri. Un campo `optional` che manca resta assente (`\'anno\' in r` è `false`); `.default(true)` aggiunge `disponibile`. `admin` non è nello schema: `z.object` lo **toglie**.',
+      },
+      {
+        title: 'Query string e `coerce`',
+        cmd: '$ node prova.js',
+        prompt: 'Il client chiede GET /api/libri?limite=5&attivi=false&solo=false. Clicca le righe nell\'ordine in cui vengono stampate:',
+        code: `const filtri = z.object({
+  limite: z.coerce.number().default(10),
+  attivi: z.coerce.boolean().optional(),
+  solo: z.stringbool().optional(),
+});
+
+const r = filtri.parse({ limite: '5', attivi: 'false', solo: 'false' });   // req.query
+console.log(r.limite + 1);
+console.log(r.attivi);
+console.log(r.solo);
+console.log(filtri.parse({}).limite);`,
+        chips: ['6', '51', 'true', 'false', '10', 'undefined'],
+        answer: ['6', 'true', 'false', '10'],
+        explain: '`coerce.number()` converte `\'5\'` in **5** (quindi `5 + 1 = 6`, non `\'51\'`). `coerce.boolean()` fa `Boolean(\'false\')`: **true**! `stringbool()` capisce la parola: **false**. Senza `limite` vale il predefinito **10**.',
+      },
+      {
+        title: '`req.query` in sola lettura',
+        cmd: '$ curl localhost:3000/api/libri?limite=5 && curl localhost:3000/api/libri',
+        prompt: 'filtri ha limite: z.coerce.number().default(10). Il client chiede prima ?limite=5, poi senza parametri. Che cosa stampa il server?',
+        code: `app.get('/api/libri', (req, res) => {
+  req.query = filtri.parse(req.query);
+  console.log(typeof req.query.limite);
+  console.log(req.query.limite);
+  res.json([]);
+});`,
+        chips: ['number', 'string', '5', '10', 'undefined', 'undefined', 'object'],
+        answer: ['string', '5', 'undefined', 'undefined'],
+        explain: 'In Express 5 `req.query` è un getter: l\'assegnazione viene **ignorata** in silenzio e `req.query` resta quello dell\'URL. Prima richiesta: la stringa `\'5\'`; seconda: niente `limite`, quindi `undefined`, e il predefinito 10 non arriva mai. Si salva il risultato altrove: `req.valido.query`.',
+      },
+      {
+        title: 'Classi di errore e `instanceof`',
+        cmd: '$ node errori.js',
+        code: `class ErroreApi extends Error {
+  constructor(status, msg) { super(msg); this.name = this.constructor.name; this.status = status; }
+}
+class NonTrovato extends ErroreApi {
+  constructor(msg) { super(404, msg); }
+}
+
+const errori = [new NonTrovato('manca'), new TypeError('ops'), new ErroreApi(409, 'doppione')];
+for (const err of errori) {
+  console.log(err instanceof ErroreApi ? err.status : 500);
+}
+console.log(errori[0].name);`,
+        chips: ['404', '500', '409', '400', 'NonTrovato', 'ErroreApi', 'Error'],
+        answer: ['404', '500', '409', 'NonTrovato'],
+        explain: 'Un `NonTrovato` **è** anche un `ErroreApi` (404); un `TypeError` no, quindi è un bug: 500. `this.constructor.name` dà il nome della classe **più specifica**: `NonTrovato`.',
+      },
+      {
+        title: 'Process.env: tutto è stringa',
+        cmd: '$ PORT=4000 DEBUG=false MAX=3 node app.js',
+        code: `console.log(process.env.PORT + 1);
+console.log(Number(process.env.MAX) + 1);
+console.log(process.env.DEBUG ? 'debug attivo' : 'debug spento');
+console.log(process.env.DEBUG === 'true' ? 'debug attivo' : 'debug spento');
+console.log(process.env.NON_CE ?? 'predefinito');`,
+        chips: ['4001', '40001', '4', '31', 'debug attivo', 'debug spento', 'predefinito', 'undefined'],
+        answer: ['40001', '4', 'debug attivo', 'debug spento', 'predefinito'],
+        explain: '`\'4000\' + 1` concatena: **40001**. `Number(\'3\') + 1` = **4**. La stringa `\'false\'` non è vuota, quindi è "vera": **debug attivo**! Il confronto giusto è `=== \'true\'`. Una variabile che non esiste è `undefined`, e `??` sceglie il predefinito.',
+      },
+      {
+        title: 'Chi vince?',
+        cmd: '$ PORT=4000 node --env-file=.env --env-file=.env.locale app.js',
+        prompt: 'Nel file .env ci sono PORT=3000 e NOME=Biblioteca, nel file .env.locale c\'è PORT=5000. Clicca le righe nell\'ordine in cui vengono stampate:',
+        code: `console.log(process.env.PORT);
+console.log(process.env.NOME);`,
+        chips: ['3000', '4000', '5000', 'Biblioteca', 'undefined'],
+        answer: ['4000', 'Biblioteca'],
+        explain: 'Tra i file vince l\'**ultimo** (5000 batterebbe 3000), ma una variabile già presente nell\'**ambiente** vince su tutti i file: **4000**. `NOME` c\'è solo nel primo file: **Biblioteca**.',
+      },
+      {
+        title: 'BOSS: il gestore con 3 parametri',
+        cmd: '$ curl -i localhost:3000/api/libri/7 && curl -i localhost:3000/api/autori',
+        prompt: 'Il client chiede GET /api/libri/7 e poi GET /api/autori, e ogni volta stampa status e Content-Type. Clicca le righe nell\'ordine in cui vengono stampate:',
+        code: `app.get('/api/libri/:id', (req, res) => {
+  throw new NonTrovato('Libro non trovato');      // err.status = 404
+});
+
+app.use((req, res) => res.status(404).json({ errore: 'Rotta non trovata' }));
+
+app.use((err, req, res) => {
+  res.status(err.status || 500).json({ errore: err.message });
+});`,
+        chips: ['404 application/json', '404 text/html', '500 text/html', '500 application/json', '404 application/json'],
+        answer: ['404 text/html', '404 application/json'],
+        explain: 'L\'ultimo `app.use` ha **3** parametri: per Express non è un gestore di errori. L\'errore lanciato dalla rotta salta tutto e arriva al gestore **predefinito**, che usa `err.status` (404) e risponde con una pagina **HTML**. La seconda richiesta arriva al middleware della 404, che risponde in JSON.',
+      },
+    ], { id: 'm7-order' });
+
+    SortGame.mount(document.getElementById('sort-errori'), M7_SORT.errori, { id: 'm7-sort-errori' });
+    SortGame.mount(document.getElementById('sort-config'), M7_SORT.config, { id: 'm7-sort-config' });
+    SortGame.mount(document.getElementById('sort-livelli'), M7_SORT.livelli, { id: 'm7-sort-livelli' });
+    PipelineViz.mount(document.getElementById('pipeline'), M7_PIPELINE);
+
+    // ---------------------------------------------------------------- 3. biblioteca
+    NodeLab.inspector(document.getElementById('inspector'), {
+      id: 'm7-biblioteca-ex',
+      files: M7_BIBLIOTECA.files,
+      fs: M7_BIBLIOTECA.fs,
+      node: M7_BIBLIOTECA.node,
+      entry: 'server.js', port: 3000, packages: ['express', 'morgan', 'zod'],
+      persist: true, watch: 'data/libri.json',
+      missions: M7_BIBLIOTECA.missions,
+      presets: M7_BIBLIOTECA.presets,
+    });
+    (function codiceProgetto() {
+      const tabs = document.getElementById('codice-tabs');
+      const src = document.getElementById('codice-src');
+      const nomi = Object.keys(M7_BIBLIOTECA.files);
+      const lingua = (n) => (n.endsWith('.js') ? 'javascript' : n.endsWith('.json') ? 'json' : 'ini');
+      function mostra(n) {
+        tabs.querySelectorAll('button').forEach((b) => {
+          b.className = `text-xs font-mono px-2 py-1 rounded border ${b.dataset.f === n ? 'border-green-500 bg-green-500/15 text-white' : 'border-gray-700 bg-gray-900 text-gray-400 hover:text-white'}`;
+        });
+        const testo = M7_BIBLIOTECA.files[n];
+        if (window.hljs) { src.innerHTML = hljs.highlight(testo, { language: lingua(n) }).value; src.classList.add('hljs'); }
+        else src.textContent = testo;
+      }
+      tabs.innerHTML = nomi.map((n) => `<button data-f="${n}">${n}</button>`).join('');
+      tabs.onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) mostra(b.dataset.f); };
+      mostra('routes/libri.js');
+    })();
+
+    // ---------------------------------------------------------------- 4. laboratori
+    const labsBox = document.getElementById('labs');
+    for (const cfg of window.M7_LABS) {
+      const el = document.createElement('article');
+      el.id = cfg.id;
+      labsBox.appendChild(el);
+      NodeLab.mount(el, cfg);
+    }
+
+    // ---------------------------------------------------------------- 6. quiz
+    Quiz.mount(document.getElementById('quiz-box'), [
+      {
+        question: 'Il frontend controlla già che il titolo non sia vuoto. Perché validare anche sul server?',
+        options: ['Non serve: basta il controllo del frontend', 'Perché chiunque può mandare richieste direttamente (curl, Postman, uno script) saltando il frontend', 'Solo per avere messaggi in italiano', 'Perché il browser potrebbe essere lento'],
+        correct: 1,
+        explanation: 'Il controllo nel frontend aiuta l\'utente, ma non protegge niente: il server deve validare **tutto** ciò che riceve.',
+      },
+      {
+        question: 'Qual è la differenza tra `schema.parse(dati)` e `schema.safeParse(dati)`?',
+        options: ['Nessuna', '`parse` è più veloce', '`parse` lancia uno `ZodError` se i dati non vanno; `safeParse` restituisce `{ success, data }` oppure `{ success, error }`', '`safeParse` corregge i dati sbagliati'],
+        correct: 2,
+        explanation: 'Con `safeParse` si controlla `r.success` senza `try/catch`; in entrambi i casi gli errori sono in `error.issues`.',
+      },
+      {
+        question: 'Con `z.object({ titolo: z.string() })`, che cosa succede al campo `admin` in `{ "titolo": "Dune", "admin": true }`?',
+        options: ['Viene rimosso dal risultato', 'Provoca un errore', 'Resta nel risultato', 'Diventa `undefined` ma resta come chiave'],
+        correct: 0,
+        explanation: '`z.object` toglie i campi sconosciuti (sostituisce `scegliCampi`). Per rifiutarli con un errore si usa `z.strictObject`.',
+      },
+      {
+        question: 'Per il parametro `?disponibile=false`, quale schema dà davvero `false`?',
+        options: ['`z.boolean()`', '`z.coerce.boolean()`', '`z.stringbool()`', '`z.string()`'],
+        correct: 2,
+        explanation: '`z.boolean()` rifiuta le stringhe; `z.coerce.boolean()` fa `Boolean(\'false\')`, che è `true`. `z.stringbool()` capisce `"true"`/`"false"`, `"1"`/`"0"`, `"yes"`/`"no"`…',
+      },
+      {
+        question: 'In Express 5, che cosa fa `req.query = filtri.parse(req.query)`?',
+        options: ['Sostituisce la query con i dati validati', 'Niente: `req.query` è in sola lettura, l\'assegnazione viene ignorata', 'Lancia sempre un errore', 'Cancella la query string'],
+        correct: 1,
+        explanation: '`req.query` è un getter che rilegge l\'URL. I dati validati si salvano altrove, per esempio in `req.valido.query`.',
+      },
+      {
+        question: 'Lo schema base ha `disponibile: z.boolean().default(true)` e per la PATCH si usa `.partial()`. Che cosa succede con `PATCH /api/libri/2 { "anno": 1948 }` su un libro in prestito?',
+        options: ['Cambia solo l\'anno', 'Errore 400', 'Il libro torna disponibile: in zod 4 i `default` si applicano anche dentro `partial()`', 'Il libro viene eliminato'],
+        correct: 2,
+        explanation: 'In zod 4 i valori predefiniti valgono anche nei campi facoltativi. Lo schema base non deve avere `.default()`: i predefiniti si aggiungono quando si **crea** il libro.',
+      },
+      {
+        question: 'Perché questo gestore degli errori non funziona?',
+        code: "app.use((err, req, res) => {\n  res.status(err.status || 500).json({ errore: err.message });\n});",
+        options: ['Manca `return`', 'Ha 3 parametri: Express riconosce i gestori di errori solo se ne hanno 4', 'Va messo prima delle rotte', '`err.status` non esiste'],
+        correct: 1,
+        explanation: 'Serve la firma `(err, req, res, next)`, anche se `next` non si usa. Con 3 parametri è un middleware normale e gli errori finiscono nel gestore predefinito (HTML).',
+      },
+      {
+        question: 'Un bug fa scattare `TypeError: Cannot read properties of undefined`. Che cosa deve rispondere l\'API?',
+        options: ['400 con il messaggio dell\'errore', '500 con lo stack, così il client capisce', '500 con un messaggio generico (ed eventualmente un id); i dettagli vanno nel log', '200 con `{ ok: false }`'],
+        correct: 2,
+        explanation: 'Non è colpa del client (quindi non 4xx) e i dettagli interni aiutano chi attacca. Si registra tutto nel log e si risponde con un messaggio generico.',
+      },
+      {
+        question: 'Si prova a prestare un libro che è già in prestito. Quale errore e quale status?',
+        options: ['`NonTrovato` → 404', '`RichiestaNonValida` → 400', '`Conflitto` → 409', 'Un 500: è un bug'],
+        correct: 2,
+        explanation: 'La richiesta è ben fatta e il libro esiste, ma lo **stato attuale** impedisce l\'operazione: 409 Conflict.',
+      },
+      {
+        question: 'Nel `.env` c\'è `PORT=3000`. Su quale porta ascolta `PORT=4000 node --env-file=.env server.js`?',
+        options: ['3000: il file vince', '4000: le variabili già presenti nell\'ambiente vincono sul file', 'Nessuna: errore', 'Una porta a caso'],
+        correct: 1,
+        explanation: 'Con `--env-file`, `process.loadEnvFile()` e dotenv le variabili dell\'ambiente non vengono sovrascritte dal file. Così in produzione decide la piattaforma.',
+      },
+      {
+        question: 'Quale di questi file va su Git?',
+        options: ['`.env`', '`.env.example`, con le chiavi ma senza i segreti', 'Entrambi', 'Nessuno dei due'],
+        correct: 1,
+        explanation: '`.env` contiene i segreti e va nel `.gitignore`. `.env.example` dice a chi clona il progetto quali variabili impostare.',
+      },
+      {
+        question: 'Perché `config.js` valida `process.env` all\'avvio e, se qualcosa non va, chiama `process.exit(1)`?',
+        options: ['Per risparmiare memoria', 'Fail fast: meglio non partire con un messaggio chiaro che fallire più tardi, alla prima richiesta', 'Perché Express lo richiede', 'Per nascondere gli errori'],
+        correct: 1,
+        explanation: 'Una configurazione mancante scoperta subito si corregge in un minuto; scoperta alla prima richiesta, magari di notte, è un guasto.',
+      },
+      {
+        question: 'Nell\'architettura a livelli, dove va la regola "un utente può avere al massimo 3 libri in prestito"?',
+        options: ['Nella rotta', 'Nel controller', 'Nel service', 'Nel repository'],
+        correct: 2,
+        explanation: 'È una regola dell\'applicazione: sta nel service, che la applica qualunque sia la strada della richiesta (API, script, job). Il numero 3 può venire dalla configurazione.',
+      },
+      {
+        question: 'Perché il service non dovrebbe usare `req`, `res` o `res.status(404)`?',
+        options: ['Perché sono lenti', 'Perché così il service si può usare e testare anche fuori da HTTP; gli status li decidono controller e gestore degli errori', 'Perché Express lo vieta', 'Non c\'è un motivo'],
+        correct: 1,
+        explanation: 'Il service parla di libri e prestiti e lancia errori del dominio (`NonTrovato`, `Conflitto`). Tradurli in HTTP è compito del livello più esterno.',
+      },
+    ], { id: 'm7-quiz' });
+
+    if (window.hljs) document.querySelectorAll('pre.code code').forEach((el) => { if (!el.dataset.highlighted && el.id !== 'codice-src') hljs.highlightElement(el); });
+    NodeLab.refreshProgress();
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>
