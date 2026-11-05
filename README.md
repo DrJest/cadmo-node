@@ -22,6 +22,7 @@ assets/
   m5-biblioteca.js    "Biblioteca 2.0" (morgan, cors, static, Router, errori) + scenario di PipelineViz (modulo 5)
   m6-biblioteca.js    "Biblioteca 3.0" (API REST v1 con il catalogo su file JSON) + scenari di RestGame (modulo 6)
   m7-biblioteca.js    "Biblioteca 4.0" (zod, classi di errore, .env, livelli) + PipelineViz, SortGame e playground (modulo 7)
+  m8-biblioteca.js    "Biblioteca 5.0" (pagine EJS, partials, form, PRG), la bacheca del doppio invio e il playground di EJS (modulo 8)
 tools/
   harness.js          esegue il runtime simulato dentro Node (senza browser)
   check-labs.js       verifica soluzioni e codice iniziale dei laboratori
@@ -72,6 +73,7 @@ NodeLab.mount(document.getElementById('lab1'), {
   node: '--env-file=.env',                       // opzioni di node, mostrate nel comando del terminale
   packages: ['express', 'morgan', 'cors'],       // pacchetti npm presenti in node_modules
   server: { port: 3000, presets: [{ method: 'GET', path: '/' }, { method: 'POST', path: '/x', body: '{}', headers: 'X-Api-Key: abc', send: false }] },
+  // con browser: true sotto l'editor c'è anche un piccolo browser (start: la prima pagina, height: l'altezza)
   tests: [{ name: '...', argv: [], fs: {}, env: { PORT: '4000' }, check: async (ctx) => { ctx.assert(...); } }],
   hints: ['...'], solution: { 'app.js': '...' },
 });
@@ -88,10 +90,15 @@ NodeLab.mount(document.getElementById('lab1'), {
 
 - `NodeTerminal.mount(el, { id, title, intro, tasks: [{ text, check: (t) => bool }], files })` — shell con npm;
   nelle check: `t.exists`, `t.read`, `t.json`, `t.cwd`, `t.ran(/regex/)`, `t.dep`, `t.devDep`, `t.installed`, `t.script`.
-- `NodeLab.inspector(el, { id, files, entry, port, fs, packages, node, env, missions: [{ text, check: (req, res, { restarts }) => bool }], presets, persist, watch })` — server pronto + missioni HTTP.
+- `NodeLab.inspector(el, { id, files, entry, port, fs, packages, node, env, missions: [{ text, check: (req, res, { restarts }) => bool }], presets, persist, watch, browser, start, height })` — server pronto + missioni HTTP.
   Con `persist: true` il pulsante ↻ riavvia il server mantenendo i file scritti (un secondo pulsante rimette i dati iniziali);
   con `watch: 'data/libri.json'` il contenuto di quel file compare sotto il log e si aggiorna dopo ogni richiesta.
 - `NodeLab.httpClient(el, { send, port, presets, onExchange })`.
+- `NodeLab.browser(el, { send, port, start, height, onExchange })` — un piccolo browser per i server simulati: mostra le pagine
+  in un iframe sandbox, segue link e redirect (301/302/303 → GET, 307/308 ripetono la richiesta), invia i form (GET o POST
+  urlencoded), carica CSS e JS collegati, ha ◀, ↻ (che chiede conferma prima di reinviare un POST) e la vista "Sorgente".
+  Nei lab (`server.browser`) e nell'inspector (`browser: true`) compare in una scheda accanto al client HTTP; ogni richiesta,
+  comprese quelle dei redirect e dei CSS, passa da `onExchange` (quindi dalle missioni).
 - `NodeLab.playground(el, { code, inputs: [{ label, value }], packages, file })` — codice fisso + un valore `input` da scegliere
   o modificare; ▶ lo esegue nel simulatore (es. per provare uno schema zod).
 - `Quiz.mount(el, [{ question, code?, options, correct, explanation }], { id })`.
@@ -117,6 +124,7 @@ node tools/check-labs.js assets/labs-m4.js M4_LABS
 node tools/check-labs.js assets/labs-m5.js M5_LABS
 node tools/check-labs.js assets/labs-m6.js M6_LABS
 node tools/check-labs.js assets/labs-m7.js M7_LABS
+node tools/check-labs.js assets/labs-m8.js M8_LABS
 ```
 
 ## Note sul simulatore
@@ -124,8 +132,12 @@ node tools/check-labs.js assets/labs-m7.js M7_LABS
 - I file sono moduli **CommonJS** (`require` / `module.exports`); `import`/`export` mostrano un avviso.
 - **Express 5** è disponibile con `packages: ['express']` (in un lab, nell'inspector o nel terminale dopo `npm install express`):
   rotte con la sintassi di Express 5 (`:param`, `*splat`, `{opzionale}`), `req.params/query/body`, `express.json/urlencoded/static`,
-  `express.Router`, `res.json/status/send/sendStatus/redirect/location/sendFile`, errori async, 404 e pagine d'errore come l'originale.
-  Non ci sono template engine (`res.render`). Come in Express 5, `req.query` è in sola lettura: `req.query = …` viene ignorato.
+  `express.Router`, `res.json/status/send/sendStatus/redirect/location/sendFile/render`, errori async, 404 e pagine d'errore come l'originale.
+  Come in Express 5, `req.query` è in sola lettura: `req.query = …` viene ignorato.
+- **EJS 7** (`packages: ['ejs']`): porting del vero motore (stesso codice generato con `with`, stessi tag `<%= <%- <% <%# <%% -%> <%_ _%>`,
+  `include` relativi al file, escape di `& < > " '`, errori con il contesto delle righe, `compile/render/renderFile`).
+  In Express: `app.set('view engine', 'ejs')`, `res.render`/`app.render` con `app.locals` e `res.locals`, la ricerca in `views/`
+  (`Failed to lookup view …`), `app.engine` e la "view cache" con `NODE_ENV=production`. Senza il pacchetto: `Cannot find module 'ejs'`.
 - **morgan** (formati `dev`, `tiny`, `short`, `common`, `combined`, token personalizzati, opzioni `skip`, `stream`, `immediate`)
   e **cors** (porting fedele: `origin` stringa/array/RegExp/funzione, preflight `OPTIONS`) sono integrati come express:
   `packages: ['express', 'morgan', 'cors']` oppure `npm install` nel terminale.

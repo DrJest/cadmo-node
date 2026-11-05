@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esercitazioni Modulo 8 — CADMO NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/mode/multiplex.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlembedded/htmlembedded.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white prose-code">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <div class="flex items-center gap-5 text-sm">
+          <a href="modulo_8.html" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="presentation" class="w-4 h-4"></i><span class="hidden sm:inline">Slide</span></a>
+          <a href="./" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Home</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="bg-gray-950 border-b border-gray-800 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center animate-fade-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-pink-900/30 border border-pink-500/30 text-xs text-pink-300 font-mono mb-4 uppercase tracking-wider">
+        <i data-lucide="layout-template" class="w-4 h-4"></i> EJS · partials · form · urlencoded · PRG
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4">Esercitazioni Modulo 8</h1>
+      <p class="text-gray-400 text-lg">Prova EJS, indovina che cosa arriva al browser, naviga nella Biblioteca 5.0 e completa cinque laboratori con verifica automatica, fino al boss del form validato.</p>
+      <p class="mt-4 text-sm font-mono text-gray-500"><span data-lab-progress="m8-primo,m8-catalogo,m8-partials,m8-prg,m8-boss"></span> · i progressi restano salvati in questo browser</p>
+    </div>
+  </header>
+
+  <!-- Indice -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+    <div class="flex flex-wrap gap-2 justify-center text-sm">
+      <a href="#guida" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">1 · Guida rapida</a>
+      <a href="#prova" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">2 · Prova e indovina</a>
+      <a href="#biblioteca" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">3 · Biblioteca 5.0</a>
+      <a href="#lab" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">4 · Laboratori</a>
+      <a href="#pc" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">5 · Sul tuo PC</a>
+      <a href="#quiz" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">6 · Quiz</a>
+    </div>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-20">
+
+    <!-- 1. GUIDA RAPIDA -->
+    <section id="guida" class="scroll-mt-20 animate-fade-in delay-100">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="book-open" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">1. Guida rapida</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-green-400 mb-2">Render e viste</h3>
+          <pre class="code small"><code class="language-javascript">// npm install ejs
+app.set('view engine', 'ejs');
+app.get('/', (req, res) => {
+  res.render('catalogo', { titolo: 'Catalogo', libri });
+});                          // → views/catalogo.ejs
+// vista inesistente → 500 "Failed to lookup view"</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-cyan-400 mb-2">I tag</h3>
+          <pre class="code small"><code class="language-html">&lt;%= valore %&gt;   stampa con l'escape   ← sempre, per i dati
+&lt;%- html %&gt;     stampa così com'è     ← solo per gli include
+&lt;% codice %&gt;    JavaScript: if, for…of, forEach
+&lt;%# nota %&gt;     commento   ·   -%&gt; toglie l'a capo dopo il tag
+&lt;% if (locals.errore) { %&gt; … &lt;% } %&gt;   ← variabile forse assente</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-purple-400 mb-2">Partials e locals</h3>
+          <pre class="code small"><code class="language-javascript">// nelle viste:
+//   &lt;%- include('partials/testa') %&gt;              relativo al file corrente
+//   &lt;%- include('partials/scheda', { libro }) %&gt;  con dati in più
+app.locals.sito = 'Biblioteca CADMO';   // per tutte le viste
+app.use((req, res, next) => {           // per le viste di questa richiesta
+  res.locals.percorso = req.path;
+  next();
+});
+app.use(express.static('public'));      // &lt;link href="/stile.css"&gt;</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-yellow-400 mb-2">Il form</h3>
+          <pre class="code small"><code class="language-html">&lt;form method="POST" action="/libri"&gt;        &lt;!-- solo GET o POST --&gt;
+  &lt;input name="titolo" value="&lt;%= valori.titolo %&gt;"&gt;
+  &lt;input type="checkbox" name="disponibile"&gt;  &lt;!-- "on" o assente --&gt;
+  &lt;button&gt;Salva&lt;/button&gt;
+&lt;/form&gt;
+&lt;form method="GET" action="/"&gt;               &lt;!-- ricerca: /?q=… --&gt;
+  &lt;input name="q" value="&lt;%= q %&gt;"&gt;
+&lt;/form&gt;</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-red-400 mb-2">Leggere e validare</h3>
+          <pre class="code small"><code class="language-javascript">app.use(express.urlencoded());          // req.body: solo stringhe
+const vuoto = (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v);
+z.preprocess(vuoto, z.coerce.number().int().optional()) // '' → assente
+z.stringbool().default(false)                           // la checkbox
+const r = libroForm.safeParse(req.body);
+if (!r.success) return res.status(422).render('nuovo',
+  { valori: req.body, errori: z.flattenError(r.error).fieldErrors });</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-emerald-400 mb-2">Post/Redirect/Get</h3>
+          <pre class="code small"><code class="language-plaintext">POST /libri       → 303 See Other · Location: /libri/16
+GET  /libri/16    → 200 (la pagina)
+↻ ricarica        → ripete solo il GET: niente doppioni
+
+res.redirect(303, `/libri/${libro.id}`);
+eliminare: &lt;form method="POST" action="/libri/3/elimina"&gt;   mai un link!</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. PROVA E INDOVINA -->
+    <section id="prova" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-round" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">2. Prova e indovina</h2>
+      </div>
+
+      <h3 class="text-xl font-bold text-white mt-6 mb-2">Il playground di EJS</h3>
+      <p class="text-gray-400 mb-4">Il codice gira davvero nel simulatore. Scegli i dati (o modificali) e premi <kbd>▶ Esegui</kbd>: guarda l'escape, il ciclo, la variabile che manca.</p>
+      <div id="play-ejs" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Che cosa arriva?</h3>
+      <p class="text-gray-400 mb-4">Clicca le righe nell'ordine in cui arrivano al browser (o al server). Alcune possono comparire più di una volta, altre mai!</p>
+      <div id="order-game"></div>
+    </section>
+
+    <!-- 3. BIBLIOTECA 5.0 -->
+    <section id="biblioteca" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="library" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">3. Biblioteca 5.0</h2>
+      </div>
+      <p class="text-gray-400 mb-4">La Biblioteca con le sue pagine: il catalogo con la ricerca, la scheda di ogni libro, il form "Nuovo libro" validato con zod (con gli errori accanto ai campi) e l'eliminazione, sempre con Post/Redirect/Get. Naviga nel <strong>browser</strong> (link, form, ↻ e ◀ funzionano come in quello vero) e guarda le richieste nel log del server. Il pulsante <kbd>↻</kbd> del log riavvia il server mantenendo i file; quello con il database rimette i dati iniziali.</p>
+      <div id="inspector" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <button onclick="toggleSolution('codice-server')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="file-code-2" class="w-4 h-4"></i> Mostra il codice del progetto</button>
+      <div id="codice-server" class="solution-container mt-4">
+        <div id="codice-tabs" class="flex flex-wrap gap-1.5 mb-2"></div>
+        <pre class="code small"><code id="codice-src" class="language-javascript"></code></pre>
+      </div>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Il doppio invio</h3>
+      <p class="text-gray-400 mb-4">Una bacheca con lo stesso form inviato in due modi: senza e con Post/Redirect/Get. Che cosa succede a <code class="inline">data/messaggi.json</code> quando premi ↻?</p>
+      <div id="doppio" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+    </section>
+
+    <!-- 4. LABORATORI -->
+    <section id="lab" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-conical" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">4. Laboratori nel browser</h2>
+      </div>
+      <div class="text-gray-400 mb-8 space-y-2">
+        <p>In ogni progetto <code class="inline">express</code> ed <code class="inline">ejs</code> (e, nel boss, <code class="inline">zod</code>) sono già installati. Premi <kbd>▶ Esegui</kbd>: la pagina compare nel <strong>browser</strong> sotto l'editor, dove puoi cliccare i link e inviare i form. La scheda <strong>Client HTTP</strong> serve per le richieste "a mano". Poi premi <kbd>Verifica</kbd>.</p>
+        <p class="text-sm">💡 I template sono nelle tab sopra l'editor (<code class="inline">views/…</code>). Dopo ogni modifica, anche solo a un template, premi di nuovo <kbd>▶ Esegui</kbd>: il browser ricarica la pagina da solo.</p>
+      </div>
+      <div class="space-y-10" id="labs"></div>
+    </section>
+
+    <!-- 5. MISSIONI SUL PC -->
+    <section id="pc" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="laptop" class="w-6 h-6 text-emerald-400"></i>
+        <h2 class="text-2xl font-bold text-white">5. Missioni sul tuo PC</h2>
+      </div>
+      <div class="space-y-8">
+        <!-- Missione A -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-emerald-900/50 flex items-center justify-center border border-emerald-500/30"><i data-lucide="folder-tree" class="w-5 h-5 text-emerald-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione A: La Biblioteca 5.0 sul tuo PC</h3>
+              <p class="text-sm text-emerald-400 font-mono">Focus: views e public, --watch e template, view cache, DevTools</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-emerald-500">
+            <li>Crea <code class="inline">corso-node/lezione8</code>, installa <code class="inline">express</code>, <code class="inline">ejs</code>, <code class="inline">zod</code> e <code class="inline">morgan</code>, ricopia i file della Biblioteca 5.0 (sezione 3, una scheda per file) e crea <code class="inline">data/libri.json</code> (va bene quello della lezione 7).</li>
+            <li>Avvia con <code class="inline">node --watch server.js</code> e cambia il testo del <code class="inline">&lt;footer&gt;</code> in <code class="inline">partials/piede.ejs</code>: il server si riavvia? La modifica si vede ricaricando la pagina? E se cambi <code class="inline">server.js</code>?</li>
+            <li>Ora avvia con <code class="inline">NODE_ENV=production node server.js</code> e rifai la prova sul footer. Che cosa cambia, e perché?</li>
+            <li>Apri gli Strumenti per sviluppatori (F12) → <strong>Rete</strong>, spunta "Preserve log" e salva un libro: quali richieste vedi, con quali status? Nella richiesta POST cerca il "Payload" (o "Form Data").</li>
+          </ol>
+          <button onclick="toggleSolution('sol-a')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-a" class="solution-container mt-4">
+            <pre class="code small"><code class="language-bash">mkdir -p corso-node/lezione8 && cd corso-node/lezione8
+npm init -y
+npm install express ejs zod morgan
+mkdir -p routes schemi services views/partials public data
+# ricopia i file della sezione 3 e data/libri.json della lezione 7
+node --watch server.js
+
+# 2. modificare un .ejs NON riavvia il server: --watch segue solo i file caricati con require.
+#    Ma non serve: in sviluppo Express rilegge (e ricompila) il template a ogni res.render,
+#    quindi basta ricaricare la pagina. Modificare server.js invece riavvia il processo.
+
+# 3. con NODE_ENV=production Express attiva la "view cache": ogni template viene compilato
+#    una volta sola e tenuto in memoria. La modifica al footer si vede solo dopo un riavvio.
+#    (Più veloce, e in produzione i file non cambiano.)
+#    PowerShell: $env:NODE_ENV="production"; node server.js
+
+# 4. salvando un libro: POST /libri → 303, poi GET /libri/9?creato=1 → 200, poi /stile.css
+#    (spesso dalla cache, o 304). Senza "Preserve log" la POST sparisce con il cambio di pagina.
+#    Payload della POST: titolo=…&amp;autore=…&amp;anno=…&amp;genere=…&amp;disponibile=on
+#    con Content-Type: application/x-www-form-urlencoded</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione B -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-purple-900/50 flex items-center justify-center border border-purple-500/30"><i data-lucide="pencil" class="w-5 h-5 text-purple-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione B: Modificare un libro</h3>
+              <p class="text-sm text-purple-400 font-mono">Focus: un partial per due form, valori iniziali, PRG anche nella modifica</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-purple-500">
+            <li>Sposta i campi del form di <code class="inline">nuovo.ejs</code> (non il <code class="inline">&lt;form&gt;</code>) in <code class="inline">views/partials/campi-libro.ejs</code> e includilo in <code class="inline">nuovo.ejs</code>.</li>
+            <li>Crea <code class="inline">GET /libri/:id/modifica</code>: la vista <code class="inline">modifica.ejs</code> usa lo stesso partial, con i <code class="inline">valori</code> presi dal libro, e invia il form a <code class="inline">POST /libri/:id/modifica</code>.</li>
+            <li>Nella POST: stesso schema, stessi errori (422); se va tutto bene aggiorna il libro (aggiungi <code class="inline">aggiorna(id, dati)</code> al service) e fai un 303 verso la scheda.</li>
+            <li>Aggiungi il link "Modifica" nella scheda del libro. Perché qui va bene un link, e per eliminare no?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-b')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-b" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-javascript">// routes/pagine.js
+router.get('/libri/:id/modifica', (req, res, next) => {
+  const libro = libri.trova(Number(req.params.id));
+  if (!libro) return next();
+  // i valori iniziali del form sono quelli del libro (disponibile: true → checkbox spuntata)
+  res.render('modifica', { titolo: 'Modifica', libro, valori: libro, errori: {}, GENERI });
+});
+
+router.post('/libri/:id/modifica', (req, res, next) => {
+  const libro = libri.trova(Number(req.params.id));
+  if (!libro) return next();
+  const r = libroForm.safeParse(req.body);
+  if (!r.success) {
+    return res.status(422).render('modifica', {
+      titolo: 'Modifica', libro, valori: req.body, errori: z.flattenError(r.error).fieldErrors, GENERI,
+    });
+  }
+  libri.aggiorna(libro.id, r.data);
+  res.redirect(303, `/libri/${libro.id}`);
+});
+
+// services/libri.js — il form manda TUTTI i campi: è una sostituzione, come un PUT
+function aggiorna(id, dati) {
+  const tutti = leggi();
+  const i = tutti.findIndex((l) => l.id === id);
+  tutti[i] = { id, ...dati };
+  scrivi(tutti);
+  return tutti[i];
+}
+module.exports = { cerca, trova, crea, aggiorna, elimina };</code></pre>
+            <pre class="code small"><code class="language-html">&lt;!-- views/modifica.ejs (nuovo.ejs è uguale, con action="/libri" e un altro titolo) --&gt;
+&lt;%- include('partials/testa') %&gt;
+&lt;h1&gt;Modifica «&lt;%= libro.titolo %&gt;»&lt;/h1&gt;
+&lt;form method="POST" action="/libri/&lt;%= libro.id %&gt;/modifica"&gt;
+  &lt;%- include('partials/campi-libro') %&gt;
+  &lt;button&gt;Salva le modifiche&lt;/button&gt;
+&lt;/form&gt;
+&lt;%- include('partials/piede') %&gt;
+
+&lt;!-- views/libro.ejs --&gt;
+&lt;a href="/libri/&lt;%= libro.id %&gt;/modifica"&gt;Modifica&lt;/a&gt;
+&lt;!-- Il link apre solo il form (un GET che non cambia niente): va benissimo.
+     È il POST del form a modificare. Eliminare con un link, invece, vorrebbe dire
+     un GET che cambia i dati: anteprime e crawler potrebbero farlo da soli. --&gt;</code></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 6. QUIZ -->
+    <section id="quiz" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="check-square" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">6. Quiz di verifica</h2>
+      </div>
+      <div id="quiz-box"></div>
+    </section>
+  </main>
+
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm font-mono">studente@nodelab:~$ res.redirect(303, '/libri')</div>
+  </footer>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m8-biblioteca.js"></script>
+  <script src="assets/labs-m8.js"></script>
+  <script>
+    // ---------------------------------------------------------------- 2. prova e indovina
+    NodeLab.playground(document.getElementById('play-ejs'), Object.assign({ packages: ['ejs'], file: 'prova.js' }, M8_PLAY));
+
+    OrderGame.mount(document.getElementById('order-game'), [
+      {
+        title: '`<%=` o `<%-`?',
+        lang: 'html',
+        cmd: "$ curl localhost:3000/          # titolo = '<b>Ciao</b> & co.'",
+        code: `<p><%= titolo %></p>
+<p><%- titolo %></p>`,
+        chips: ['<p>&lt;b&gt;Ciao&lt;/b&gt; &amp; co.</p>', '<p><b>Ciao</b> & co.</p>', '<p>Ciao & co.</p>', '<p>titolo</p>'],
+        answer: ['<p>&lt;b&gt;Ciao&lt;/b&gt; &amp; co.</p>', '<p><b>Ciao</b> & co.</p>'],
+        explain: '`<%=` trasforma `<`, `>` e `&` in entità: il browser mostra il testo com\'è scritto. `<%-` lo lascia così com\'è: il browser lo interpreta come HTML (qui un grassetto, altrove uno `<script>`…).',
+      },
+      {
+        title: 'Un ciclo con `if`',
+        lang: 'html',
+        cmd: '$ curl localhost:3000/',
+        prompt: 'libri = [{ t: "A", d: true }, { t: "B", d: false }, { t: "C", d: true }]. Clicca le righe nell\'ordine in cui arrivano al browser (gli spazi non contano):',
+        code: `<% libri.forEach((l) => { %>
+  <% if (l.d) { %>
+    <li><%= l.t %></li>
+  <% } else { %>
+    <li class="prestito"><%= l.t %></li>
+  <% } %>
+<% }) %>
+<p><%= libri.filter((l) => l.d).length %> disponibili</p>`,
+        chips: ['<li>A</li>', '<li>B</li>', '<li class="prestito">B</li>', '<li>C</li>', '<li class="prestito">C</li>', '<p>2 disponibili</p>', '<p>3 disponibili</p>'],
+        answer: ['<li>A</li>', '<li class="prestito">B</li>', '<li>C</li>', '<p>2 disponibili</p>'],
+        explain: 'Il ciclo produce un `<li>` per libro, e l\'`if` sceglie quale dei due. Il conteggio usa `filter`: due libri hanno `d: true`. (Un calcolo così, però, starebbe meglio nella rotta.)',
+      },
+      {
+        title: 'Che cosa c\'è in `req.body`?',
+        cmd: '$ # il browser invia il form',
+        prompt: 'L\'utente scrive 1958 nell\'anno, lascia vuote le note e NON spunta la checkbox. Che cosa stampa il server?',
+        code: `// <input name="anno"> <input name="note"> <input type="checkbox" name="disponibile">
+app.use(express.urlencoded());
+app.post('/libri', (req, res) => {
+  console.log(typeof req.body.anno);
+  console.log(JSON.stringify(req.body.note));
+  console.log(req.body.disponibile);
+  console.log(Number(req.body.note));
+  res.redirect(303, '/');
+});`,
+        chips: ['string', 'number', '""', 'undefined', 'false', 'on', '0', 'NaN'],
+        answer: ['string', '""', 'undefined', '0'],
+        explain: 'Dai form arrivano solo **stringhe**: `"1958"`. Un campo vuoto è `""`, e `Number("")` è **0** (non `NaN`!). Una checkbox non spuntata **non viene inviata**: `undefined`.',
+      },
+      {
+        title: 'Senza PRG',
+        cmd: '$ # l\'utente invia il form, poi preme ↻ e conferma',
+        prompt: 'Quali richieste vede il server, in ordine?',
+        code: `app.post('/libri', (req, res) => {
+  libri.push(req.body.titolo);
+  res.render('libri', { libri });
+});`,
+        chips: ['POST /libri → 200', 'POST /libri → 200', 'GET /libri → 200', 'POST /libri → 303', 'GET / → 200'],
+        answer: ['POST /libri → 200', 'POST /libri → 200'],
+        explain: 'La pagina che si vede è la risposta al POST: ricaricarla **ripete il POST** (dopo la conferma del browser). Il libro viene aggiunto due volte.',
+      },
+      {
+        title: 'Con PRG',
+        cmd: '$ # l\'utente invia il form, poi preme ↻',
+        prompt: 'Quali richieste vede il server, in ordine?',
+        code: `app.post('/libri', (req, res) => {
+  libri.push(req.body.titolo);
+  res.redirect(303, '/libri');
+});
+app.get('/libri', (req, res) => res.render('libri', { libri }));`,
+        chips: ['POST /libri → 303', 'GET /libri → 200', 'GET /libri → 200', 'POST /libri → 200', 'POST /libri → 303'],
+        answer: ['POST /libri → 303', 'GET /libri → 200', 'GET /libri → 200'],
+        explain: 'Il 303 fa fare al browser un **GET** automatico. La pagina che si vede è quella del GET: ↻ ripete solo il GET, nessun doppione.',
+      },
+      {
+        title: 'BOSS: la variabile che manca',
+        cmd: '$ curl -i localhost:3000/ && curl -i localhost:3000/?q=levi',
+        prompt: 'Che status riceve il client nelle due richieste?',
+        code: `app.get('/', (req, res) => {
+  const q = req.query.q;
+  if (q) return res.render('catalogo', { libri: cerca(q), q });
+  res.render('catalogo', { libri: tutti() });
+});
+// views/catalogo.ejs:   <% if (q) { %><p>Risultati per «<%= q %>»</p><% } %>`,
+        chips: ['200', '500', '404', '200', '500'],
+        answer: ['500', '200'],
+        explain: 'Senza `?q=` la rotta non passa `q`: nel template è una variabile **inesistente** → `ReferenceError` → 500. Con `?q=levi` c\'è e va tutto bene. Rimedi: passare sempre `q` (anche `\'\'`) oppure scrivere `locals.q`.',
+      },
+    ], { id: 'm8-order' });
+
+    // ---------------------------------------------------------------- 3. biblioteca
+    NodeLab.inspector(document.getElementById('inspector'), {
+      id: 'm8-biblioteca-ex',
+      files: M8_BIBLIOTECA.files, fs: M8_BIBLIOTECA.fs, entry: 'server.js', port: 3000,
+      packages: M8_BIBLIOTECA.packages, browser: true, persist: true, watch: 'data/libri.json',
+      missions: M8_BIBLIOTECA.missions, presets: M8_BIBLIOTECA.presets,
+    });
+    NodeLab.inspector(document.getElementById('doppio'), {
+      id: 'm8-doppio-ex',
+      files: M8_DOPPIO.files, fs: M8_DOPPIO.fs, entry: 'server.js', port: 3000,
+      packages: ['express', 'ejs'], browser: true, height: '16rem', persist: true, watch: 'data/messaggi.json',
+      missions: M8_DOPPIO.missions,
+    });
+    (function codiceProgetto() {
+      const tabs = document.getElementById('codice-tabs');
+      const src = document.getElementById('codice-src');
+      const nomi = Object.keys(M8_BIBLIOTECA.files);
+      const lingua = (n) => (n.endsWith('.js') ? 'javascript' : n.endsWith('.ejs') ? 'html' : n.endsWith('.css') ? 'css' : 'plaintext');
+      function mostra(n) {
+        tabs.querySelectorAll('button').forEach((b) => {
+          b.className = `text-xs font-mono px-2 py-1 rounded border ${b.dataset.f === n ? 'border-green-500 bg-green-500/15 text-white' : 'border-gray-700 bg-gray-900 text-gray-400 hover:text-white'}`;
+        });
+        const testo = M8_BIBLIOTECA.files[n];
+        if (window.hljs) { src.innerHTML = hljs.highlight(testo, { language: lingua(n) }).value; src.classList.add('hljs'); }
+        else src.textContent = testo;
+      }
+      tabs.innerHTML = nomi.map((n) => `<button data-f="${n}">${n}</button>`).join('');
+      tabs.onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) mostra(b.dataset.f); };
+      mostra('routes/pagine.js');
+    })();
+
+    // ---------------------------------------------------------------- 4. laboratori
+    const labsBox = document.getElementById('labs');
+    for (const cfg of window.M8_LABS) {
+      const el = document.createElement('article');
+      el.id = cfg.id;
+      labsBox.appendChild(el);
+      NodeLab.mount(el, cfg);
+    }
+
+    // ---------------------------------------------------------------- 6. quiz
+    Quiz.mount(document.getElementById('quiz-box'), [
+      {
+        question: 'Con il rendering lato server (SSR), che cosa riceve il browser?',
+        options: ['Solo JSON: la pagina la costruisce il JavaScript del browser', 'HTML già pronto, costruito dal template con i dati', 'Il file `.ejs`, che il browser interpreta', 'Uno script che scarica i dati'],
+        correct: 1,
+        explanation: 'Il template gira sul server: al browser arriva HTML normale. Il file `.ejs` non lascia mai il server.',
+      },
+      {
+        question: 'Con `app.set(\'view engine\', \'ejs\')`, quale file usa `res.render(\'catalogo\', { libri })`?',
+        options: ['`catalogo.html`', '`views/catalogo.ejs`', '`public/catalogo.ejs`', '`templates/catalogo`'],
+        correct: 1,
+        explanation: 'La cartella predefinita delle viste è `views/` (si cambia con `app.set(\'views\', …)`) e l\'estensione viene dal view engine.',
+      },
+      {
+        question: 'Un utente salva come titolo `<script>alert(1)<\/script>`. Quale tag lo mostra in modo sicuro?',
+        options: ['`<%- titolo %>`', '`<%= titolo %>`', '`<% titolo %>`', '`<%# titolo %>`'],
+        correct: 1,
+        explanation: '`<%=` fa l\'escape: `<` diventa `&lt;` e il browser mostra il testo. `<%-` lo inserirebbe come HTML (XSS); `<% %>` esegue senza stampare; `<%# %>` è un commento.',
+      },
+      {
+        question: 'Il template contiene `<% if (errore) { %>`, ma la rotta non passa `errore`. Che cosa succede?',
+        options: ['Niente: `errore` vale `undefined`', '`ReferenceError: errore is not defined` e una pagina 500', 'Il blocco viene saltato con un avviso', 'EJS mette `false`'],
+        correct: 1,
+        explanation: 'Nel template i dati sono variabili: una variabile mai dichiarata dà `ReferenceError`. `locals.errore` invece vale `undefined` senza errori.',
+      },
+      {
+        question: 'Perché gli include si scrivono con `<%-` e non con `<%=`?',
+        options: ['È la stessa cosa', 'Il partial è HTML già pronto: con `<%=` verrebbe "escapato" e comparirebbe come testo', '`<%=` non accetta funzioni', 'Per velocità'],
+        correct: 1,
+        explanation: '`include()` restituisce l\'HTML del partial, che deve arrivare al browser così com\'è. I dati dentro il partial sono già passati da `<%=`.',
+      },
+      {
+        question: 'Dove conviene mettere il nome del sito, che serve in tutte le pagine?',
+        options: ['In ogni `res.render`', 'In `app.locals`', 'In `req.body`', 'In un cookie'],
+        correct: 1,
+        explanation: '`app.locals` è visibile in tutte le viste; `res.locals` serve per i dati di una singola richiesta (il percorso, l\'utente collegato).',
+      },
+      {
+        question: 'Un form contiene `<input placeholder="Titolo">`, senza `name`. Che cosa arriva al server?',
+        options: ['Il valore, con chiave `Titolo`', 'Il valore, con chiave `input`', 'Niente: senza `name` il campo non viene inviato', 'Un errore 400'],
+        correct: 2,
+        explanation: 'Il `name` è la chiave del dato: `titolo=…`. Senza `name` il browser ignora il campo.',
+      },
+      {
+        question: '`<input type="checkbox" name="disponibile">` non è spuntata. Che cosa contiene `req.body.disponibile`?',
+        options: ['`false`', '`"off"`', '`undefined`: il campo non viene inviato', '`""`'],
+        correct: 2,
+        explanation: 'Una checkbox spuntata invia `disponibile=on`; non spuntata, niente. Con zod: `z.stringbool().default(false)`.',
+      },
+      {
+        question: 'Un form con `method="GET"` e `<input name="q">`: dove finisce quello che scrive l\'utente?',
+        options: ['Nel body', 'Nella query string: `/?q=…`', 'In un cookie', 'Negli header'],
+        correct: 1,
+        explanation: 'Con GET i campi diventano la query string: perfetto per ricerche e filtri, che si possono anche salvare nei preferiti o condividere.',
+      },
+      {
+        question: 'Dopo un POST riuscito, perché `res.redirect(303, …)` invece di `res.render(…)`?',
+        options: ['Perché è più veloce', 'Così la pagina mostrata è il risultato di un GET: ricaricarla non ripete il POST', '`res.render` non funziona dopo un POST', 'Per nascondere i dati'],
+        correct: 1,
+        explanation: 'È il pattern Post/Redirect/Get: niente doppioni con ↻ o con Indietro, e nella barra c\'è un indirizzo vero.',
+      },
+      {
+        question: 'I dati del form non sono validi. Che cosa conviene fare?',
+        options: ['Un redirect alla pagina del form', 'Rispondere 422 con lo stesso form, i valori già scritti e gli errori accanto ai campi', 'Rispondere 200 con un `alert`', 'Rispondere 500'],
+        correct: 1,
+        explanation: 'Con un redirect si perderebbe quello che l\'utente ha scritto. Il redirect (PRG) si fa quando il POST **riesce**.',
+      },
+      {
+        question: 'Perché eliminare un libro con `<a href="/libri/3/elimina">` è una cattiva idea?',
+        options: ['I link sono lenti', 'Un GET deve essere sicuro: anteprime, crawler e browser che precaricano le pagine potrebbero eliminare il libro da soli', 'Nei link non si possono usare numeri', 'Non è un problema'],
+        correct: 1,
+        explanation: 'Le operazioni che modificano i dati vanno con POST (un form con un pulsante), seguito da un redirect 303.',
+      },
+    ], { id: 'm8-quiz' });
+
+    if (window.hljs) document.querySelectorAll('pre.code code').forEach((el) => { if (!el.dataset.highlighted && el.id !== 'codice-src') hljs.highlightElement(el); });
+    NodeLab.refreshProgress();
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

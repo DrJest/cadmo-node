@@ -26,9 +26,11 @@
   const icons = () => window.lucide && window.lucide.createIcons();
   // modalità di CodeMirror e linguaggio di highlight.js dal nome del file
   const isJs = (n) => /\.(c|m)?js$/.test(n);
-  const cmMode = (n) => (n.endsWith('.json') ? { name: 'javascript', json: true } : isJs(n) ? 'javascript' : 'text/plain');
-  const hlLang = (n) => (n.endsWith('.json') ? 'json' : isJs(n) ? 'javascript' : /(^|\/)\.env/.test(n) ? 'ini' : 'plaintext');
-  const fileIcon = (n) => (n.endsWith('.json') ? 'file-json' : isJs(n) ? 'file-code-2' : /(^|\/)\.env/.test(n) ? 'key-round' : 'file-text');
+  const isTpl = (n) => /\.(ejs|html?)$/.test(n);
+  // i modi di CodeMirror per HTML ed EJS si caricano solo nelle pagine che li usano (altrimenti testo semplice)
+  const cmMode = (n) => (n.endsWith('.json') ? { name: 'javascript', json: true } : isJs(n) ? 'javascript' : n.endsWith('.ejs') ? 'application/x-ejs' : isTpl(n) ? 'htmlmixed' : n.endsWith('.css') ? 'css' : 'text/plain');
+  const hlLang = (n) => (n.endsWith('.json') ? 'json' : isJs(n) ? 'javascript' : isTpl(n) ? 'html' : n.endsWith('.css') ? 'css' : /(^|\/)\.env/.test(n) ? 'ini' : 'plaintext');
+  const fileIcon = (n) => (n.endsWith('.json') ? 'file-json' : isJs(n) ? 'file-code-2' : isTpl(n) ? 'file-code' : n.endsWith('.css') ? 'palette' : /(^|\/)\.env/.test(n) ? 'key-round' : 'file-text');
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem('nodelab:' + k)); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem('nodelab:' + k, JSON.stringify(v)); } catch (e) { /* storage non disponibile */ } },
@@ -243,6 +245,174 @@
     };
   }
 
+  /* ----------------------------------------------------------- Browser
+   * Un piccolo browser per i server simulati: mostra le pagine HTML, segue link e redirect
+   * (303 → GET, come i browser veri), invia i form (GET o POST urlencoded), carica i CSS
+   * collegati e, come un browser vero, chiede conferma prima di reinviare un POST con ↻.
+   * La pagina gira in un iframe sandbox (origine opaca): uno script iniettato inoltra
+   * click e invii dei form al simulatore con postMessage.
+   * NodeLab.browser(el, { port, send, onExchange, start: '/', height: '22rem' })
+   */
+  const BR_HOOK = `<script>(function(){var p=function(m){m.nodelab='browser';parent.postMessage(m,'*');};
+document.addEventListener('click',function(e){if(e.defaultPrevented)return;var a=e.target.closest&&e.target.closest('a[href]');if(!a)return;var h=a.getAttribute('href');if(!h||h.charAt(0)==='#'||/^javascript:/i.test(h))return;e.preventDefault();p({type:'nav',href:h});});
+document.addEventListener('submit',function(e){if(e.defaultPrevented)return;e.preventDefault();var f=e.target,s=e.submitter,d;try{d=new FormData(f,s||undefined);}catch(x){d=new FormData(f);if(s&&s.name)d.append(s.name,s.value);}var q=[];d.forEach(function(v,k){q.push([k,typeof v==='string'?v:v.name]);});
+p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('method')||'get',action:(s&&s.getAttribute('formaction'))||f.getAttribute('action')||'',params:q});});})();<\/script>`;
+  function browser(el, opts) {
+    const port = opts.port || 3000;
+    const start = opts.start || '/';
+    el.innerHTML = `
+      <div class="bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
+        <div class="flex items-center gap-1.5 px-3 py-2 bg-gray-800 border-b border-gray-700">
+          <button class="br-back p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700" title="Indietro"><i data-lucide="arrow-left" class="w-4 h-4"></i></button>
+          <button class="br-reload p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700" title="Ricarica"><i data-lucide="rotate-cw" class="w-4 h-4"></i></button>
+          <form class="br-bar flex-1 flex min-w-0"><input class="br-url flex-1 min-w-0 bg-gray-950 border border-gray-700 rounded-full px-3 py-1 font-mono text-sm text-gray-100 focus:outline-none focus:border-cyan-500" spellcheck="false" value="http://localhost:${port}${esc(start)}"></form>
+          <span class="br-state text-xs font-mono whitespace-nowrap ml-1"></span>
+        </div>
+        <div class="br-warn hidden flex flex-wrap items-center gap-2 px-3 py-2 bg-yellow-500/10 border-b border-yellow-500/30 text-sm text-yellow-100"></div>
+        <div class="relative">
+          <iframe class="br-frame block w-full bg-white" style="height:${opts.height || '22rem'}" sandbox="allow-scripts allow-forms" title="Pagina"></iframe>
+          <pre class="br-src hidden absolute inset-0 overflow-auto m-0 p-3 text-xs bg-gray-950 text-gray-200 whitespace-pre-wrap"></pre>
+        </div>
+        <div class="flex items-start gap-2 px-3 py-1.5 bg-gray-800 border-t border-gray-700 text-xs">
+          <span class="text-gray-500 mt-0.5">Richieste:</span><div class="br-log flex-1 flex flex-wrap gap-1 font-mono min-w-0"></div>
+          <button class="br-view text-gray-400 hover:text-white px-2 py-0.5 rounded border border-gray-700 whitespace-nowrap">Sorgente</button>
+        </div>
+      </div>`;
+    const $ = (s) => el.querySelector(s);
+    const frame = $('.br-frame');
+    const log = $('.br-log');
+    const warnBox = $('.br-warn');
+    const hdr = { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' };
+    const stack = [];
+    let current = null;
+    let busy = false;
+    const here = () => `http://localhost:${current ? current.port : port}${current ? current.path : start}`;
+    const resolve = (href, base) => { try { return new URL(href, base || here()); } catch (e) { return null; } };
+    const isLocal = (u) => u && u.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(u.hostname);
+    const toReq = (u, extra) => Object.assign({ method: 'GET', path: u.pathname + u.search, port: Number(u.port || 80), headers: hdr }, extra || {});
+    function warn(html, actions) {
+      warnBox.innerHTML = `<i data-lucide="alert-triangle" class="w-4 h-4 text-yellow-400 shrink-0"></i><span class="flex-1 min-w-[12rem]">${html}</span>${(actions || []).map((a, i) => `<button data-a="${i}" class="px-2 py-0.5 rounded border ${i ? 'border-gray-600 text-gray-300' : 'border-yellow-500/60 bg-yellow-500/20 text-white'} hover:text-white">${a[0]}</button>`).join('')}`;
+      warnBox.classList.remove('hidden');
+      warnBox.querySelectorAll('[data-a]').forEach((b) => { b.onclick = () => { warnBox.classList.add('hidden'); actions[Number(b.dataset.a)][1](); }; });
+      icons();
+    }
+    async function fetchOne(req, sub) {
+      const r = await opts.send(req);
+      const res = r.ok ? Object.assign({}, r, { headersObj: Object.fromEntries(r.headers.map(([k, v]) => [k.toLowerCase(), v])), json() { return JSON.parse(r.body); } }) : r;
+      const chip = document.createElement('span');
+      chip.className = `px-1.5 py-0.5 rounded border ${r.ok ? STATUS_COLOR(r.status) : 'bg-red-500/20 text-red-300 border-red-500/40'} ${sub ? 'opacity-60' : ''}`;
+      chip.textContent = `${req.method} ${req.path} → ${r.ok ? r.status : 'errore'}`;
+      log.appendChild(chip);
+      if (opts.onExchange) opts.onExchange(req, res);
+      return res;
+    }
+    // i file collegati (CSS, JS, immagini SVG) li chiede il "browser" al server, come farebbe Chrome
+    async function prepare(src, base) {
+      const doc = new DOMParser().parseFromString(src, 'text/html');
+      doc.querySelectorAll('base').forEach((n) => n.remove());
+      for (const n of doc.querySelectorAll('link[rel~="stylesheet"][href], script[src], img[src]')) {
+        const attr = n.tagName === 'LINK' ? 'href' : 'src';
+        const u = resolve(n.getAttribute(attr), base);
+        if (!isLocal(u)) continue;
+        const r = await fetchOne(toReq(u, { headers: { Accept: '*/*' } }), true);
+        const ok = r.ok && r.status === 200;
+        if (n.tagName === 'LINK') { const s = doc.createElement('style'); if (ok) s.textContent = r.body; n.replaceWith(s); } else if (n.tagName === 'SCRIPT') { n.removeAttribute('src'); if (ok) n.textContent = r.body; } else if (ok && /svg/.test(r.headersObj['content-type'] || '')) n.setAttribute('src', 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(r.body)); else n.removeAttribute('src');
+      }
+      doc.head.insertAdjacentHTML('afterbegin', BR_HOOK);
+      return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+    }
+    async function go(req, push) {
+      if (busy) return;
+      busy = true;
+      warnBox.classList.add('hidden');
+      log.innerHTML = '';
+      let r;
+      for (let hops = 0; ; hops++) {
+        r = await fetchOne(req);
+        const loc = r.ok && r.headersObj.location;
+        if (!loc || ![301, 302, 303, 307, 308].includes(r.status) || hops >= 10) break;
+        const u = resolve(loc, `http://localhost:${req.port}${req.path}`);
+        if (!isLocal(u)) { warn(`Il server ha fatto un redirect verso <code class="inline">${esc(loc)}</code>: nel simulatore si naviga solo su http://localhost.`); break; }
+        // 307 e 308 ripetono la stessa richiesta; 301, 302 e 303 diventano un GET (senza body)
+        req = r.status === 307 || r.status === 308 ? Object.assign({}, req, toReq(u, { method: req.method, headers: req.headers, body: req.body })) : toReq(u);
+      }
+      current = req;
+      if (push || !stack.length) stack.push(req);
+      else stack[stack.length - 1] = req;
+      $('.br-url').value = here();
+      let page;
+      if (!r.ok) {
+        $('.br-src').textContent = '';
+        page = `<div style="font-family:system-ui,sans-serif;padding:40px;color:#202124"><h2 style="font-weight:500">Impossibile raggiungere il sito</h2><p><b>localhost</b> ha rifiutato la connessione.</p><p style="color:#5f6368">Il server è acceso? Premi ▶ Esegui (o guarda il terminale: è andato in crash?)</p><p style="color:#5f6368;font-size:12px">ERR_CONNECTION_REFUSED</p></div>`;
+      } else {
+        $('.br-src').textContent = r.body || '(body vuoto)';
+        page = /text\/html/.test(r.headersObj['content-type'] || '')
+          ? await prepare(r.body, here())
+          : `<pre style="white-space:pre-wrap;word-wrap:break-word;font:13px monospace;margin:8px">${esc(r.body)}</pre>`;
+      }
+      frame.srcdoc = page;
+      busy = false;
+    }
+    function repeat(req) {
+      if (req.method === 'POST') {
+        warn(`<strong>Conferma nuovo invio del modulo.</strong> Questa pagina è la risposta a <code class="inline">POST ${esc(req.path)}</code>: per mostrarla di nuovo il browser deve <strong>reinviare</strong> gli stessi dati.`, [['Invia di nuovo', () => go(req, false)], ['Annulla', () => {}]]);
+      } else go(req, false);
+    }
+    window.addEventListener('message', (e) => {
+      const m = e.data;
+      if (e.source !== frame.contentWindow || !m || m.nodelab !== 'browser') return;
+      if (m.type === 'nav') {
+        const u = resolve(m.href);
+        if (!isLocal(u)) { warn(`Link esterno (<code class="inline">${esc(m.href)}</code>): nel simulatore si naviga solo su http://localhost.`); return; }
+        go(toReq(u), true);
+      } else if (m.type === 'submit') {
+        const u = resolve(m.action || here());
+        if (!isLocal(u)) { warn('Il form punta a un altro sito: nel simulatore si naviga solo su http://localhost.'); return; }
+        const params = new URLSearchParams(m.params).toString();
+        if (String(m.method).toLowerCase() === 'post') go(toReq(u, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/x-www-form-urlencoded' }, hdr), body: params }), true);
+        else { u.search = params ? '?' + params : ''; go(toReq(u), true); }
+      }
+    });
+    $('.br-bar').onsubmit = (e) => {
+      e.preventDefault();
+      let v = $('.br-url').value.trim();
+      if (v.startsWith('/')) v = `http://localhost:${port}${v}`;
+      if (!/^[a-z]+:\/\//i.test(v)) v = 'http://' + v;
+      const u = resolve(v);
+      if (!isLocal(u)) { warn(`Nel simulatore puoi aprire solo i server su <code class="inline">http://localhost:PORTA</code>.`); return; }
+      go(toReq(u), true);
+    };
+    $('.br-reload').onclick = () => (current ? repeat(current) : go(toReq(resolve(here())), true));
+    $('.br-back').onclick = () => { if (stack.length > 1) { stack.pop(); repeat(stack[stack.length - 1]); } };
+    $('.br-view').onclick = () => { const s = $('.br-src'); s.classList.toggle('hidden'); $('.br-view').textContent = s.classList.contains('hidden') ? 'Sorgente' : 'Pagina'; };
+    frame.srcdoc = '<p style="font-family:system-ui,sans-serif;color:#888;padding:24px">Premi ▶ Esegui: la pagina comparirà qui.</p>';
+    icons();
+    return {
+      setState(html) { $('.br-state').innerHTML = html; },
+      open: (p) => go(toReq(resolve(p)), true),
+      // il server è (ri)partito: ricarica la pagina corrente, come F5 dopo node --watch
+      ready() { if (!busy) go(current && current.method === 'GET' ? current : toReq(resolve(start)), !current); },
+    };
+  }
+  // Browser e client HTTP nello stesso riquadro, con due schede
+  function webPanel(el, opts) {
+    if (!opts.browser) return httpClient(el, opts);
+    el.innerHTML = `<div class="flex gap-1 mb-2 text-sm">
+        <button data-v="br" class="wp-tab px-3 py-1 rounded-lg flex items-center gap-1.5"><i data-lucide="globe" class="w-4 h-4"></i>Browser</button>
+        <button data-v="hc" class="wp-tab px-3 py-1 rounded-lg flex items-center gap-1.5"><i data-lucide="send" class="w-4 h-4"></i>Client HTTP</button></div>
+      <div class="wp-pane" data-v="br"></div><div class="wp-pane hidden" data-v="hc"></div>`;
+    const b = browser(el.querySelector('.wp-pane[data-v="br"]'), opts);
+    const c = httpClient(el.querySelector('.wp-pane[data-v="hc"]'), opts);
+    const show = (v) => {
+      el.querySelectorAll('.wp-tab').forEach((t) => { t.className = `wp-tab px-3 py-1 rounded-lg flex items-center gap-1.5 ${t.dataset.v === v ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`; });
+      el.querySelectorAll('.wp-pane').forEach((p) => p.classList.toggle('hidden', p.dataset.v !== v));
+    };
+    el.querySelectorAll('.wp-tab').forEach((t) => { t.onclick = () => show(t.dataset.v); });
+    show('br');
+    icons();
+    return { setState(h) { b.setState(h); c.setState(h); }, send: c.send, ready: b.ready, open: b.open };
+  }
+
   /* ------------------------------------------------------------- Lab */
   const LEVEL = {
     base: ['Base', 'text-green-300 bg-green-500/10 border-green-500/30'],
@@ -391,9 +561,10 @@
 
     /* --- http client */
     if (cfg.server) {
-      client = httpClient($('.lab-http'), {
+      client = webPanel($('.lab-http'), {
         port: cfg.server.port || 3000,
         presets: cfg.server.presets,
+        browser: cfg.server.browser, start: cfg.server.start, height: cfg.server.height,
         send: (req) => (proc ? proc.request(req) : Promise.resolve({ ok: false, error: `connect ECONNREFUSED 127.0.0.1:${req.port}`, code: 'ECONNREFUSED' })),
       });
       client.setState('<span class="text-gray-500">● server spento</span>');
@@ -410,6 +581,7 @@
       term.write('cmd', `node ${cfg.node ? cfg.node + ' ' : ''}${entry}${argStr ? ' ' + argStr : ''}\n`);
       setRunning(true);
       if (client) client.setState('<span class="text-yellow-400">● avvio…</span>');
+      let shown = false;
       const p = new NodeProcess({
         files: Object.assign({}, files), entry, argv: parseArgs(argStr), env: cfg.env || {}, fs: cfg.fs || {}, packages: cfg.packages || [], nodeOptions: parseArgs(cfg.node || ''),
         onOutput: (stream, text) => { if (p === proc) term.write(stream, text); },
@@ -417,6 +589,7 @@
         onIdle: (ports, snap) => {
           if (p !== proc) return;
           if (client) client.setState(`<span class="text-green-400">● in ascolto su :${ports.join(', :')}</span>`);
+          if (client && client.ready && !shown && ports.length) { shown = true; client.ready(); }
           showTree(snap);
         },
         onExit: (info) => {
@@ -593,12 +766,14 @@
       term.clear();
       term.write('prompt', '$ ');
       term.write('cmd', `node ${cfg.node ? cfg.node + ' ' : ''}${cfg.entry || 'server.js'}\n`);
+      let shown = false;
       const p = new NodeProcess({
         files: cfg.files, entry: cfg.entry || 'server.js', fs: fsInit, packages: cfg.packages || [], env: cfg.env || {}, nodeOptions: parseArgs(cfg.node || ''),
         onOutput: (s, t) => { if (p === proc) term.write(s, t); },
         onIdle: (ports, snap) => {
           if (p !== proc) return;
           client.setState(`<span class="text-green-400">● in ascolto su :${ports.join(', :')}</span>`);
+          if (client.ready && !shown && ports.length) { shown = true; client.ready(); }
           lastFs = snap;
           drawWatch(snap);
         },
@@ -611,9 +786,10 @@
       proc = p;
       p.start();
     }
-    const client = httpClient($('.insp-client'), {
+    const client = webPanel($('.insp-client'), {
       port: cfg.port || 3000,
       presets: cfg.presets,
+      browser: cfg.browser, start: cfg.start, height: cfg.height,
       send: (req) => (proc ? proc.request(req) : Promise.resolve({ ok: false, error: 'server non avviato' })),
       onExchange: (req, res) => {
         cfg.missions.forEach((m, i) => {
@@ -706,5 +882,5 @@
   document.addEventListener('nodelab:progress', refreshProgress);
   document.addEventListener('DOMContentLoaded', refreshProgress);
 
-  window.NodeLab = { mount, httpClient, inspector, playground, ansiToHtml, fnSource, refreshProgress, store };
+  window.NodeLab = { mount, httpClient, browser, inspector, playground, ansiToHtml, fnSource, refreshProgress, store };
 })();

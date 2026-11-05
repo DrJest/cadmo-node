@@ -1671,6 +1671,7 @@
           let idx = 0;
           const basePath = req.__path;
           const baseUrl = req.baseUrl || '';
+          const parentNext = req.next;   // come il router di Express: req.next è il next del router corrente
           const restore = () => {
             req.__path = basePath;
             req.baseUrl = baseUrl;
@@ -1678,7 +1679,7 @@
             req.url = rest.startsWith('/') ? rest : '/' + rest;
           };
           function next(err) {
-            if (err === 'router') { restore(); return out(); }
+            if (err === 'router') { restore(); req.next = parentNext; return out(); }
             restore();
             while (idx < stack.length) {
               const layer = stack[idx++];
@@ -1706,6 +1707,7 @@
               }
               return call(fn, err, next);
             }
+            req.next = parentNext;
             return out(err);
           }
           function runRoute(handlers, err) {
@@ -1732,6 +1734,7 @@
               if (r && typeof r.then === 'function') r.then(undefined, (e) => once(e || new Error('Rejected promise')));
             } catch (e) { once(e); }
           }
+          req.next = next;
           next();
         };
         return router;
@@ -1869,7 +1872,14 @@
           res.end(vfs.files.get(full));
           if (cb) scheduleOp(() => cb());
         };
-        res.render = () => { throw new Error('res.render: nel simulatore non c\'è un template engine (lo vedremo nel modulo dedicato con EJS).'); };
+        res.render = (view, options, callback) => {
+          let done = callback;
+          let opts = options || {};
+          if (typeof options === 'function') { done = options; opts = {}; }
+          opts._locals = res.locals;
+          done = done || ((err, str) => { if (err) return req.next(err); res.send(str); });
+          app.render(view, opts, done);
+        };
         res.cookie = (name, value) => res.appendHeader('Set-Cookie', `${name}=${encodeURIComponent(typeof value === 'object' ? 'j:' + JSON.stringify(value) : value)}; Path=/`);
         res.clearCookie = (name) => res.appendHeader('Set-Cookie', `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT`);
         if (app.settings['x-powered-by']) res.setHeader('X-Powered-By', 'Express');
@@ -1950,6 +1960,50 @@
         }
       }
 
+      // le viste, come lib/view.js di Express 5: estensione, motore (require del pacchetto), ricerca del file
+      function View(name, opts) {
+        this.defaultEngine = opts.defaultEngine;
+        this.ext = path.extname(name);
+        this.name = name;
+        this.root = opts.root;
+        if (!this.ext && !this.defaultEngine) throw new Error('No default engine was specified and no extension was provided.');
+        let fileName = name;
+        if (!this.ext) {
+          this.ext = this.defaultEngine[0] !== '.' ? '.' + this.defaultEngine : this.defaultEngine;
+          fileName += this.ext;
+        }
+        if (!opts.engines[this.ext]) {
+          const mod = this.ext.slice(1);
+          const fn = makeRequire({ filename: CWD + '/node_modules/express/lib/view.js', children: [] })(mod).__express;
+          if (typeof fn !== 'function') throw new Error(`Module "${mod}" does not provide a view engine.`);
+          opts.engines[this.ext] = fn;
+        }
+        this.engine = opts.engines[this.ext];
+        this.path = this.lookup(fileName);
+      }
+      View.prototype.lookup = function (name) {
+        for (const root of [].concat(this.root)) {
+          const loc = path.resolve(CWD, root, name);
+          const p = this.resolve(path.dirname(loc), path.basename(loc));
+          if (p) return p;
+        }
+        return undefined;
+      };
+      View.prototype.resolve = function (dir, file) {
+        let p = path.join(dir, file);
+        if (isFile(p)) return p;
+        p = path.join(dir, path.basename(file, this.ext), 'index' + this.ext);
+        return isFile(p) ? p : undefined;
+      };
+      View.prototype.render = function (options, callback) {
+        let sync = true;
+        this.engine(this.path, options, function onRender(...args) {
+          if (!sync) return callback.apply(this, args);
+          return nextTick(() => callback.apply(this, args));   // come Express: la callback è sempre asincrona
+        });
+        sync = false;
+      };
+
       function express() {
         const app = makeRouter(true);
         Object.defineProperty(app, '__nodelabApp', { value: true });
@@ -1962,8 +2016,35 @@
         app.disable = (k) => app.set(k, false);
         app.enabled = (k) => !!app.settings[k];
         app.disabled = (k) => !app.settings[k];
-        app.engine = () => app;
-        app.render = () => { throw new Error('app.render: nel simulatore non c\'è un template engine.'); };
+        app.settings.views = path.resolve(CWD, 'views');
+        if (app.settings.env === 'production') app.settings['view cache'] = true;
+        app.engines = Object.create(null);
+        app.cache = Object.create(null);
+        app.engine = (ext, fn) => {
+          if (typeof fn !== 'function') throw new Error('callback function required');
+          app.engines[ext[0] !== '.' ? '.' + ext : ext] = fn;
+          return app;
+        };
+        app.render = (name, options, callback) => {
+          let done = callback;
+          let opts = options || {};
+          if (typeof options === 'function') { done = options; opts = {}; }
+          const renderOptions = Object.assign({}, app.locals, opts._locals, opts);
+          if (renderOptions.cache == null) renderOptions.cache = !!app.settings['view cache'];
+          let view = renderOptions.cache ? app.cache[name] : undefined;
+          if (!view) {
+            view = new View(name, { defaultEngine: app.settings['view engine'], root: app.settings.views, engines: app.engines });
+            if (!view.path) {
+              const roots = [].concat(view.root);
+              const dirs = roots.length > 1 ? `directories "${roots.slice(0, -1).join('", "')}" or "${roots[roots.length - 1]}"` : `directory "${view.root}"`;
+              const err = new Error(`Failed to lookup view "${name}" in views ${dirs}`);
+              err.view = view;
+              return done(err);
+            }
+            if (renderOptions.cache) app.cache[name] = view;
+          }
+          try { view.render(renderOptions, done); } catch (err) { done(err); }
+        };
         const inner = app.handle;
         app.handle = (req, res, out) => {
           if (!req.app) decorate(app, req, res);
@@ -2820,6 +2901,214 @@
       return { config, configDotenv: config, parse: (src) => parseEnvText(String(src)), populate };
     }
 
+    // ---------------------------------------------------------------- ejs
+    // Porting essenziale di EJS 7: stessi tag, stesso codice generato (with + __append),
+    // stessa risoluzione degli include e stessi messaggi d'errore (con il contesto delle righe).
+    function createEjs() {
+      const ENC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&#34;', "'": '&#39;' };
+      const escapeXML = (m) => (m == undefined ? '' : String(m).replace(/[&<>'"]/g, (c) => ENC[c]));
+      const nullObj = () => Object.create(null);
+      const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+      const copy = (to, from) => {
+        for (const p in from || {}) if (own(from, p) && p !== '__proto__' && p !== 'constructor') to[p] = from[p];
+        return to;
+      };
+      const reEsc = (s) => String(s).replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
+      const cache = new Map();
+      const ejs = { VERSION: '7.0.2', name: 'ejs', localsName: 'locals', escapeXML };
+      ejs.cache = { set: (k, v) => cache.set(k, v), get: (k) => cache.get(k), remove: (k) => cache.delete(k), reset: () => cache.clear() };
+      ejs.clearCache = () => cache.clear();
+      ejs.fileLoader = (p) => {
+        if (!isFile(p)) throw fsError(isDir(p) ? 'EISDIR' : 'ENOENT', isDir(p) ? 'read' : 'open', p);
+        return toBuffer(vfs.files.get(p)).toString();
+      };
+      ejs.resolveInclude = (name, filename, isDirectory) => {
+        let p = path.resolve(isDirectory ? filename : path.dirname(filename), name);
+        if (!path.extname(name)) p += '.ejs';
+        return p;
+      };
+      const resolvePaths = (name, paths) => {
+        for (const v of paths) { const p = ejs.resolveInclude(name, v, true); if (exists(p)) return p; }
+        return undefined;
+      };
+      function getIncludePath(p, options) {
+        let includePath;
+        if (/^[A-Za-z]+:\\|^\//.test(p)) {
+          p = p.replace(/^\/*/, '');
+          includePath = Array.isArray(options.root) ? resolvePaths(p, options.root) : ejs.resolveInclude(p, options.root || '/', true);
+        } else {
+          if (options.filename) {
+            const f = ejs.resolveInclude(p, options.filename);
+            if (exists(f)) includePath = f;
+          }
+          if (!includePath && Array.isArray(options.views)) includePath = resolvePaths(p, options.views);
+          if (!includePath) throw new Error(`Could not find the include file "${options.escapeFunction(p)}"`);
+        }
+        return includePath;
+      }
+      function handleCache(options, template) {
+        const filename = options.filename;
+        const hasTemplate = arguments.length > 1;
+        let fn;
+        if (options.cache) {
+          if (!filename) throw new Error('cache option requires a filename');
+          fn = cache.get(filename);
+          if (fn) return fn;
+          if (!hasTemplate) template = ejs.fileLoader(filename).replace(/^﻿/, '');
+        } else if (!hasTemplate) {
+          if (!filename) throw new Error('Internal EJS error: no file name or template provided');
+          template = ejs.fileLoader(filename).replace(/^﻿/, '');
+        }
+        fn = ejs.compile(template, options);
+        if (options.cache) cache.set(filename, fn);
+        return fn;
+      }
+      function rethrow(err, str, flnm, lineno, esc) {
+        const lines = str.split('\n');
+        const start = Math.max(lineno - 3, 0);
+        const end = Math.min(lines.length, lineno + 3);
+        const filename = esc(flnm);
+        const context = lines.slice(start, end).map((line, i) => {
+          const curr = i + start + 1;
+          return (curr == lineno ? ' >> ' : '    ') + curr + '| ' + line;
+        }).join('\n');
+        err.path = filename;
+        err.message = (filename || 'ejs') + ':' + lineno + '\n' + context + '\n\n' + err.message;
+        throw err;
+      }
+      ejs.compile = function compile(text, optsIn) {
+        const o = copy(nullObj(), optsIn);
+        const opts = {
+          escapeFunction: o.escape || o.escapeFunction || escapeXML,
+          compileDebug: o.compileDebug !== false, filename: o.filename, strict: !!o.strict, context: o.context,
+          cache: !!o.cache, rmWhitespace: o.rmWhitespace, root: o.root, views: o.views, async: o.async,
+          outputFunctionName: o.outputFunctionName, localsName: o.localsName || ejs.localsName,
+          unsafePrototypeLocals: !!o.unsafePrototypeLocals,
+          delimiter: o.delimiter || '%', openDelimiter: o.openDelimiter || '<', closeDelimiter: o.closeDelimiter || '>',
+        };
+        opts._with = opts.strict ? false : o._with !== undefined ? o._with : true;
+        const O = opts.openDelimiter + opts.delimiter;
+        const C = opts.delimiter + opts.closeDelimiter;
+        const T = {
+          eval: O, evalSlurp: O + '_', escaped: O + '=', raw: O + '-', comment: O + '#', literalOpen: O + opts.delimiter,
+          close: C, closeTrim: '-' + C, closeSlurp: '_' + C, literalClose: opts.delimiter + C,
+        };
+        const re = new RegExp('(' + [T.literalOpen, T.literalClose, T.escaped, T.raw, T.evalSlurp, T.comment, T.eval, T.close, T.closeTrim, T.closeSlurp].map(reEsc).join('|') + ')');
+        let tpl = String(text);
+        if (opts.rmWhitespace) tpl = tpl.replace(/[\r\n]+/g, '\n').replace(/^\s+|\s+$/gm, '');
+        tpl = tpl.replace(new RegExp('[ \\t]*' + reEsc(T.evalSlurp), 'gm'), T.evalSlurp).replace(new RegExp(reEsc(T.closeSlurp) + '[ \\t]*', 'gm'), T.closeSlurp);
+        const parts = [];
+        let rest = tpl;
+        let m;
+        while ((m = re.exec(rest))) {
+          if (m.index) parts.push(rest.slice(0, m.index));
+          parts.push(m[0]);
+          rest = rest.slice(m.index + m[0].length);
+        }
+        if (rest) parts.push(rest);
+        let src = '';
+        let mode = null;
+        let truncate = false;
+        let line = 1;
+        const addOutput = (s) => {
+          if (truncate) { s = s.replace(/^(?:\r\n|\r|\n)/, ''); truncate = false; }
+          if (s) src += '    ; __append(' + JSON.stringify(s) + ')\n';
+        };
+        const stripSemi = (s) => s.replace(/;(\s*$)/, '$1');
+        parts.forEach((tok, i) => {
+          if (tok.indexOf(T.eval) === 0 && tok.indexOf(T.literalOpen) !== 0) {
+            const closing = parts[i + 2];
+            if (!(closing === T.close || closing === T.closeTrim || closing === T.closeSlurp)) throw new Error(`Could not find matching close tag for "${tok}".`);
+          }
+          const nl = tok.split('\n').length - 1;
+          switch (tok) {
+            case T.eval: case T.evalSlurp: mode = 'eval'; break;
+            case T.escaped: mode = 'escaped'; break;
+            case T.raw: mode = 'raw'; break;
+            case T.comment: mode = 'comment'; break;
+            case T.literalOpen: mode = 'literal'; src += `    ; __append(${JSON.stringify(T.eval)})\n`; break;
+            case T.literalClose: mode = 'literal'; src += `    ; __append(${JSON.stringify(T.close)})\n`; break;
+            case T.close: case T.closeTrim: case T.closeSlurp:
+              if (mode === 'literal') addOutput(tok);
+              mode = null;
+              truncate = tok[0] === '-' || tok[0] === '_';
+              break;
+            default: {
+              let code = tok;
+              if (mode && mode !== 'comment' && mode !== 'literal' && code.lastIndexOf('//') > code.lastIndexOf('\n')) code += '\n';
+              if (mode === 'eval') src += '    ; ' + code + '\n';
+              else if (mode === 'escaped') src += '    ; __append(escapeFn(' + stripSemi(code) + '))\n';
+              else if (mode === 'raw') src += '    ; __append(' + stripSemi(code) + ')\n';
+              else if (mode === 'literal' || !mode) addOutput(code);
+            }
+          }
+          if (opts.compileDebug && nl) { line += nl; src += '    ; __line = ' + line + '\n'; }
+        });
+        let body = '  var __output = "";\n  function __append(s) { if (s !== undefined && s !== null) __output += s }\n';
+        if (opts.outputFunctionName) body += `  var ${opts.outputFunctionName} = __append;\n`;
+        if (opts._with) body += `  with (${opts.localsName} || {}) {\n${src}  }\n`;
+        else body += src;
+        body += '  return __output;\n';
+        let full = opts.compileDebug
+          ? `var __line = 1\n  , __lines = ${JSON.stringify(tpl)}\n  , __filename = ${opts.filename ? JSON.stringify(opts.filename) : 'undefined'};\ntry {\n${body}} catch (e) {\n  rethrow(e, __lines, __filename, __line, escapeFn);\n}\n`
+          : body;
+        if (opts.strict) full = '"use strict";\n' + full;
+        let fn;
+        try {
+          const Ctor = opts.async ? (async function () {}).constructor : Function;
+          fn = new Ctor(`${opts.localsName}, escapeFn, include, rethrow`, full);
+        } catch (e) {
+          if (e instanceof SyntaxError) {
+            if (opts.filename) e.message += ' in ' + opts.filename;
+            e.message += ' while compiling ejs\n\nIf the above error is not helpful, you may want to try EJS-Lint:\nhttps://github.com/RyanZim/EJS-Lint';
+            if (!opts.async) e.message += '\nOr, if you meant to create an async function, pass `async: true` as an option.';
+          }
+          throw e;
+        }
+        const includeFile = (p, options) => {
+          const io = copy(nullObj(), options);
+          io.filename = getIncludePath(p, io);
+          return handleCache(io);
+        };
+        const rendered = function (data) {
+          const include = (p, includeData) => {
+            let d = copy(nullObj(), data);
+            if (includeData) d = copy(d, includeData);
+            return includeFile(p, opts)(d);
+          };
+          const locals = opts.unsafePrototypeLocals ? data || nullObj() : copy(nullObj(), data);
+          return fn.apply(opts.context, [locals, opts.escapeFunction, include, rethrow]);
+        };
+        if (opts.filename) Object.defineProperty(rendered, 'name', { value: path.basename(opts.filename, path.extname(opts.filename)), configurable: true });
+        return rendered;
+      };
+      ejs.render = (template, d, o) => handleCache(o || nullObj(), template)(d || nullObj());
+      ejs.renderFile = function (...args) {
+        const filename = args.shift();
+        const opts = { filename };
+        let cb;
+        let data;
+        if (typeof args[args.length - 1] === 'function') cb = args.pop();
+        if (args.length) {
+          data = args.shift();
+          if (data == null) data = nullObj();
+          if (args.length) copy(opts, args.pop());
+          else if (own(data, 'settings') && data.settings) {
+            // Express passa le impostazioni dell'app insieme ai dati
+            if (data.settings.views) opts.views = data.settings.views;
+            if (data.settings['view cache']) opts.cache = true;
+          }
+          opts.filename = filename;
+        } else data = nullObj();
+        if (!cb) return new Promise((resolve, reject) => { try { resolve(handleCache(opts)(data)); } catch (e) { reject(e); } });
+        let result;
+        try { result = handleCache(opts)(data); } catch (e) { return cb(e); }
+        cb(null, result);
+      };
+      ejs.__express = ejs.renderFile;
+      return ejs;
+    }
+
     // pacchetti npm "integrati" nel simulatore: node_modules/<nome>/index.js contiene solo un marcatore
     // (sub: altri file del pacchetto, per require('dotenv/config') o require('zod/v4'))
     const BUILTIN_PKGS = {
@@ -2828,6 +3117,7 @@
       cors: { version: '2.8.6', create: createCors },
       zod: { version: '4.6.7', create: createZod, sub: { 'v4.js': 'zod' } },
       dotenv: { version: '18.0.9', create: createDotenv, sub: { 'config.js': 'dotenv/config' } },
+      ejs: { version: '7.0.2', create: createEjs },
       'dotenv/config': { internal: true, create: () => { getBuiltin('dotenv').config({ quiet: true }); return {}; } },
     };
     const builtinCache = new Map();

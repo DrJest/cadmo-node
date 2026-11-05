@@ -34,7 +34,7 @@
     questions.forEach((q, qi) => {
       const block = document.createElement('div');
       block.innerHTML = `<h3 class="text-lg md:text-xl font-semibold text-white mb-4">${qi + 1}. ${inline(q.question)}</h3>
-        ${q.code ? `<pre class="code small mb-4"><code class="language-javascript">${esc(q.code.trim())}</code></pre>` : ''}
+        ${q.code ? `<pre class="code small mb-4"><code class="language-${q.lang || 'javascript'}">${esc(q.code.trim())}</code></pre>` : ''}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${q.options.map((o, oi) => `
           <button data-o="${oi}" class="q-opt text-left p-4 rounded-lg border border-gray-700 bg-gray-800/60 hover:border-green-500 hover:bg-gray-800 text-gray-300 transition-all">${inline(o)}</button>`).join('')}</div>
         <div class="q-exp hidden mt-4 p-4 rounded-lg border text-sm md:text-base"></div>`;
@@ -161,7 +161,7 @@
           <h3 class="text-lg font-bold text-white flex items-center gap-2"><span class="w-7 h-7 rounded-lg bg-green-500/15 text-green-400 flex items-center justify-center text-sm font-mono">${si + 1}</span>${inline(sn.title || 'Che cosa stampa?')}</h3>
           <span class="og-badge text-xs font-mono ${saved[si] ? 'text-green-400' : 'text-gray-600'}">${saved[si] ? '✓ risolto' : ''}</span></div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <pre class="code small"><code class="language-javascript">${esc(sn.code.trim())}</code></pre>
+          <pre class="code small"><code class="language-${sn.lang || 'javascript'}">${esc(sn.code.trim())}</code></pre>
           <div class="flex flex-col gap-3">
             <div class="text-sm text-gray-400">${inline(sn.prompt || 'Clicca le righe nell\'ordine in cui compariranno nel terminale:')}</div>
             <div class="og-chips flex flex-wrap gap-2"></div>

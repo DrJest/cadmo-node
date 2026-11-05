@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 8 · Template engine e form — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="bg-gray-900">
+
+  <!-- ===================== Esempi di codice (testo puro, niente escape) ===================== -->
+  <script type="text/plain" id="c-stringhe">
+app.get('/', (req, res) => {
+  let html = '<h1>Catalogo</h1><ul>';
+  for (const l of libri) {
+    html += `<li>${l.titolo} — ${l.autore}</li>`;
+  }
+  html += '</ul>';
+  res.send(html);
+});
+</script>
+  <script type="text/plain" id="c-stringhe-ejs">
+<h1>Catalogo</h1>
+<ul>
+  <% for (const l of libri) { %>
+    <li><%= l.titolo %> — <%= l.autore %></li>
+  <% } %>
+</ul>
+</script>
+  <script type="text/plain" id="c-render">
+// npm install ejs
+const express = require('express');
+const app = express();
+
+app.set('view engine', 'ejs');    // le viste sono file .ejs nella cartella views/
+
+app.get('/', (req, res) => {
+  const libri = [{ titolo: 'Il Gattopardo', anno: 1958 }];
+  res.render('catalogo', { titolo: 'Catalogo', libri });   // → views/catalogo.ejs
+});
+</script>
+  <script type="text/plain" id="c-ciclo">
+<h1><%= titolo %></h1>
+
+<% if (libri.length === 0) { %>
+  <p>Nessun libro.</p>
+<% } else { %>
+  <p><%= libri.length %> <%= libri.length === 1 ? 'libro' : 'libri' %></p>
+  <ul>
+    <% libri.forEach((l) => { %>
+      <li class="<%= l.disponibile ? '' : 'prestito' %>"><%= l.titolo %> (<%= l.anno ?? 'anno?' %>)</li>
+    <% }) %>
+  </ul>
+<% } %>
+</script>
+  <script type="text/plain" id="c-ciclo-out">
+<h1>Catalogo</h1>
+
+
+  <p>2 libri</p>
+  <ul>
+
+      <li class="">Il Gattopardo (1958)</li>
+
+      <li class="prestito">Dune (anno?)</li>
+
+  </ul>
+</script>
+  <script type="text/plain" id="c-escape-si">
+<!-- titolo = '<script>rubaCookie()<\/script>' -->
+<h2><%= titolo %></h2>
+
+<!-- arriva al browser: -->
+<h2>&lt;script&gt;rubaCookie()&lt;/script&gt;</h2>
+</script>
+  <script type="text/plain" id="c-escape-no">
+<!-- titolo = '<script>rubaCookie()<\/script>' -->
+<h2><%- titolo %></h2>
+
+<!-- arriva al browser: -->
+<h2><script>rubaCookie()<\/script></h2>
+</script>
+  <script type="text/plain" id="c-manca">
+<h1><%= titolo %></h1>
+<% if (errore) { %>
+  <p class="errore"><%= errore %></p>
+<% } %>
+
+<%# ✅ così invece funziona anche se "errore" non c'è: %>
+<% if (locals.errore) { %> … <% } %>
+</script>
+  <script type="text/plain" id="c-manca-out">
+ReferenceError: /progetto/views/nuovo.ejs:2
+    1| <h1><%= titolo %></h1>
+ >> 2| <% if (errore) { %>
+    3|   <p class="errore"><%= errore %></p>
+    4| <% } %>
+
+errore is not defined
+</script>
+  <script type="text/plain" id="c-partials">
+<!-- views/partials/testa.ejs -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title><%= titolo %> · <%= sito %></title>
+  <link rel="stylesheet" href="/stile.css">
+</head>
+<body>
+  <nav>…</nav>
+  <main>
+
+<!-- views/partials/piede.ejs -->
+  </main>
+  <footer><%= sito %></footer>
+</body>
+</html>
+
+<!-- views/catalogo.ejs: solo ciò che è suo -->
+<%- include('partials/testa') %>
+<h1>Catalogo</h1>
+…
+<%- include('partials/piede') %>
+</script>
+  <script type="text/plain" id="c-locals">
+// per TUTTE le viste: il nome del sito
+app.locals.sito = 'Biblioteca CADMO';
+
+// per le viste di QUESTA richiesta: un middleware
+app.use((req, res, next) => {
+  res.locals.percorso = req.path;
+  next();
+});
+
+// nel menu (partials/testa.ejs):
+//   <a href="/orari" class="<%= percorso === '/orari' ? 'attivo' : '' %>">Orari</a>
+
+// se un nome compare più volte vince:
+//   i dati di res.render  >  res.locals  >  app.locals
+</script>
+  <script type="text/plain" id="c-statici">
+progetto/
+├── server.js          app.use(express.static('public'))
+├── public/            ← i file serviti così come sono
+│   ├── stile.css      → GET /stile.css
+│   └── logo.svg       → GET /logo.svg
+└── views/             ← i template: NON sono statici
+    ├── partials/
+    │   └── testa.ejs  <link rel="stylesheet" href="/stile.css">
+    └── catalogo.ejs
+</script>
+  <script type="text/plain" id="c-form">
+<form method="POST" action="/libri">
+  <input name="titolo" value="Il Gattopardo">
+  <input name="anno" value="1958">
+  <select name="genere">
+    <option>romanzo</option>
+    <option>giallo</option>
+  </select>
+  <label><input type="checkbox" name="disponibile"> Disponibile</label>
+  <input placeholder="Note (senza name: non viene inviato)">
+  <button>Salva</button>
+</form>
+</script>
+  <script type="text/plain" id="c-form-out">
+POST /libri HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+titolo=Il+Gattopardo&anno=1958&genere=romanzo&disponibile=on
+</script>
+  <script type="text/plain" id="c-urlencoded">
+app.use(express.urlencoded());     // come express.json(), ma per i form
+
+app.post('/libri', (req, res) => {
+  req.body;
+  // { titolo: 'Il Gattopardo', anno: '1958', genere: 'romanzo', disponibile: 'on' }
+  //                                  ↑ una stringa              ↑ c'è solo se spuntata
+});
+
+// lo schema zod converte le stringhe
+const vuotoComeAssente = (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v);
+const libroForm = z.object({
+  titolo: z.string().trim().min(1, 'Il titolo è obbligatorio'),
+  anno: z.preprocess(vuotoComeAssente, z.coerce.number().int().optional()),   // '' → assente
+  disponibile: z.stringbool().default(false),                                  // 'on' → true
+});
+</script>
+  <script type="text/plain" id="c-errori">
+router.post('/libri', (req, res) => {
+  const r = libroForm.safeParse(req.body);
+  if (!r.success) {
+    return res.status(422).render('nuovo', {
+      valori: req.body,                               // quello che l'utente aveva scritto
+      errori: z.flattenError(r.error).fieldErrors,    // { titolo: ['Il titolo è obbligatorio'] }
+    });
+  }
+  const libro = libri.crea(r.data);
+  res.redirect(303, `/libri/${libro.id}`);            // tutto bene: Post/Redirect/Get
+});
+
+// views/nuovo.ejs
+//   <input name="titolo" value="<%= valori.titolo %>">
+//   <% if (errori.titolo) { %><p class="errore"><%= errori.titolo[0] %></p><% } %>
+</script>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/m8-biblioteca.js"></script>
+  <script>
+    // nei blocchi text/plain il tag di chiusura degli script è scritto con la barra "escapata"
+    const C = (id) => document.getElementById(id).textContent.replace(/^\n/, '').replace(/<\\\/script>/g, '<\/script>');
+    const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const code = (s) => `<code class="inline">${esc(s)}</code>`;
+    const md = (t) => esc(t).replace(/`([^`]+)`/g, '<code class="inline">$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    const TABLE = (head, rows) => `<div class="overflow-x-auto rounded-xl border border-gray-700"><table class="w-full text-left text-sm md:text-base">
+      <thead class="bg-gray-800 text-gray-300"><tr>${head.map((h) => `<th class="px-4 py-2 font-semibold">${h}</th>`).join('')}</tr></thead>
+      <tbody class="divide-y divide-gray-800 text-gray-200">${rows.map((r) => `<tr class="bg-gray-900/60">${r.map((c) => `<td class="px-4 py-2">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    const NOTE = (items) => `<ul class="slide-items space-y-3 text-base md:text-xl text-gray-300 mt-6">${items.map((t) => `<li class="flex"><span class="text-green-500 mr-4 font-mono">$</span><span>${md(t)}</span></li>`).join('')}</ul>`;
+
+    const TAG_HTML = TABLE(['Tag', 'Che cosa fa', 'Esempio'], [
+      [code('<%= valore %>'), 'stampa il valore <strong>con l\'escape</strong> (<code class="inline">&lt;</code> → <code class="inline">&amp;lt;</code>)', code('<%= libro.titolo %>')],
+      [code('<%- valore %>'), 'stampa il valore <strong>così com\'è</strong>, come HTML', code("<%- include('partials/testa') %>")],
+      [code('<% codice %>'), 'esegue JavaScript, non stampa niente', code('<% if (libri.length) { %>')],
+      [code('<%# commento %>'), 'un commento: non arriva al browser', code('<%# TODO: il menu %>')],
+      [code('-%>'), 'chiude il tag e toglie l\'a capo che segue', code('<% } -%>')],
+    ]) + NOTE([
+      'Dentro `<% %>` c\'è JavaScript normale: `if`, `for…of`, `forEach`, `? :`, `??`…',
+      'Le graffe aperte in un tag si chiudono in un altro (`<% } %>`): se ne manca una, EJS dà un errore di sintassi.',
+    ]);
+
+    // Post/Redirect/Get: lo scambio tra browser e server
+    const RIGA = (dir, testo, nota, colore) => `
+      <div class="flex items-center gap-3 ${dir === '→' ? '' : 'flex-row-reverse text-right'}">
+        <div class="flex-1 rounded-lg border border-${colore}-500/40 bg-${colore}-500/10 px-3 py-2 font-mono text-sm md:text-base text-${colore}-200">${testo}</div>
+        <i data-lucide="${dir === '→' ? 'arrow-right' : 'arrow-left'}" class="w-5 h-5 text-gray-500 shrink-0"></i>
+        <div class="flex-1 text-sm text-gray-400">${nota}</div>
+      </div>`;
+    const PRG_HTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div class="lg:col-span-7 space-y-2">
+        <div class="flex justify-between font-bold text-gray-300 px-1"><span>🌐 Browser</span><span>Server 🖥️</span></div>
+        ${RIGA('→', 'POST /libri<br><span class="text-xs text-gray-400">titolo=Il+Gattopardo&amp;…</span>', 'valida e crea il libro', 'yellow')}
+        ${RIGA('←', '303 See Other<br><span class="text-xs">Location: /libri/16</span>', 'nessuna pagina: "vai là"', 'blue')}
+        ${RIGA('→', 'GET /libri/16', 'il browser segue da solo il redirect', 'green')}
+        ${RIGA('←', '200 OK · la scheda (HTML)', 'res.render(\'libro\', …)', 'green')}
+        <div class="mt-3 rounded-lg border border-dashed border-green-500/50 px-3 py-2 text-green-300 text-sm md:text-base">↻ Ricarica = ripete solo <code class="inline">GET /libri/16</code>: nessun doppione, e l'indirizzo è giusto.</div>
+      </div>
+      <div class="lg:col-span-5">${NOTE([
+        '`res.redirect(303, url)`: "il risultato è altrove: vai a prenderlo con un GET".',
+        'Anche 302 funziona quasi sempre allo stesso modo, ma 303 lo dice esplicitamente.',
+        'Il messaggio "Libro aggiunto"? Nell\'URL (`?creato=1`) oppure un "flash" in sessione (modulo 12).',
+        'Solo se il POST **riesce**: con gli errori si mostra subito il form.',
+      ])}</div></div>`;
+
+    window.DECK = {
+      module: 'MODULO 8',
+      title: 'Template engine e form',
+      prompt: 'modulo-8',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover', icon: 'layout-template',
+          title: 'Template engine e form',
+          subtitle: 'Pagine HTML costruite dal **server** con EJS, form che inviano dati e il pattern **Post/Redirect/Get**.',
+          meta: ['3 ore', 'Modulo 8'],
+        },
+        {
+          type: 'agenda', part: 'PROGRAMMA', title: 'Agenda', icon: 'list-checks',
+          rows: [
+            ['Pagine dal server: perché un template engine', 'teoria'],
+            ['EJS: `res.render`, i tag, cicli, escape', 'teoria'],
+            ['Simulazione: prova il template', 'demo'],
+            ['Partials, `app.locals` e `res.locals`, file statici', 'teoria'],
+            ['Pausa', 'pausa'],
+            ['Form: `urlencoded`, validazione, errori nel form', 'teoria'],
+            ['Post/Redirect/Get + simulazione del doppio invio', 'demo'],
+            ['Biblioteca 5.0 + 5 laboratori', 'lab'],
+            ['Quiz', 'quiz'],
+          ],
+        },
+
+        /* ------------------------------------------------ SSR */
+        {
+          type: 'compare', part: 'PAGINE DAL SERVER', title: 'Due modi di fare il web', icon: 'git-compare',
+          columns: [
+            { title: 'API JSON + frontend (moduli 6–7)', color: 'blue', icon: 'braces', items: ['Il server manda **dati**: `{ "titolo": "Dune" }`', 'Il JavaScript del browser (React, Vue, `fetch`…) costruisce la pagina', 'Ottimo per app molto interattive e per le app mobili'] },
+            { title: 'Pagine dal server (SSR, oggi)', color: 'green', icon: 'file-code', items: ['Il server manda **HTML pronto**: `<h1>Dune</h1>`', 'Funziona anche senza JavaScript; veloce al primo caricamento; facile da indicizzare', 'Ottimo per siti di contenuti, gestionali, pannelli di amministrazione, form'] },
+          ],
+          footer: 'Non è "o l\'uno o l\'altro": molte applicazioni hanno sia le pagine sia un\'API. Oggi la Biblioteca, oltre all\'API, avrà le sue **pagine**.',
+        },
+        {
+          type: 'compare', part: 'PAGINE DAL SERVER', title: 'HTML con le stringhe? No, grazie', icon: 'scissors',
+          columns: [
+            { title: 'A mano, in una template string', color: 'red', icon: 'x-circle', code: C('c-stringhe'), items: ['HTML e JavaScript mescolati: illeggibile', 'Nessun escape: un titolo con `<script>` diventa codice', 'Testa e menu da ricopiare in ogni rotta'] },
+            { title: 'Con un template EJS', color: 'green', icon: 'check-circle', code: C('c-stringhe-ejs'), lang: 'html', items: ['Un file `.ejs`: HTML con dentro un po\' di JavaScript', '`<%= %>` fa l\'escape da solo', 'I pezzi comuni in file separati (partials)'] },
+          ],
+          footer: 'Altri template engine: Pug (sintassi a rientri), Handlebars (pochissima logica), Nunjucks. EJS è il più vicino all\'HTML: chi sa HTML e JavaScript lo sa già usare.',
+        },
+
+        /* ------------------------------------------------ EJS */
+        {
+          type: 'code', part: 'EJS', title: 'EJS in Express: `res.render`', icon: 'file-code', iconColor: 'text-green-400',
+          items: [
+            '`app.set(\'view engine\', \'ejs\')`: le viste sono file `.ejs`, ed Express fa da solo `require(\'ejs\')`.',
+            '`res.render(nome, dati)` cerca `views/nome.ejs`, lo riempie con i dati e invia l\'HTML (`text/html`).',
+            'Le chiavi dell\'oggetto diventano **variabili** nel template: `titolo`, `libri`.',
+            'Vista inesistente → errore 500: `Failed to lookup view "catalogo" in views directory "/progetto/views"`.',
+          ],
+          code: C('c-render'), file: 'server.js',
+        },
+        {
+          type: 'custom', part: 'EJS', title: 'I tag di EJS', icon: 'tags', iconColor: 'text-green-400',
+          html: TAG_HTML,
+        },
+        {
+          type: 'code', part: 'EJS', title: 'Cicli e condizioni', icon: 'repeat', iconColor: 'text-green-400',
+          items: [
+            'In `<% %>` il JavaScript che **decide** (`if`, `forEach`, `for…of`); in `<%= %>` quello che si **stampa**.',
+            '`? :` e `??` sono comodi per classi e testi alternativi.',
+            'Gli spazi e gli a capo intorno ai tag restano nell\'HTML: al browser non importa (con `-%>` si tolgono).',
+            '**Poca logica nei template**: filtri, ordinamenti e calcoli si fanno nella rotta o nel service. La vista mostra e basta.',
+          ],
+          code: C('c-ciclo'), lang: 'html', file: 'views/catalogo.ejs', output: C('c-ciclo-out'), reveal: true,
+        },
+        {
+          type: 'compare', part: 'EJS', title: 'L\'escape: `<%=` contro `<%-`', icon: 'shield-alert',
+          columns: [
+            { title: '<%= : il testo resta testo', color: 'green', icon: 'shield-check', code: C('c-escape-si'), lang: 'html', items: ['Il browser **mostra** `<script>`, non lo esegue', 'Escape di `& < > " \'`: sicuro anche dentro `value="…"`'] },
+            { title: '<%- : l\'HTML diventa HTML', color: 'red', icon: 'skull', code: C('c-escape-no'), lang: 'html', items: ['Lo script **gira** nel browser di chi apre la pagina', 'È un attacco **XSS** (Cross-Site Scripting): furto di sessioni, pagine modificate…'] },
+          ],
+          footer: 'Regola: **sempre `<%=`** per i dati (soprattutto quelli scritti dagli utenti). `<%-` solo per HTML generato da voi, come gli `include`. Ne riparleremo nel modulo 13.',
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Prova il template', icon: 'flask-conical', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Il codice gira davvero, con EJS. Scegli i dati e premi <strong>Esegui</strong>: che cosa succede all\'HTML nel titolo? E se manca <code class="inline">libri</code>?</p><div class="pg"></div>',
+          mount: (el) => NodeLab.playground(el.querySelector('.pg'), Object.assign({ packages: ['ejs'], file: 'prova.js', height: '20rem' }, M8_PLAY)),
+        },
+        {
+          type: 'code', part: 'EJS', title: 'La variabile che manca', icon: 'bug', iconColor: 'text-red-400',
+          items: [
+            'La rotta fa `res.render(\'nuovo\', { titolo })`, ma il template usa anche `errore`: per JavaScript è una variabile **che non esiste**.',
+            'Risultato: `ReferenceError` e una pagina 500. EJS indica file, riga (`>>`) e qualche riga intorno.',
+            'Soluzioni: passare sempre la variabile (`errore: null`) oppure scrivere `locals.errore`, che vale `undefined` senza errori.',
+            'Una graffa dimenticata dà invece `SyntaxError: … while compiling ejs`.',
+          ],
+          code: C('c-manca'), lang: 'html', file: 'views/nuovo.ejs', output: C('c-manca-out'), reveal: true,
+        },
+
+        /* ------------------------------------------------ PARTIALS */
+        {
+          type: 'code', part: 'PARTIALS', title: 'Partials: i pezzi in comune', icon: 'layout-template', iconColor: 'text-purple-400',
+          items: [
+            '`include(\'partials/testa\')` inserisce un altro template: il percorso è **relativo al file** che lo contiene, `.ejs` è sottinteso.',
+            'Si usa `<%-`: il partial è HTML già pronto (con `<%=` comparirebbe come testo).',
+            'Il partial vede le variabili della pagina; se ne servono altre: `include(\'partials/scheda\', { libro })`.',
+            'EJS non ha i layout "a blocchi": testa e piede sono il modo più semplice (c\'è anche il pacchetto `express-ejs-layouts`).',
+          ],
+          code: C('c-partials'), lang: 'html',
+        },
+        {
+          type: 'code', part: 'PARTIALS', title: 'Dati per tutte le viste', icon: 'globe', iconColor: 'text-purple-400',
+          items: [
+            '`app.locals`: i dati uguali per tutte le pagine (il nome del sito, l\'anno, i link del menu).',
+            '`res.locals`: i dati di **una** richiesta, preparati da un middleware: il percorso, più avanti l\'utente collegato (modulo 12).',
+            'Così ogni `res.render` passa solo i dati **della pagina**.',
+          ],
+          code: C('c-locals'), file: 'server.js',
+        },
+        {
+          type: 'code', part: 'PARTIALS', title: 'File statici: CSS, immagini, JavaScript', icon: 'palette', iconColor: 'text-purple-400',
+          items: [
+            'Ripasso dal modulo 5: `express.static(\'public\')` serve i file della cartella così come sono.',
+            'Il browser riceve l\'HTML, trova `<link>`, `<img>`, `<script>` e fa **una richiesta per ognuno**.',
+            'Nei template percorsi che iniziano con `/` (`/stile.css`): funzionano da ogni pagina, anche da `/libri/3`.',
+            'Le viste non vanno in `public/`: sono codice del server, non file da scaricare.',
+          ],
+          code: C('c-statici'), lang: 'plaintext',
+        },
+
+        /* ------------------------------------------------ FORM */
+        {
+          type: 'code', part: 'FORM', title: 'Il form HTML', icon: 'text-cursor-input', iconColor: 'text-yellow-400',
+          items: [
+            '`action` è l\'URL, `method` è **GET** o **POST**: i form non conoscono PUT, PATCH e DELETE.',
+            'Viene inviato solo ciò che ha un **`name`**: è la chiave del dato.',
+            'Con POST i dati vanno nel body, codificati come una query string (`application/x-www-form-urlencoded`).',
+            'Con GET finiscono nell\'URL: perfetto per ricerche e filtri (`/?q=calvino`), mai per modificare qualcosa.',
+          ],
+          code: C('c-form'), lang: 'html', output: C('c-form-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'FORM', title: 'Leggere il form: `express.urlencoded()`', icon: 'inbox', iconColor: 'text-yellow-400',
+          items: [
+            'Senza `express.urlencoded()` il body non viene letto e `req.body` è `undefined`.',
+            'Arriva tutto come **stringa**: `"1958"`; un campo lasciato vuoto è `""`.',
+            'Una checkbox non spuntata **non viene inviata**: il campo manca. Spuntata vale `"on"`.',
+            'Trappola: `Number("")` è `0`. Per questo il vuoto diventa prima `undefined` (`z.preprocess`).',
+          ],
+          code: C('c-urlencoded'),
+        },
+        {
+          type: 'code', part: 'FORM', title: 'Errori nel form: la stessa pagina, con i valori', icon: 'message-square-warning', iconColor: 'text-yellow-400',
+          items: [
+            'Dati non validi → **lo stesso form**, subito (niente redirect: si perderebbe quello che l\'utente ha scritto).',
+            'Status **422** (o 400): il browser mostra la pagina lo stesso, ma log e test vedono l\'errore.',
+            '`fieldErrors` dà gli errori campo per campo: si mostrano accanto agli input.',
+            '`value="<%= valori.titolo %>"`: l\'escape protegge anche gli attributi; con `valori = {}` stampa una stringa vuota.',
+          ],
+          code: C('c-errori'), file: 'routes/pagine.js',
+        },
+
+        /* ------------------------------------------------ PRG */
+        {
+          part: 'PRG', title: 'Il problema del doppio invio', icon: 'copy', iconColor: 'text-red-400',
+          items: [
+            'Dopo un POST il server risponde **direttamente con la pagina**: per il browser quella pagina "è" il POST.',
+            '↻ Ricarica (o Indietro e poi Avanti) **ripete il POST**: il browser chiede "Confermare il nuovo invio del modulo?"…',
+            '…e quasi tutti confermano: libro creato due volte, ordine pagato due volte, messaggio pubblicato due volte.',
+            'Anche l\'indirizzo è sbagliato: la barra mostra `/libri`, un URL che con un GET non è la pagina che si vede.',
+          ],
+        },
+        {
+          type: 'custom', part: 'PRG', title: 'Post/Redirect/Get', icon: 'corner-up-right', iconColor: 'text-green-400',
+          html: PRG_HTML,
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Prova il doppio invio', icon: 'flask-conical', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Lo stesso form, inviato in due modi. Segui le missioni e guarda <code class="inline">data/messaggi.json</code>: quanti messaggi crea un ↻?</p><div class="dp"></div>',
+          mount: (el) => NodeLab.inspector(el.querySelector('.dp'), {
+            id: 'm8-doppio-slide', files: M8_DOPPIO.files, fs: M8_DOPPIO.fs, entry: 'server.js', port: 3000,
+            packages: ['express', 'ejs'], browser: true, height: '15rem', persist: true, watch: 'data/messaggi.json',
+            missions: M8_DOPPIO.missions,
+          }),
+        },
+        {
+          part: 'FORM', title: 'Modificare ed eliminare con i form', icon: 'trash-2', iconColor: 'text-red-400',
+          items: [
+            'I form conoscono solo GET e POST. Per eliminare: un piccolo form con un pulsante, `POST /libri/3/elimina`, poi un 303 verso il catalogo.',
+            '**Mai** un link come `<a href="/libri/3/elimina">`: i GET devono essere sicuri. Anteprime dei link, crawler e browser che precaricano le pagine li aprono da soli!',
+            'Alternative: il pacchetto `method-override` (un campo nascosto `_method=DELETE`) oppure `fetch()` da JavaScript verso l\'API REST.',
+          ],
+        },
+
+        /* ------------------------------------------------ CHIUSURA */
+        {
+          part: 'RIEPILOGO', title: 'Cosa portiamo a casa', icon: 'check-circle', iconColor: 'text-green-400',
+          items: [
+            'SSR: il server costruisce l\'HTML. `app.set(\'view engine\', \'ejs\')` e `res.render(\'vista\', dati)` → `views/vista.ejs`.',
+            '`<%= %>` stampa con l\'escape (sempre, per i dati); `<%- %>` così com\'è (gli include); `<% %>` esegue JavaScript.',
+            'Pezzi comuni nei **partials**, dati comuni in `app.locals` e `res.locals`, CSS e immagini con `express.static`.',
+            'Form: un `name` per ogni campo, `express.urlencoded()`, tutto arriva come stringa (e le checkbox spente non arrivano).',
+            'Errori → 422 e lo stesso form con valori ed errori. Successo → **303** e un GET: Post/Redirect/Get.',
+          ],
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Biblioteca 5.0: mettiti alla prova', icon: 'library', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">La Biblioteca con le sue pagine: catalogo con ricerca, scheda del libro, form "Nuovo libro" validato con zod, eliminazione e PRG. Naviga nel browser qui sotto: le richieste compaiono nel log del server.</p><div class="biblio"></div>',
+          mount: (el) => NodeLab.inspector(el.querySelector('.biblio'), {
+            id: 'm8-biblioteca-slide', files: M8_BIBLIOTECA.files, fs: M8_BIBLIOTECA.fs, entry: 'server.js', port: 3000,
+            packages: M8_BIBLIOTECA.packages, browser: true, height: '20rem', persist: true, watch: 'data/libri.json',
+            missions: M8_BIBLIOTECA.missions, presets: M8_BIBLIOTECA.presets,
+          }),
+        },
+        {
+          type: 'custom', part: 'ORA TOCCA A VOI', title: 'Esercitazioni e laboratori', icon: 'flask-conical',
+          html: `<div class="grid md:grid-cols-2 gap-6 items-center">
+            <ul class="space-y-3 text-lg md:text-xl text-gray-300">
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Playground di EJS e "che cosa arriva al browser?"</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Biblioteca 5.0: 10 missioni nel browser</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>5 laboratori con verifica automatica (un boss)</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Missioni sul vostro PC + quiz</li>
+            </ul>
+            <div class="text-center">
+              <a href="modulo_8_ex.html" class="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold hover:bg-green-500 transition-colors">
+                <i data-lucide="flask-conical" class="w-6 h-6"></i> Apri le esercitazioni</a>
+              <p class="mt-6 text-gray-500 font-mono text-sm">Prossimo modulo: Database relazionali, SQL e SQLite</p>
+            </div></div>`,
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>
