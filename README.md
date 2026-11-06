@@ -24,6 +24,7 @@ assets/
   m7-biblioteca.js    "Biblioteca 4.0" (zod, classi di errore, .env, livelli) + PipelineViz, SortGame e playground (modulo 7)
   m8-biblioteca.js    "Biblioteca 5.0" (pagine EJS, partials, form, PRG), la bacheca del doppio invio e il playground di EJS (modulo 8)
   m9-biblioteca.js    "Biblioteca 6.0" (Express + node:sqlite: migrazioni, seed, repository, JOIN), la demo di SQL injection e il database della console SQL (modulo 9)
+  m10-biblioteca.js   "Biblioteca 7.0" (Express + TypeORM: entità, migrazioni, relazioni, QueryBuilder, transazioni) e il playground "Dall'ORM all'SQL" (modulo 10)
 tools/
   harness.js          esegue il runtime simulato dentro Node (senza browser)
   check-labs.js       verifica soluzioni e codice iniziale dei laboratori
@@ -130,6 +131,7 @@ node tools/check-labs.js assets/labs-m6.js M6_LABS
 node tools/check-labs.js assets/labs-m7.js M7_LABS
 node tools/check-labs.js assets/labs-m8.js M8_LABS
 node tools/check-labs.js assets/labs-m9.js M9_LABS
+node tools/check-labs.js assets/labs-m10.js M10_LABS
 ```
 
 ## Note sul simulatore
@@ -160,6 +162,18 @@ node tools/check-labs.js assets/labs-m9.js M9_LABS
   `tools/harness.js` usa invece il `node:sqlite` di Node (serve Node 22.13+). Le chiavi esterne sono attive come in Node.
   I file `.db` stanno nel file system virtuale (codificati in base64): sopravvivono ai riavvii dell'inspector con `persist: true`,
   più connessioni allo stesso file vedono gli stessi dati. `require('sqlite')` senza `node:` non esiste, come in Node.
+- **TypeORM 1.1** (`packages: ['typeorm', 'better-sqlite3']`): porting per SQLite con `type: 'better-sqlite3'` (come nella 1.x;
+  `'sqlite'` dà "Wrong driver", senza better-sqlite3 "SQLite package has not been found installed"). `DataSource` (`initialize`,
+  `destroy`, `transaction`, `query`, `setOptions`, `synchronize`, `runMigrations`, `undoLastMigration`, `showMigrations`), `EntitySchema`
+  (colonne, `nullable`/`unique`/`default`, `createDate`/`updateDate`, `uniques`/`indices`/`checks`; relazioni `many-to-one`, `one-to-many`,
+  `one-to-one`, `many-to-many` con `joinColumn`/`joinTable`, `cascade`, `eager`), Repository ed EntityManager (`find*`, `count*`, `exists*`,
+  `save`/`remove` con le tabelle ponte, `insert`/`update`/`delete`, `increment`, `sum`/`average`/`minimum`/`maximum`), find options con gli
+  operatori (`MoreThan`, `Like`, `ILike`, `In`, `Between`, `IsNull`, `Not`, `Raw`, `And`/`Or`; array = OR; paginazione con DISTINCT come
+  l'originale) e QueryBuilder (select/update/delete/insert, join, `Brackets`, parametri `:nome` e `:...elenco`, `getManyAndCount`, `getRawMany`).
+  L'SQL generato, il log (`logging`) e gli errori (`QueryFailedError` con il `code` di better-sqlite3, `EntityNotFoundError`, l'errore
+  per un `undefined` nel `where`…) sono gli stessi di TypeORM 1.1.2, confrontati con il pacchetto vero. Migrazioni: classi con `up`/`down`
+  e `queryRunner.query(…)`, da `migrations: [glob]`. Non disponibili: i decoratori (servono TypeScript), la CLI, i metodi di schema del
+  `queryRunner` (`createTable`, `addColumn`…: si usa l'SQL) e gli altri database.
 - Moduli disponibili: `fs`, `fs/promises`, `path`, `events`, `os`, `util`, `http`, `url`, `querystring`,
   `crypto` (parziale), `assert`, `buffer`, `timers`, `timers/promises`, `stream` (minimo), `string_decoder`.
 - Il file system è virtuale (radice `/progetto`) e si azzera a ogni esecuzione.

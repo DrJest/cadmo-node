@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 10 · ORM con TypeORM — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="bg-gray-900">
+
+  <!-- ===================== Esempi di codice (testo puro, niente escape) ===================== -->
+  <script type="text/plain" id="c-ds">
+// npm install typeorm better-sqlite3
+const { DataSource } = require('typeorm');
+
+const AppDataSource = new DataSource({
+  type: 'better-sqlite3',                 // TypeORM 1.x: SQLite si usa così
+  database: 'data/biblioteca.db',
+  entities: [Autore, Libro, Genere],      // le entità (prossima slide)
+  synchronize: true,                      // crea le tabelle all'avvio (solo in sviluppo!)
+  logging: ['query', 'error'],            // stampa l'SQL che TypeORM esegue
+});
+
+// server.js — prima il database, poi il server
+AppDataSource.initialize()
+  .then(() => app.listen(3000))
+  .catch((err) => { console.error(err); process.exit(1); });
+</script>
+  <script type="text/plain" id="c-entity">
+// entities/libro.js
+const { EntitySchema } = require('typeorm');
+
+module.exports = new EntitySchema({
+  name: 'Libro',                       // il nome dell'entità
+  tableName: 'libri',                  // il nome della tabella
+  columns: {
+    id:          { type: Number, primary: true, generated: true },
+    titolo:      { type: String },
+    anno:        { type: Number, nullable: true },
+    isbn:        { type: String, nullable: true, unique: true },
+    disponibile: { type: Boolean, default: true },
+  },
+});
+</script>
+  <script type="text/plain" id="c-sync-out">
+query: CREATE TABLE "libri" ("id" integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+  "titolo" varchar NOT NULL, "anno" integer, "isbn" varchar,
+  "disponibile" boolean NOT NULL DEFAULT (1),
+  CONSTRAINT "UQ_330dd7327dabc70d7fdf6b7c360" UNIQUE ("isbn"))
+</script>
+  <script type="text/plain" id="c-crud">
+const libri = AppDataSource.getRepository(Libro);
+
+const l = libri.create({ titolo: 'Palomar', anno: 1983 });  // solo un oggetto, nessuna query
+await libri.save(l);                          // INSERT: ora l.id c'è
+await libri.findOneBy({ id: l.id });          // un libro, oppure null
+await libri.find();                           // tutti
+
+l.anno = 1984;
+await libri.save(l);                          // ha l'id: SELECT + UPDATE dei campi cambiati
+
+await libri.update({ id: l.id }, { disponibile: false });   // UPDATE diretto
+await libri.delete(l.id);                     // DELETE
+</script>
+  <script type="text/plain" id="c-crud-out">
+query: BEGIN TRANSACTION
+query: INSERT INTO "libri"("id", "titolo", "anno", "isbn", "disponibile") VALUES (NULL, ?, 1983, NULL, 1) -- PARAMETERS: ["Palomar"]
+query: SELECT "Libro"."id" AS "Libro_id", "Libro"."disponibile" AS "Libro_disponibile" FROM "libri" "Libro" WHERE "Libro"."id" = 8
+query: COMMIT
+…
+query: UPDATE "libri" SET "anno" = 1984 WHERE "id" = 8
+…
+UpdateResult { generatedMaps: [], raw: [], affected: 1 }
+DeleteResult { raw: [], affected: 1 }
+</script>
+  <script type="text/plain" id="c-find">
+const { MoreThan, Like, In, IsNull } = require('typeorm');
+
+await libri.find({
+  where: { anno: MoreThan(1960), titolo: Like('Il %') },   // AND
+  order: { anno: 'DESC' },
+  skip: 0, take: 10,                                       // paginazione
+  select: { id: true, titolo: true },                      // solo queste colonne
+});
+
+await libri.find({ where: [{ anno: IsNull() }, { disponibile: false }] });   // array = OR
+const [righe, totale] = await libri.findAndCount({ take: 10 });
+</script>
+  <script type="text/plain" id="c-find-out">
+query: SELECT "Libro"."id" AS "Libro_id", "Libro"."titolo" AS "Libro_titolo"
+  FROM "libri" "Libro"
+  WHERE (("Libro"."anno" > 1960) AND ("Libro"."titolo" LIKE ?))
+  ORDER BY "Libro"."anno" DESC LIMIT 10 OFFSET 0 -- PARAMETERS: ["Il %"]
+[ { id: 7, titolo: 'Il nome della rosa' }, { id: 5, titolo: 'Il sistema periodico' } ]
+</script>
+  <script type="text/plain" id="c-n1">
+// entities/libro.js — ogni libro ha UN autore
+relations: {
+  autore: {
+    type: 'many-to-one', target: 'Autore', inverseSide: 'libri',
+    joinColumn: { name: 'autore_id' },        // la chiave esterna (modulo 9)
+    nullable: false,                          // obbligatoria → INNER JOIN
+  },
+},
+
+// entities/autore.js — un autore ha MOLTI libri (il lato inverso: nessuna colonna)
+relations: {
+  libri: { type: 'one-to-many', target: 'Libro', inverseSide: 'autore' },
+},
+
+await libri.save({ titolo: 'Palomar', autore: { id: 1 } });   // basta l'id
+await libri.find({ relations: { autore: true }, where: { autore: { nome: Like('%Levi%') } } });
+await autori.find({ relations: { libri: true } });             // anche dall'altro lato
+</script>
+  <script type="text/plain" id="c-n1-out">
+query: SELECT "Libro"."id" AS "Libro_id", … "Libro__Libro_autore"."nome" AS "Libro__Libro_autore_nome"
+  FROM "libri" "Libro" INNER JOIN "autori" "Libro__Libro_autore"
+  ON "Libro__Libro_autore"."id"="Libro"."autore_id"
+  WHERE (((("Libro__Libro_autore"."nome" LIKE ?)))) -- PARAMETERS: ["%Levi%"]
+[
+  { id: 4, titolo: 'Se questo è un uomo', …, autore: { id: 2, nome: 'Primo Levi' } },
+  { id: 5, titolo: 'Il sistema periodico', …, autore: { id: 2, nome: 'Primo Levi' } }
+]
+</script>
+  <script type="text/plain" id="c-nn">
+// entities/libro.js — un libro ha tanti generi, un genere tanti libri
+generi: {
+  type: 'many-to-many', target: 'Genere',
+  joinTable: {                                    // il lato "proprietario" ha la tabella ponte
+    name: 'libri_generi',
+    joinColumn: { name: 'libro_id' },
+    inverseJoinColumn: { name: 'genere_id' },
+  },
+},
+
+const libro = await libri.findOne({ where: { id: 1 }, relations: { generi: true } });
+libro.generi.push({ id: 4 });                              // + giallo
+libro.generi = libro.generi.filter((g) => g.id !== 1);     // − romanzo
+await libri.save(libro);
+</script>
+  <script type="text/plain" id="c-nn-out">
+query: BEGIN TRANSACTION
+query: INSERT INTO "libri_generi"("libro_id", "genere_id") VALUES (1, 4)
+query: DELETE FROM "libri_generi" WHERE ("libro_id" = 1 AND "genere_id" = 1)
+query: COMMIT
+</script>
+  <script type="text/plain" id="c-np1-no">
+const autori = await repoAutori.find();        // 1 query
+for (const a of autori) {                      // + 1 query per autore
+  a.libri = await libri.findBy({ autore: { id: a.id } });
+}
+// 5 autori → 6 query. 1000 autori → 1001.
+</script>
+  <script type="text/plain" id="c-np1-si">
+const autori = await repoAutori.find({
+  relations: { libri: true },                  // una LEFT JOIN
+});
+// 1 query, qualunque sia il numero di autori.
+// (o il QueryBuilder, se servono solo i conteggi)
+</script>
+  <script type="text/plain" id="c-qb">
+const [libri, totale] = await AppDataSource.getRepository(Libro)
+  .createQueryBuilder('l')                          // l = alias di "libri"
+  .innerJoinAndSelect('l.autore', 'a')              // JOIN + carica l'autore
+  .leftJoinAndSelect('l.generi', 'g')
+  .where('a.nome LIKE :autore', { autore: '%calvino%' })   // :autore = parametro
+  .andWhere('l.anno > :anno', { anno: 1950 })
+  .orderBy('l.anno', 'DESC')
+  .skip(0).take(10)
+  .getManyAndCount();                               // entità + totale
+
+// righe "grezze": raggruppamenti e conteggi
+await repoAutori.createQueryBuilder('a')
+  .leftJoin('a.libri', 'l')
+  .select('a.nome', 'autore')
+  .addSelect('COUNT(l.id)', 'libri')
+  .groupBy('a.id')
+  .getRawMany();                    // [{ autore: 'Alda Merini', libri: 0 }, …]
+</script>
+  <script type="text/plain" id="c-inj-no">
+// l'ORM non protegge le stringhe che scrivi tu
+qb.where(`a.nome = '${req.query.autore}'`);     // SQL injection, come nel modulo 9
+qb.orderBy(req.query.ordina);                   // una colonna (o un'espressione) a scelta del client
+AppDataSource.query(`SELECT * FROM libri WHERE id = ${req.params.id}`);
+</script>
+  <script type="text/plain" id="c-inj-si">
+qb.where('a.nome = :autore', { autore: req.query.autore });
+qb.where('l.id IN (:...ids)', { ids: [1, 2, 3] });    // :... = un elenco
+qb.orderBy(ORDINI[req.query.ordina] ?? 'l.titolo');   // whitelist (o z.enum)
+AppDataSource.query('SELECT * FROM libri WHERE id = ?', [req.params.id]);
+
+// nelle find options i valori sono sempre parametri
+libri.findBy({ titolo: Like(`%${q}%`) });
+</script>
+  <script type="text/plain" id="c-tx">
+// il prestito: due modifiche, tutte e due o nessuna
+function presta(id, lettore) {
+  return AppDataSource.transaction(async (manager) => {    // BEGIN
+    const libro = await manager.findOneBy(Libro, { id });
+    if (!libro) throw new NonTrovato('Il libro non esiste');            // → ROLLBACK
+    if (!libro.disponibile) throw new Conflitto('Già in prestito');     // → ROLLBACK
+    await manager.save(Prestito, { libro, lettore, dal: oggi() });
+    await manager.update(Libro, id, { disponibile: false });
+  });                                                        // COMMIT
+}
+</script>
+  <script type="text/plain" id="c-tx-out">
+query: BEGIN TRANSACTION
+query: SELECT "Libro"."id" AS "Libro_id", … FROM "libri" "Libro" WHERE (("Libro"."id" = 1)) LIMIT 1
+query: INSERT INTO "prestiti"("id", "lettore", "dal", "al", "libro_id") VALUES (NULL, ?, ?, NULL, 1) -- PARAMETERS: ["Giulia","2026-11-06"]
+query: UPDATE "libri" SET "disponibile" = 0 WHERE "id" = 1
+query: COMMIT
+</script>
+  <script type="text/plain" id="c-migra">
+// data-source.js
+synchronize: false,                                       // lo schema lo cambiano SOLO le migrazioni
+migrations: [path.join(__dirname, 'migrations', '*.js')],
+migrationsRun: true,                                      // all'avvio: quelle nuove
+
+// migrations/1762506000000-AggiungiIsbn.js
+module.exports = class AggiungiIsbn1762506000000 {       // il numero = quando è stata creata
+  async up(queryRunner) {
+    await queryRunner.query(`ALTER TABLE "libri" ADD COLUMN "isbn" varchar`);
+  }
+  async down(queryRunner) {                               // per tornare indietro
+    await queryRunner.query(`ALTER TABLE "libri" DROP COLUMN "isbn"`);
+  }
+};
+</script>
+  <script type="text/plain" id="c-cli">
+# un file vuoto da riempire a mano (-o = JavaScript)
+npx typeorm migration:create migrations/AggiungiIsbn -o
+# oppure: TypeORM confronta entità e database e scrive l'SQL che manca
+npx typeorm migration:generate migrations/AggiungiIsbn -d data-source.js -o
+
+npx typeorm migration:show   -d data-source.js     # [X] applicate, [ ] da applicare
+npx typeorm migration:run    -d data-source.js     # applica quelle nuove
+npx typeorm migration:revert -d data-source.js     # annulla l'ultima (down)
+</script>
+  <script type="text/plain" id="c-errori">
+// middleware/errori.js
+const { QueryFailedError, EntityNotFoundError } = require('typeorm');
+
+function gestoreErrori(err, req, res, next) {
+  // … ErroreApi, JSON non valido (moduli 7 e 9) …
+  if (err instanceof EntityNotFoundError) {             // findOneByOrFail, findOneOrFail
+    return res.status(404).json({ errore: 'Risorsa non trovata' });
+  }
+  if (err instanceof QueryFailedError) {                // l'errore del database
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {      // 'UNIQUE constraint failed: libri.isbn'
+      return res.status(409).json({ errore: 'ISBN già presente' });
+    }
+    if (err.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+      return res.status(409).json({ errore: 'Ci sono dati collegati' });
+    }
+  }
+  console.error(err);                                   // tutto il resto è un bug → 500
+  res.status(500).json({ errore: 'Errore interno del server' });
+}
+</script>
+  <script type="text/plain" id="c-repo">
+// repositories/libri.js — stessi nomi del modulo 9: le rotte non cambiano (aggiungono solo await)
+const repo = () => AppDataSource.getRepository(Libro);
+
+function trova(id) {
+  return repo().findOne({ where: { id }, relations: { autore: true, generi: true } });
+}
+
+async function crea({ autore_id, generi = [], ...dati }) {
+  const libro = repo().create({ ...dati, autore: { id: autore_id }, generi: generi.map((id) => ({ id })) });
+  await repo().save(libro);              // INSERT + le righe della tabella ponte
+  return trova(libro.id);
+}
+
+async function elimina(id) {
+  return (await repo().delete(id)).affected > 0;    // 0 → 404
+}
+
+// routes/libri.js
+router.get('/:id', async (req, res) => {
+  const l = await libri.trova(Number(req.params.id));
+  if (!l) throw new NonTrovato('Il libro non esiste');   // Express 5: async gestito
+  res.json(l);
+});
+</script>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/m10-biblioteca.js"></script>
+  <script>
+    // nei blocchi text/plain il tag di chiusura degli script è scritto con la barra "escapata"
+    const C = (id) => document.getElementById(id).textContent.replace(/^\n/, '').replace(/<\\\/script>/g, '<\/script>');
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const code = (s) => `<code class="inline">${esc(s)}</code>`;
+    const md = (t) => esc(t).replace(/`([^`]+)`/g, '<code class="inline">$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    const TABLE = (head, rows) => `<div class="overflow-x-auto rounded-xl border border-gray-700"><table class="w-full text-left text-sm md:text-base">
+      <thead class="bg-gray-800 text-gray-300"><tr>${head.map((h) => `<th class="px-4 py-2 font-semibold">${h}</th>`).join('')}</tr></thead>
+      <tbody class="divide-y divide-gray-800 text-gray-200">${rows.map((r) => `<tr class="bg-gray-900/60">${r.map((c) => `<td class="px-4 py-2">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    const NOTE = (items) => `<ul class="slide-items space-y-3 text-base md:text-xl text-gray-300 mt-6">${items.map((t) => `<li class="flex"><span class="text-green-500 mr-4 font-mono">$</span><span>${md(t)}</span></li>`).join('')}</ul>`;
+    const PRE = (txt, lang) => `<pre class="code small"><code class="language-${lang || 'javascript'}">${esc(txt)}</code></pre>`;
+
+    const MAPPA_HTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div class="lg:col-span-6 space-y-4">` + TABLE(['Nell\'entità', 'In SQLite', 'Torna come'], [
+        [code('type: Number'), 'integer', 'number'],
+        [code('type: String') + ' (' + code('length: 100') + ')', 'varchar (varchar(100))', 'string'],
+        [code('type: Boolean'), 'boolean = <strong>0 / 1</strong>', '<strong>true / false</strong>'],
+        [code('type: Date') + ', ' + code('createDate: true'), 'datetime', 'Date'],
+        [code("type: 'text'") + ', ' + code("'real'") + ', ' + code("'date'"), 'il tipo indicato', 'string / number'],
+        [code('primary: true, generated: true'), 'PRIMARY KEY AUTOINCREMENT', ''],
+        [code('nullable: true') + ' · ' + code('unique') + ' · ' + code('default'), 'NULL · UNIQUE · DEFAULT', ''],
+      ]) + `</div><div class="lg:col-span-6">${PRE(C('c-sync-out'), 'sql')}${NOTE([
+        'I booleani e le date **tornano già convertiti**: addio al `daRiga` del modulo 9.',
+        'Senza `nullable: true` la colonna è `NOT NULL`. I nomi dei vincoli (`UQ_…`) li sceglie TypeORM.',
+      ])}</div></div>`;
+
+    const OPERATORI_HTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"><div class="lg:col-span-7">` + TABLE(['Find option', 'Diventa'], [
+      [code('{ anno: 1957 }'), code('"anno" = 1957')],
+      [code('MoreThan(1960)') + ' · ' + code('LessThanOrEqual(…)'), code('> 1960') + ' · ' + code('<= …')],
+      [code('Between(1950, 1970)'), code('BETWEEN 1950 AND 1970')],
+      [code("In(['a', 'b'])"), code('IN (?, ?)')],
+      [code("Like('Il %')") + ' · ' + code("ILike('%rosa%')"), code('LIKE ?') + ' · ' + code('UPPER(…) LIKE UPPER(?)')],
+      [code('IsNull()') + ' · ' + code('Not(IsNull())'), code('IS NULL') + ' · ' + code('NOT(… IS NULL)')],
+      [code('Not(5)'), code('!= 5')],
+      [code('where: [{ … }, { … }]'), '(…) <strong>OR</strong> (…)'],
+      [code('where: { autore: { nome: … } }'), 'una <strong>JOIN</strong> sulla relazione'],
+    ]) + `</div><div class="lg:col-span-5">${NOTE([
+      'Gli operatori si importano da `typeorm` e vanno al posto del valore.',
+      'Nello stesso oggetto: **AND**. Un array di oggetti: **OR**.',
+      '⚠️ TypeORM 1.x: `{ anno: undefined }` o `{ anno: null }` danno **errore**. Per il NULL c\'è `IsNull()`; i filtri facoltativi si aggiungono solo se ci sono.',
+    ])}</div></div>`;
+
+    const CONFRONTO_HTML = TABLE(['', 'Che cos\'è', 'Quando'], [
+      ['<strong>SQL a mano</strong> (node:sqlite, pg)', 'Le query le scrivi tu', 'Query particolari, report, prestazioni; capire cosa succede'],
+      ['<strong>Query builder</strong> (Knex, Kysely)', 'L\'SQL costruito con funzioni', 'Query dinamiche senza un modello a oggetti'],
+      ['<strong>ORM</strong> (TypeORM, Sequelize, MikroORM)', 'Entità ↔ tabelle, relazioni, migrazioni', 'CRUD con relazioni: la maggior parte delle API'],
+      ['<strong>ORM "schema-first"</strong> (Prisma, Drizzle)', 'Uno schema da cui si genera il client', 'Progetti TypeScript nuovi'],
+    ]) + NOTE([
+      'Non si esclude niente: con TypeORM si scrive SQL quando serve (`AppDataSource.query(sql, [valori])`).',
+      'Con un **repository** davanti, passare dall\'uno all\'altro cambia un livello solo (lo abbiamo appena fatto).',
+    ]);
+
+    window.DECK = {
+      module: 'MODULO 10',
+      title: 'ORM con TypeORM',
+      prompt: 'modulo-10',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover', icon: 'boxes',
+          title: 'ORM con TypeORM',
+          subtitle: 'Le tabelle diventano **entità**: repository, relazioni, transazioni e migrazioni, senza scrivere SQL (ma sapendo quale SQL parte).',
+          meta: ['3 ore', 'Modulo 10'],
+        },
+        {
+          type: 'agenda', part: 'PROGRAMMA', title: 'Agenda', icon: 'list-checks',
+          rows: [
+            ['Che cos\'è un ORM; DataSource ed entità con `EntitySchema`', 'teoria'],
+            ['Repository e find options + simulazione', 'demo'],
+            ['Relazioni N-1, 1-N, N-N; il problema N+1', 'teoria'],
+            ['QueryBuilder, injection e transazioni', 'teoria'],
+            ['Pausa', 'pausa'],
+            ['`synchronize` o migrazioni? Errori dell\'ORM', 'teoria'],
+            ['Biblioteca 7.0 + 5 laboratori', 'lab'],
+            ['Quiz', 'quiz'],
+          ],
+        },
+
+        /* ------------------------------------------------ PERCHÉ */
+        {
+          type: 'compare', part: 'PERCHÉ UN ORM', title: 'Dall\'SQL a mano all\'ORM', icon: 'git-compare',
+          columns: [
+            { title: 'SQL a mano (modulo 9)', color: 'red', icon: 'file-code', items: ['Ogni tabella: `prepare`, `run`, `get` e le stesse query ripetute', 'Le conversioni a mano: `0/1` → booleani, testo → date', 'Le JOIN e la tabella ponte scritte ogni volta', 'Le migrazioni: tutto SQL scritto da noi'] },
+            { title: 'ORM (oggi)', color: 'green', icon: 'boxes', items: ['Descrivi le **entità** una volta: tabelle e colonne ne derivano', '`find`, `save`, `delete` per tutte le tabelle', 'Le relazioni si dichiarano: `relations: { autore: true }`', 'Le migrazioni possono essere **generate**'] },
+          ],
+          footer: '**ORM** = Object-Relational Mapping: oggetti JavaScript ↔ righe delle tabelle. L\'SQL non sparisce, lo scrive TypeORM: con `logging` lo vedi tutto (e conviene guardarlo).',
+        },
+        {
+          type: 'code', part: 'DATASOURCE', title: 'Installazione e `DataSource`', icon: 'plug', iconColor: 'text-blue-400',
+          items: [
+            '`npm install typeorm better-sqlite3`. In TypeORM 1.x SQLite passa da **better-sqlite3** (`type: \'sqlite\'` non esiste più).',
+            'Una `DataSource` per tutta l\'app (come la connessione di `db.js`), con `initialize()` **prima** di `listen`.',
+            'Tutto è **asincrono** (Promise): `await` ovunque, anche se SQLite è sincrono.',
+            'Lo stesso codice va su PostgreSQL o MySQL cambiando `type` e pochi parametri.',
+          ],
+          code: C('c-ds'), file: 'data-source.js',
+        },
+        {
+          type: 'code', part: 'ENTITÀ', title: 'Le entità con `EntitySchema`', icon: 'table-properties', iconColor: 'text-blue-400',
+          items: [
+            'Un\'entità = una tabella: `name` (per il codice), `tableName`, le `columns`.',
+            'In JavaScript si usa `EntitySchema`: i decoratori della documentazione (`@Entity`, `@Column`) sono **TypeScript**.',
+            '`primary: true, generated: true` = l\'id automatico. Senza `nullable: true` la colonna è obbligatoria.',
+            'Le entità sono oggetti normali: `{ id, titolo, anno, … }`, senza classi da estendere.',
+          ],
+          code: C('c-entity'), file: 'entities/libro.js',
+        },
+        {
+          type: 'custom', part: 'ENTITÀ', title: 'Dall\'entità alla tabella', icon: 'arrow-left-right', iconColor: 'text-blue-400',
+          html: MAPPA_HTML,
+        },
+
+        /* ------------------------------------------------ REPOSITORY */
+        {
+          type: 'code', part: 'REPOSITORY', title: 'Il Repository: CRUD', icon: 'database', iconColor: 'text-green-400',
+          items: [
+            '`getRepository(Libro)`: i metodi per **una** entità. `create` costruisce l\'oggetto, `save` lo scrive.',
+            '`save` decide da solo: senza id → INSERT; con l\'id → prima legge la riga, poi UPDATE dei soli campi cambiati.',
+            '`findOneBy` restituisce `null` (→ 404); `update` e `delete` dicono quante righe hanno toccato: `affected`.',
+            '`save` restituisce lo stesso oggetto, con `id` e default (`disponibile: true`).',
+          ],
+          code: C('c-crud'), output: C('c-crud-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'REPOSITORY', title: 'Le find options', icon: 'search', iconColor: 'text-green-400',
+          items: [
+            '`where` (quali righe), `order`, `skip`/`take` (la pagina), `select` (quali colonne), `relations` (più avanti).',
+            '`findBy(where)`, `findOneBy(where)`, `count`, `countBy`, `exists`: le scorciatoie.',
+            '`findAndCount`: le righe della pagina **e** il totale, per la paginazione dell\'API.',
+            'I valori diventano sempre **parametri**: niente SQL injection.',
+          ],
+          code: C('c-find'), output: C('c-find-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'REPOSITORY', title: 'Gli operatori', icon: 'filter', iconColor: 'text-green-400',
+          html: OPERATORI_HTML,
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Dall\'ORM all\'SQL', icon: 'flask-conical', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Un database in memoria con autori, libri e generi. Scegli una chiamata (o scrivine una): nel terminale l\'SQL che TypeORM esegue davvero, e poi il risultato.</p><div class="pg"></div>',
+          mount: (el) => NodeLab.playground(el.querySelector('.pg'), Object.assign({ packages: ['typeorm', 'better-sqlite3'], height: '19rem' }, M10_ORM)),
+        },
+
+        /* ------------------------------------------------ RELAZIONI */
+        {
+          type: 'code', part: 'RELAZIONI', title: 'Uno a molti: `many-to-one` e `one-to-many`', icon: 'network', iconColor: 'text-purple-400',
+          items: [
+            '**N-1** (`many-to-one`): il lato con la chiave esterna. `joinColumn` ne sceglie il nome (altrimenti `autoreId`).',
+            '**1-N** (`one-to-many`): il lato inverso, senza colonna; `inverseSide` collega i due lati.',
+            'Le relazioni **non** si caricano da sole: `relations: { autore: true }` aggiunge la JOIN.',
+            'Per collegare basta l\'id: `autore: { id: 1 }`. Nel `where` si può filtrare sui campi della relazione.',
+          ],
+          code: C('c-n1'), output: C('c-n1-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'RELAZIONI', title: 'Molti a molti: `many-to-many`', icon: 'workflow', iconColor: 'text-purple-400',
+          items: [
+            'La **tabella ponte** del modulo 9 la crea e la gestisce TypeORM: con `joinTable` ne scegli i nomi.',
+            'Si lavora con un **array** di oggetti: `libro.generi`. Al `save` TypeORM confronta con il database.',
+            'Aggiunto all\'array → `INSERT` nella tabella ponte; tolto → `DELETE`. Il resto non si tocca.',
+            '`cascade: true` salva anche i generi **nuovi** (senza id) insieme al libro.',
+          ],
+          code: C('c-nn'), output: C('c-nn-out'), reveal: true,
+        },
+        {
+          type: 'compare', part: 'RELAZIONI', title: 'Il problema N+1', icon: 'triangle-alert',
+          columns: [
+            { title: 'Una query per ogni riga', color: 'red', icon: 'repeat', code: C('c-np1-no'), items: ['Funziona, ed è per questo che è insidioso', 'Ogni query è un viaggio fino al database (con PostgreSQL: in rete)'] },
+            { title: 'Una JOIN', color: 'green', icon: 'merge', code: C('c-np1-si'), items: ['Il database fa il lavoro in una volta sola', 'Con `logging` acceso il problema si vede subito: decine di righe `query:` uguali'] },
+          ],
+          footer: '`eager: true` su una relazione la carica **sempre**: comodo, ma ogni `find` diventa più pesante. Meglio chiedere le relazioni quando servono.',
+        },
+
+        /* ------------------------------------------------ QUERY BUILDER */
+        {
+          type: 'code', part: 'QUERY BUILDER', title: 'Il QueryBuilder', icon: 'blocks', iconColor: 'text-cyan-400',
+          items: [
+            'Quando le find options non bastano: `GROUP BY`, condizioni complesse, JOIN con condizioni, sottoquery.',
+            'Si ragiona in **alias** (`l`, `a`) e **proprietà** (`l.autore`, `a.nome`): TypeORM le traduce in tabelle e colonne.',
+            '`:nome` è un **parametro**: il valore arriva nel secondo argomento, mai dentro la stringa.',
+            '`getMany` / `getOne` → entità; `getRawMany` → righe grezze (con gli alias scelti in `select`).',
+          ],
+          code: C('c-qb'),
+        },
+        {
+          type: 'compare', part: 'SICUREZZA', title: 'SQL injection, anche con l\'ORM', icon: 'syringe',
+          columns: [
+            { title: 'Stringhe costruite a mano', color: 'red', icon: 'skull', code: C('c-inj-no'), items: ['Nel QueryBuilder e in `query()` scrivi **SQL**: valgono le regole del modulo 9'] },
+            { title: 'Parametri e whitelist', color: 'green', icon: 'shield-check', code: C('c-inj-si'), items: ['`:nome` (e `:...elenco`) nel QueryBuilder, `?` in `query()`', 'Per colonne e direzioni: un elenco chiuso'] },
+          ],
+          footer: 'Con le find options (`find`, `findBy`…) i valori sono sempre parametri. Il rischio c\'è dove passi **testo** a TypeORM: `where(\'…\')`, `orderBy(…)`, `query(…)`.',
+        },
+        {
+          type: 'code', part: 'TRANSAZIONI', title: 'Le transazioni', icon: 'lock', iconColor: 'text-cyan-400',
+          items: [
+            '`AppDataSource.transaction(async (manager) => { … })`: `BEGIN`, la funzione, `COMMIT`.',
+            'Se la funzione **lancia un errore** → `ROLLBACK` e l\'errore arriva al chiamante (→ 404, 409…).',
+            'Dentro, **solo** `manager` (`manager.save`, `manager.getRepository(…)`): con PostgreSQL le altre query andrebbero su un\'altra connessione, fuori dalla transazione.',
+            'Un singolo `save` ha già la sua transazione (guarda il log del CRUD).',
+          ],
+          code: C('c-tx'), file: 'repositories/libri.js', output: C('c-tx-out'), reveal: true,
+        },
+
+        /* ------------------------------------------------ SCHEMA */
+        {
+          type: 'compare', part: 'SCHEMA', title: '`synchronize` o migrazioni?', icon: 'git-compare',
+          columns: [
+            { title: 'synchronize: true', color: 'yellow', icon: 'refresh-cw', items: ['All\'avvio confronta entità e tabelle e **modifica** il database', 'Comodissimo mentre si sviluppa e nei test', 'In produzione **mai**: togliere o cambiare una proprietà può cancellare una colonna, e i suoi dati'] },
+            { title: 'Migrazioni', color: 'green', icon: 'git-branch', items: ['File numerati con `up` (avanti) e `down` (indietro)', 'Su Git insieme al codice: ogni database arriva alla stessa versione', 'Quelle già eseguite stanno nella tabella `migrations`'] },
+          ],
+          footer: 'La strada di solito: `synchronize` per i primi esperimenti, poi `synchronize: false` e **solo** migrazioni. Come le `user_version` del modulo 9, ma gestite da TypeORM.',
+        },
+        {
+          type: 'code', part: 'SCHEMA', title: 'Le migrazioni', icon: 'git-branch', iconColor: 'text-orange-400',
+          items: [
+            'Una migrazione è una **classe** con `up` e `down`; il nome finisce con un timestamp di 13 cifre, che dà l\'ordine.',
+            'Dentro si scrive SQL con `queryRunner.query(…)`: è quello che produce anche `migration:generate`.',
+            'Si applicano con `migrationsRun: true` all\'avvio, o con `runMigrations()` / la CLI.',
+            'Tutte le migrazioni nuove girano in **una** transazione: se una fallisce, non resta niente a metà.',
+          ],
+          code: C('c-migra'), file: 'data-source.js · migrations/',
+        },
+        {
+          type: 'code', part: 'SCHEMA', title: 'La CLI di TypeORM', icon: 'terminal', iconColor: 'text-orange-400',
+          items: [
+            '`-d data-source.js` dice alla CLI quale DataSource usare (il file deve esportarla).',
+            '`migration:generate` legge le entità e il database e scrive le differenze in SQL: **da rileggere** sempre.',
+            'Con SQLite le modifiche diventano "crea una tabella nuova, copia i dati, rinomina": SQLite cambia poco con `ALTER TABLE`.',
+            '`-o` fa uscire JavaScript (senza, TypeScript).',
+          ],
+          code: C('c-cli'), lang: 'bash', file: 'terminale',
+        },
+        {
+          type: 'code', part: 'ARCHITETTURA', title: 'Gli errori dell\'ORM', icon: 'shield-alert', iconColor: 'text-purple-400',
+          items: [
+            '`QueryFailedError`: la query è fallita. Dentro: `query`, `parameters` e il `code` di better-sqlite3.',
+            'Un vincolo violato dal client non è un bug: UNIQUE → 409, chiave esterna → 409.',
+            '`EntityNotFoundError` arriva dai metodi `…OrFail` (`findOneByOrFail`): → 404.',
+            'Gli errori "di programmazione" (`EntityPropertyNotFoundError`, `undefined` nel where) restano 500: vanno corretti.',
+          ],
+          code: C('c-errori'), file: 'middleware/errori.js',
+        },
+        {
+          type: 'code', part: 'ARCHITETTURA', title: 'La Biblioteca 7.0: il repository con TypeORM', icon: 'layers', iconColor: 'text-purple-400',
+          items: [
+            'Stessi nomi del repository SQL del modulo 9: rotte, validazione ed errori restano quelli.',
+            'Le funzioni ora sono **async**: nelle rotte serve `await` (Express 5 inoltra da solo gli errori).',
+            'Filtri e paginazione con il QueryBuilder; prestiti con una transazione; schema con due migrazioni.',
+          ],
+          code: C('c-repo'), file: 'repositories/libri.js',
+        },
+        {
+          type: 'custom', part: 'OLTRE TYPEORM', title: 'ORM, query builder o SQL?', icon: 'scale', iconColor: 'text-purple-400',
+          html: CONFRONTO_HTML,
+        },
+
+        /* ------------------------------------------------ CHIUSURA */
+        {
+          part: 'RIEPILOGO', title: 'Cosa portiamo a casa', icon: 'check-circle', iconColor: 'text-green-400',
+          items: [
+            'Una `DataSource` (`type: \'better-sqlite3\'`), `initialize()` prima del server; entità con `EntitySchema`.',
+            'Repository: `create`, `save`, `find`/`findOneBy` con `where`, operatori, `order`, `skip`/`take`; `update`/`delete` con `affected`.',
+            'Relazioni `many-to-one` / `one-to-many` / `many-to-many`, caricate con `relations`. Occhio all\'N+1.',
+            'QueryBuilder con i **parametri** `:nome`; `transaction(manager => …)` per il "tutto o niente".',
+            '`synchronize` solo in sviluppo, migrazioni in produzione; `QueryFailedError` → 409.',
+          ],
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Biblioteca 7.0: mettiti alla prova', icon: 'library', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">La Biblioteca con TypeORM: migrazioni all\'avvio, relazioni, QueryBuilder, transazioni. Nel log ogni query che TypeORM esegue; a sinistra le tabelle di <code class="inline">data/biblioteca.db</code>. ↻ riavvia il server <strong>mantenendo</strong> il file.</p><div class="biblio"></div>',
+          mount: (el) => NodeLab.inspector(el.querySelector('.biblio'), {
+            id: 'm10-biblioteca-slide', files: M10_BIBLIOTECA.files, fs: M10_BIBLIOTECA.fs, entry: 'server.js', port: 3000,
+            packages: M10_BIBLIOTECA.packages, height: '20rem', persist: true, watch: 'data/biblioteca.db',
+            missions: M10_BIBLIOTECA.missions, presets: M10_BIBLIOTECA.presets,
+          }),
+        },
+        {
+          type: 'custom', part: 'ORA TOCCA A VOI', title: 'Esercitazioni e laboratori', icon: 'flask-conical',
+          html: `<div class="grid md:grid-cols-2 gap-6 items-center">
+            <ul class="space-y-3 text-lg md:text-xl text-gray-300">
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Dall'ORM all'SQL e "che cosa succede?"</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Biblioteca 7.0 con le missioni</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>5 laboratori con verifica automatica (un boss)</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Missioni sul vostro PC + quiz</li>
+            </ul>
+            <div class="text-center">
+              <a href="modulo_10_ex.html" class="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold hover:bg-green-500 transition-colors">
+                <i data-lucide="flask-conical" class="w-6 h-6"></i> Apri le esercitazioni</a>
+              <p class="mt-6 text-gray-500 font-mono text-sm">Prossimo modulo: MongoDB e Mongoose</p>
+            </div></div>`,
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>

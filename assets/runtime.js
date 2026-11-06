@@ -3147,7 +3147,7 @@
     let sqlEngineError = null;
     let sqlEngineLoading = null;
     function needsSqlite(msg) {
-      if ((msg.packages || []).includes('better-sqlite3')) return true;
+      if ((msg.packages || []).some((p) => p === 'better-sqlite3' || p === 'typeorm')) return true;
       const texts = Object.values(msg.files || {}).concat(Object.values(msg.fs || {}));
       return texts.some((t) => typeof t === 'string' && (t.includes('sqlite') || isBin(t)));
     }
@@ -3575,7 +3575,7 @@
         constructor(message, code) { super(message); this.code = code; }
       }
       Object.defineProperty(SqliteError.prototype, 'name', { value: 'SqliteError', writable: true, configurable: true });
-      const CODES = { 1: 'SQLITE_ERROR', 5: 'SQLITE_BUSY', 8: 'SQLITE_READONLY', 14: 'SQLITE_CANTOPEN', 19: 'SQLITE_CONSTRAINT', 25: 'SQLITE_RANGE', 26: 'SQLITE_NOTADB', 275: 'SQLITE_CONSTRAINT_CHECK', 787: 'SQLITE_CONSTRAINT_FOREIGNKEY', 1299: 'SQLITE_CONSTRAINT_NOTNULL', 1555: 'SQLITE_CONSTRAINT_PRIMARYKEY', 2067: 'SQLITE_CONSTRAINT_UNIQUE' };
+      const CODES = { 1: 'SQLITE_ERROR', 5: 'SQLITE_BUSY', 8: 'SQLITE_READONLY', 14: 'SQLITE_CANTOPEN', 19: 'SQLITE_CONSTRAINT', 25: 'SQLITE_RANGE', 26: 'SQLITE_NOTADB', 275: 'SQLITE_CONSTRAINT_CHECK', 787: 'SQLITE_CONSTRAINT_FOREIGNKEY', 1299: 'SQLITE_CONSTRAINT_NOTNULL', 1811: 'SQLITE_CONSTRAINT_TRIGGER', 1555: 'SQLITE_CONSTRAINT_PRIMARYKEY', 2067: 'SQLITE_CONSTRAINT_UNIQUE' };
       const wrap = (e) => {
         const x = sqliteError(e);
         return x.code === 'ERR_SQLITE_ERROR' ? new SqliteError(x.message, CODES[x.errcode] || CODES[x.errcode & 255] || 'SQLITE_ERROR') : x;
@@ -3650,6 +3650,7 @@
         if (values.length < st.info.anon) throw new RangeError('Too few parameter values were provided');
         if (values.length > st.info.anon) throw new RangeError('Too many parameter values were provided');
         if (!st.info.names.length) return { named: null, positional: values };
+        if (!named) throw new TypeError('Missing named parameters');
         const out = {};
         for (const n of st.info.names) {
           const bare = n.slice(1);
@@ -3730,6 +3731,2565 @@
       return Database;
     }
 
+    // ------------------------------------------------------------ TypeORM
+    // Porting essenziale di TypeORM 1.1 per SQLite (type: 'better-sqlite3', come nella 1.x):
+    // DataSource, EntitySchema, EntityManager e Repository, find options e operatori, QueryBuilder,
+    // relazioni 1-1, N-1, 1-N e N-N, transazioni, synchronize e migrazioni.
+    // L'SQL generato (e il log "query: …") ha la stessa forma di quello del vero TypeORM.
+    // Gira sopra better-sqlite3 del simulatore: il pacchetto va installato insieme a typeorm.
+    function createTypeorm() {
+      const q = (n) => '"' + String(n).replace(/"/g, '""') + '"';
+      const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const isObj = (v) => v !== null && typeof v === 'object';
+      const kind = (v, n) => v !== null && (typeof v === 'object' || typeof v === 'function') && v['@instanceof'] === Symbol.for(n);
+      const isSchema = (v) => kind(v, 'EntitySchema');
+      const isOperator = (v) => kind(v, 'FindOperator') || kind(v, 'EqualOperator');
+      const isBrackets = (v) => kind(v, 'Brackets') || kind(v, 'NotBrackets');
+      const unsupported = (what) => makeError(Error, 'ERR_NODELAB_UNSUPPORTED', `${what} non è disponibile nel simulatore NodeLab.`);
+
+      // sha1 (i nomi dei vincoli: "UQ_" + sha1("tabella_colonne"), come la DefaultNamingStrategy)
+      function sha1(str) {
+        const bytes = new TextEncoder().encode(str);
+        const len = (((bytes.length + 8) >> 6) + 1) << 6;
+        const buf = new Uint8Array(len);
+        buf.set(bytes);
+        buf[bytes.length] = 0x80;
+        const dv = new DataView(buf.buffer);
+        dv.setUint32(len - 4, (bytes.length * 8) >>> 0);
+        dv.setUint32(len - 8, Math.floor((bytes.length * 8) / 0x100000000));
+        const h = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0];
+        const w = new Uint32Array(80);
+        for (let off = 0; off < len; off += 64) {
+          for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4);
+          for (let i = 16; i < 80; i++) { const x = w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16]; w[i] = (x << 1) | (x >>> 31); }
+          let [a, b, c, d, e] = h;
+          for (let i = 0; i < 80; i++) {
+            const f = i < 20 ? (b & c) | (~b & d) : i < 40 ? b ^ c ^ d : i < 60 ? (b & c) | (b & d) | (c & d) : b ^ c ^ d;
+            const k = i < 20 ? 0x5A827999 : i < 40 ? 0x6ED9EBA1 : i < 60 ? 0x8F1BBCDC : 0xCA62C1D6;
+            const t = (((a << 5) | (a >>> 27)) + f + e + k + w[i]) >>> 0;
+            e = d; d = c; c = ((b << 30) | (b >>> 2)) >>> 0; b = a; a = t;
+          }
+          h[0] = (h[0] + a) >>> 0; h[1] = (h[1] + b) >>> 0; h[2] = (h[2] + c) >>> 0; h[3] = (h[3] + d) >>> 0; h[4] = (h[4] + e) >>> 0;
+        }
+        return h.map((x) => x.toString(16).padStart(8, '0')).join('');
+      }
+      const snakeCase = (s) => s.replace(/([A-Z])([A-Z])([a-z])/g, '$1_$2$3').replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+      const camelCase = (s) => s.replace(/^([A-Z])|[\s-_](\w)/g, (m, p1, p2) => (p2 ? p2.toUpperCase() : p1.toLowerCase()));
+      const constraintKey = (table, cols) => `${table.replace('.', '_')}_${[...cols].sort().join('_')}`;
+      const naming = {
+        uniqueName: (t, cols) => 'UQ_' + sha1(constraintKey(t, cols)).slice(0, 27),
+        relationName: (t, cols) => 'REL_' + sha1(constraintKey(t, cols)).slice(0, 26),
+        foreignKeyName: (t, cols) => 'FK_' + sha1(constraintKey(t, cols)).slice(0, 27),
+        indexName: (t, cols, where) => 'IDX_' + sha1(constraintKey(t, cols) + (where ? `_${where}` : '')).slice(0, 26),
+        checkName: (t, expr) => 'CHK_' + sha1(`${t.replace('.', '_')}_${expr}`).slice(0, 26),
+      };
+
+      // ------------------------------------------------------------ errori
+      class TypeORMError extends Error {
+        get name() { return this.constructor.name; }
+        constructor(message) {
+          super(message);
+          Object.setPrototypeOf(this, new.target.prototype);
+        }
+      }
+      const targetName = (t) => (isSchema(t) ? t.options.name : typeof t === 'function' ? t.name : isObj(t) && 'name' in t ? t.name : t);
+      class QueryFailedError extends TypeORMError {
+        constructor(query, parameters, driverError) {
+          super(String(driverError).replace(/^error: /, '').replace(/^Error: /, '').replace(/^Request/, ''));
+          this.query = query;
+          this.parameters = parameters;
+          this.driverError = driverError;
+          if (driverError && typeof driverError === 'object') {
+            const { name, ...other } = driverError;
+            Object.assign(this, other);
+          }
+        }
+      }
+      class EntityNotFoundError extends TypeORMError {
+        constructor(entityClass, criteria) {
+          super();
+          this.entityClass = entityClass;
+          this.criteria = criteria;
+          let c;
+          try { c = JSON.stringify(criteria, null, 4); } catch (e) { c = '' + criteria; }
+          this.message = `Could not find any entity of type "${targetName(entityClass)}" matching: ${c}`;
+        }
+      }
+      class EntityMetadataNotFoundError extends TypeORMError {
+        constructor(target) { super(); this.message = `No metadata for "${targetName(target)}" was found.`; }
+      }
+      class EntityPropertyNotFoundError extends TypeORMError {
+        constructor(propertyPath, metadata) { super(propertyPath); this.message = `Property "${propertyPath}" was not found in "${metadata.targetName}". Make sure your query is correct.`; }
+      }
+      class MustBeEntityError extends TypeORMError {
+        constructor(operation, wrongValue) { super(`Cannot ${operation}, given value must be an entity, instead "${wrongValue}" is given.`); }
+      }
+      class MissingDriverError extends TypeORMError {
+        constructor(type, list) { super(`Wrong driver: "${type}" given. Supported drivers are: ${list.map((d) => `"${d}"`).join(', ')}.`); }
+      }
+      class DriverPackageNotInstalledError extends TypeORMError {
+        constructor(driverName, packageName) { super(`${driverName} package has not been found installed. Please run "npm install ${packageName}".`); }
+      }
+      class DriverOptionNotSetError extends TypeORMError {
+        constructor(option) { super(`Driver option (${option}) is not set. Please set it to perform connection to the database.`); }
+      }
+      class CannotConnectAlreadyConnectedError extends TypeORMError {
+        constructor() { super('Cannot initialize DataSource because it is already connected to the database.'); }
+      }
+      class CannotExecuteNotConnectedError extends TypeORMError {
+        constructor() { super('Cannot execute operation because connection is not yet established.'); }
+      }
+      class MissingPrimaryColumnError extends TypeORMError {
+        constructor(m) { super(`Entity "${m.name}" does not have a primary column. Primary column is required to have in all your entities. Use @PrimaryColumn decorator to add a primary column to your entity.`); }
+      }
+      class TransactionNotStartedError extends TypeORMError {
+        constructor() { super('Transaction is not started yet, start transaction before committing or rolling it back.'); }
+      }
+      class NamedPlaceholdersNotSupportedError extends TypeORMError {
+        constructor() { super('Your driver does not support named placeholders.'); }
+      }
+      class UpdateValuesMissingError extends TypeORMError {
+        constructor() { super('Cannot perform update query because update values are not defined. Call "qb.set(...)" method to specify updated values.'); }
+      }
+
+      // ------------------------------------------------------------ operatori, Brackets, EntitySchema
+      class FindOperator {
+        constructor(type, value, useParameter = true, multipleParameters = false, getSql, objectLiteralParameters) {
+          this['@instanceof'] = Symbol.for('FindOperator');
+          this._type = type;
+          this._value = value;
+          this._useParameter = useParameter;
+          this._multipleParameters = multipleParameters;
+          this._getSql = getSql;
+          this._objectLiteralParameters = objectLiteralParameters;
+        }
+        get useParameter() { return this._value instanceof FindOperator ? this._value.useParameter : this._useParameter; }
+        get multipleParameters() { return this._value instanceof FindOperator ? this._value.multipleParameters : this._multipleParameters; }
+        get type() { return this._type; }
+        get value() { return this._value instanceof FindOperator ? this._value.value : this._value; }
+        get objectLiteralParameters() { return this._value instanceof FindOperator ? this._value.objectLiteralParameters : this._objectLiteralParameters; }
+        get child() { return this._value instanceof FindOperator ? this._value : undefined; }
+        get getSql() { return this._value instanceof FindOperator ? this._value.getSql : this._getSql; }
+      }
+      class EqualOperator extends FindOperator {
+        constructor(value) { super('equal', value); this['@instanceof'] = Symbol.for('EqualOperator'); }
+      }
+      const op = (type) => (value) => new FindOperator(type, value);
+      const operators = {
+        Equal: (v) => new EqualOperator(v),
+        Not: op('not'),
+        LessThan: op('lessThan'),
+        LessThanOrEqual: op('lessThanOrEqual'),
+        MoreThan: op('moreThan'),
+        MoreThanOrEqual: op('moreThanOrEqual'),
+        Like: op('like'),
+        ILike: op('ilike'),
+        Between: (from, to) => new FindOperator('between', [from, to], true, true),
+        In: (values) => new FindOperator('in', values, true, true),
+        Any: (values) => new FindOperator('any', values),
+        IsNull: () => new FindOperator('isNull', undefined, false),
+        Raw: (valueOrSql, params) => (typeof valueOrSql !== 'function' ? new FindOperator('raw', valueOrSql, false) : new FindOperator('raw', [], true, true, valueOrSql, params)),
+        And: (...values) => new FindOperator('and', values, true, true),
+        Or: (...values) => new FindOperator('or', values, true, true),
+      };
+      class Brackets {
+        constructor(whereFactory) { this['@instanceof'] = Symbol.for('Brackets'); this.whereFactory = whereFactory; }
+      }
+      class NotBrackets extends Brackets {
+        constructor(whereFactory) { super(whereFactory); this['@instanceof'] = Symbol.for('NotBrackets'); }
+      }
+      class EntitySchema {
+        constructor(options) { this.options = options; this['@instanceof'] = Symbol.for('EntitySchema'); }
+      }
+      class InsertResult {
+        constructor() { this.identifiers = []; this.generatedMaps = []; }
+      }
+      class UpdateResult {
+        constructor() { this.generatedMaps = []; }
+      }
+      class DeleteResult {}
+      class Migration {
+        constructor(id, timestamp, name, instance) { this.id = id; this.timestamp = timestamp; this.name = name; this.instance = instance; }
+      }
+      // Table, TableColumn…: esistono, ma il simulatore esegue solo le migrazioni scritte con queryRunner.query()
+      const holder = (n) => ({ [n]: class { constructor(options) { Object.assign(this, options || {}); } } })[n];
+      const Table = holder('Table');
+      const TableColumn = holder('TableColumn');
+      const TableIndex = holder('TableIndex');
+      const TableForeignKey = holder('TableForeignKey');
+
+      // ------------------------------------------------------------ valori JS ↔ SQLite
+      const pad = (n, w = 2) => String(n).padStart(w, '0');
+      function toUtcDatetime(v) {
+        const d = v instanceof Date ? v : new Date(v);
+        if (isNaN(d)) return v;
+        return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}.${pad(d.getUTCMilliseconds(), 3)}`;
+      }
+      const toDateString = (v) => (v instanceof Date ? `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}` : v);
+      const isBoolCol = (c) => c.type === Boolean || c.type === 'boolean';
+      const isDatetimeCol = (c) => c.type === Date || c.type === 'datetime';
+      function sqliteType(c) {
+        const t = c.type;
+        if (t === Number || t === 'int') return 'integer';
+        if (t === String || t === 'uuid' || t === 'simple-enum') return 'varchar';
+        if (t === Date) return 'datetime';
+        if (t === Boolean) return 'boolean';
+        if (t === 'simple-array' || t === 'simple-json') return 'text';
+        return typeof t === 'string' ? t : t && t.name ? t.name.toLowerCase() : '';
+      }
+      function fullType(c) {
+        let t = sqliteType(c);
+        if (c.length) t += `(${c.length})`;
+        else if (c.precision != null && c.scale != null) t += `(${c.precision},${c.scale})`;
+        else if (c.precision != null) t += `(${c.precision})`;
+        return t;
+      }
+      function toDb(c, v) {
+        if (v === null || v === undefined) return v;
+        if (c.transformer) v = [].concat(c.transformer).reduce((x, t) => t.to(x), v);
+        if (isBoolCol(c)) return v === true ? 1 : 0;
+        if (c.type === 'date') return toDateString(v);
+        if (isDatetimeCol(c)) return toUtcDatetime(v);
+        if (c.type === 'simple-array') return v.map(String).join(',');
+        if (c.type === 'simple-json') return JSON.stringify(v);
+        return v;
+      }
+      function fromDb(c, v) {
+        if (v === null || v === undefined) return c.transformer ? [].concat(c.transformer).reduceRight((x, t) => t.from(x), v) : v;
+        if (isBoolCol(c)) v = !!v;
+        else if (isDatetimeCol(c)) {
+          if (typeof v === 'string') {
+            if (/^\d\d\d\d-\d\d-\d\d \d\d:\d\d/.test(v)) v = v.replace(' ', 'T');
+            if (/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d\d\d)?)?$/.test(v)) v += 'Z';
+          }
+          v = typeof v === 'string' ? new Date(v) : v;
+        } else if (c.type === 'simple-array') v = v === '' ? [] : String(v).split(',');
+        else if (c.type === 'simple-json') v = typeof v === 'string' ? JSON.parse(v) : v;
+        else if (c.type === Number) v = !isNaN(+v) ? parseInt(v) : v;
+        if (c.transformer) v = [].concat(c.transformer).reduceRight((x, t) => t.from(x), v);
+        return v;
+      }
+      // il default nel CREATE TABLE e negli INSERT senza valore
+      function defaultSql(c) {
+        const d = c.default;
+        if (typeof d === 'number') return '' + d;
+        if (typeof d === 'boolean') return d ? '1' : '0';
+        if (typeof d === 'function') return d();
+        if (typeof d === 'string') return `'${d}'`;
+        if (d === null || d === undefined) return undefined;
+        return `${d}`;
+      }
+      function sameValue(c, a, b) {
+        if (a === b) return true;
+        if (a === null || a === undefined || b === null || b === undefined) return (a ?? null) === (b ?? null);
+        if (isDatetimeCol(c) || a instanceof Date || b instanceof Date) return new Date(a).getTime() === new Date(b).getTime();
+        if (isBoolCol(c)) return !!a === !!b;
+        if (typeof a === 'object' || typeof b === 'object') return JSON.stringify(a) === JSON.stringify(b);
+        return false;
+      }
+
+      // ------------------------------------------------------------ logger
+      function makeLogger(option) {
+        const has = (k) => Array.isArray(option) && option.includes(k);
+        const on = {
+          query: option === 'all' || option === true || has('query'),
+          error: option === 'all' || option === true || has('error'),
+          schema: option === 'all' || has('schema'),
+          log: option === 'all' || has('log'),
+          info: option === 'all' || has('info'),
+          warn: option === 'all' || has('warn'),
+        };
+        const params = (p) => { try { return JSON.stringify(p); } catch (e) { return String(p); } };
+        const sql = (s, p) => (p && p.length ? `${s} -- PARAMETERS: ${params(p)}` : s);
+        return {
+          options: option,
+          logQuery(s, p) { if (on.query) nodeConsole.log('query:', sql(s, p)); },
+          logQueryError(err, s, p) {
+            if (!on.error) return;
+            nodeConsole.log('query failed:', sql(s, p));
+            nodeConsole.log('error:', String(err));
+          },
+          logSchemaBuild(m) { if (on.schema) nodeConsole.log(m); },
+          logMigration(m) { nodeConsole.log(m); },
+          log(level, m) {
+            if (level === 'log' && on.log) nodeConsole.log(m);
+            if (level === 'info' && on.info) nodeConsole.log('info:', m);
+            if (level === 'warn' && on.warn) nodeConsole.log('warn:', m);
+          },
+        };
+      }
+
+      // ------------------------------------------------------------ metadati
+      // un file (o un glob: 'entities/*.js') → le EntitySchema / le classi esportate
+      function globFiles(pattern) {
+        const absPattern = path.resolve(CWD, pattern);
+        const parts = absPattern.split('/').filter(Boolean);
+        const toRe = (p) => new RegExp('^' + p.split('*').map(escRe).join('[^/]*').replace(/\\\?/g, '[^/]') + '$');
+        let paths = ['/'];
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+          const last = i === parts.length - 1;
+          const next = [];
+          for (const base of paths) {
+            if (part === '**') {
+              const all = [base];
+              const walk = (d) => { for (const sub of listDir(d)) { const p = path.join(d, sub); if (isDir(p)) { all.push(p); walk(p); } } };
+              walk(base);
+              next.push(...all);
+            } else if (/[*?]/.test(part)) {
+              const re = toRe(part);
+              for (const name of listDir(base)) if (re.test(name)) { const p = path.join(base, name); if (last ? isFile(p) : isDir(p)) next.push(p); }
+            } else {
+              const p = path.join(base, part);
+              if (last ? isFile(p) : isDir(p)) next.push(p);
+            }
+          }
+          paths = next;
+        }
+        return Array.from(new Set(paths)).sort();
+      }
+      function listDir(d) {
+        const out = new Set();
+        const prefix = d === '/' ? '/' : d + '/';
+        for (const k of vfs.files.keys()) if (k.startsWith(prefix)) out.add(k.slice(prefix.length).split('/')[0]);
+        for (const k of vfs.dirs) if (k.startsWith(prefix) && k !== d) out.add(k.slice(prefix.length).split('/')[0]);
+        return Array.from(out).filter(Boolean).sort();
+      }
+      function importFromGlobs(patterns) {
+        const req = makeRequire({ filename: path.join(CWD, '__typeorm__.js'), children: [] });
+        const out = [];
+        const collect = (v) => {
+          if (isSchema(v) || typeof v === 'function') out.push(v);
+          else if (Array.isArray(v)) v.forEach(collect);
+          else if (isObj(v)) Object.values(v).forEach(collect);
+        };
+        for (const pat of patterns) {
+          for (const file of globFiles(pat)) {
+            if (!/\.(js|cjs|mjs|ts|mts|cts)$/.test(file) || /\.d\.ts$/.test(file)) continue;
+            collect(req(file));
+          }
+        }
+        return out;
+      }
+      function flattenSources(list) {
+        const out = [];
+        const strings = [];
+        const walk = (v) => {
+          if (typeof v === 'string') strings.push(v);
+          else if (Array.isArray(v)) v.forEach(walk);
+          else if (isSchema(v) || typeof v === 'function') out.push(v);
+          else if (isObj(v)) Object.values(v).forEach(walk);
+        };
+        walk(list || []);
+        return out.concat(importFromGlobs(strings));
+      }
+
+      function makeColumn(meta, prop, c) {
+        const createDate = !!c.createDate;
+        const updateDate = !!c.updateDate;
+        let type = c.type;
+        if ((createDate || updateDate || c.deleteDate) && !type) type = Date;
+        if (c.enum && !type) type = 'simple-enum';
+        const generated = c.generated === true ? (type === 'uuid' ? 'uuid' : 'increment') : c.generated || undefined;
+        return {
+          entityMetadata: meta,
+          propertyName: prop,
+          propertyPath: prop,
+          databaseName: c.name || prop,
+          type,
+          length: c.length !== undefined ? String(c.length) : '',
+          precision: c.precision,
+          scale: c.scale,
+          isPrimary: !!c.primary,
+          isGenerated: !!generated,
+          generationStrategy: generated,
+          isNullable: !c.primary && !!c.nullable,
+          isUnique: !!c.unique,
+          default: createDate || updateDate ? () => "datetime('now')" : c.default,
+          isCreateDate: createDate,
+          isUpdateDate: updateDate,
+          isVersion: !!c.version,
+          isSelect: c.select !== false,
+          isInsert: c.insert !== false,
+          isUpdate: c.update !== false,
+          enum: c.enum ? (Array.isArray(c.enum) ? c.enum : Object.values(c.enum)) : undefined,
+          transformer: c.transformer,
+          isVirtual: false,
+          relationMetadata: null,
+          referencedColumn: null,
+        };
+      }
+
+      function buildMetadatas(ds) {
+        const sources = flattenSources(ds.options.entities);
+        const metas = [];
+        for (const src of sources) {
+          if (!isSchema(src)) continue;
+          const o = src.options || {};
+          const name = o.name || (o.target && o.target.name);
+          const meta = {
+            dataSource: ds,
+            schema: src,
+            target: o.target || src,
+            targetClass: typeof o.target === 'function' ? o.target : null,
+            name,
+            targetName: typeof o.target === 'function' ? o.target.name : name,
+            tableName: o.tableName || snakeCase(name),
+            columns: [],
+            relations: [],
+            uniques: [],
+            indices: [],
+            checks: [],
+            foreignKeys: [],
+            isJunction: false,
+          };
+          meta.tablePath = meta.tableName;
+          for (const [prop, c] of Object.entries(o.columns || {})) if (c) meta.columns.push(makeColumn(meta, prop, c));
+          for (const [prop, r] of Object.entries(o.relations || {})) {
+            if (!r) continue;
+            const cascade = r.cascade === true ? ['insert', 'update', 'remove', 'soft-remove', 'recover'] : Array.isArray(r.cascade) ? r.cascade : [];
+            meta.relations.push({
+              entityMetadata: meta,
+              propertyName: prop,
+              propertyPath: prop,
+              relationType: r.type,
+              options: r,
+              isManyToOne: r.type === 'many-to-one',
+              isOneToMany: r.type === 'one-to-many',
+              isManyToMany: r.type === 'many-to-many',
+              isOneToOne: r.type === 'one-to-one',
+              isEager: !!r.eager,
+              isNullable: r.nullable !== false,
+              onDelete: r.onDelete,
+              onUpdate: r.onUpdate,
+              isCascadeInsert: cascade.includes('insert'),
+              isCascadeUpdate: cascade.includes('update'),
+              isCascadeRemove: cascade.includes('remove'),
+              inverseSidePropertyPath: typeof r.inverseSide === 'string' ? r.inverseSide : undefined,
+              joinColumns: [],
+              inverseJoinColumns: [],
+              junctionEntityMetadata: null,
+              inverseRelation: null,
+            });
+          }
+          metas.push(meta);
+        }
+        const findMeta = (t) => metas.find((m) => m.schema === t || m.target === t || (typeof t === 'string' && (m.name === t || m.targetName === t)) || (isSchema(t) && m.name === t.options.name));
+        // relazioni: entità di destinazione, lato proprietario, relazioni inverse
+        for (const m of metas) {
+          for (const r of m.relations) {
+            const t = typeof r.options.target === 'function' && !findMeta(r.options.target) && !r.options.target.prototype ? r.options.target() : r.options.target;
+            r.inverseEntityMetadata = findMeta(t);
+            if (!r.inverseEntityMetadata) throw new TypeORMError(`Entity metadata for ${m.name}#${r.propertyName} was not found. Check if you specified a correct entity object and if it's connected in the connection options.`);
+            r.isOwning = r.isManyToOne || (r.isOneToOne && !!r.options.joinColumn) || (r.isManyToMany && !!r.options.joinTable);
+            r.isWithJoinColumn = r.isManyToOne || (r.isOneToOne && r.isOwning);
+            r.isOneToOneOwner = r.isOneToOne && r.isOwning;
+            r.isOneToOneNotOwner = r.isOneToOne && !r.isOwning;
+            r.isManyToManyOwner = r.isManyToMany && r.isOwning;
+            r.isManyToManyNotOwner = r.isManyToMany && !r.isOwning;
+          }
+        }
+        for (const m of metas) {
+          m.primaryColumns = m.columns.filter((c) => c.isPrimary);
+          if (!m.primaryColumns.length) throw new MissingPrimaryColumnError(m);
+        }
+        for (const m of metas) {
+          for (const r of m.relations) {
+            const inv = r.inverseEntityMetadata;
+            if (r.inverseSidePropertyPath) r.inverseRelation = inv.relations.find((x) => x.propertyName === r.inverseSidePropertyPath) || null;
+            if (!r.inverseRelation && (r.isOneToMany || r.isOneToOneNotOwner || r.isManyToManyNotOwner)) {
+              r.inverseRelation = inv.relations.find((x) => x.inverseEntityMetadata === m && x.isOwning && (r.isOneToMany ? x.isManyToOne : r.isOneToOne ? x.isOneToOne : x.isManyToMany)) || null;
+            }
+            if (r.inverseRelation && !r.inverseRelation.inverseRelation) r.inverseRelation.inverseRelation = r;
+          }
+        }
+        // colonne delle chiavi esterne (N-1, 1-1) e tabelle ponte (N-N)
+        const junctions = [];
+        for (const m of metas) {
+          for (const r of m.relations) {
+            const inv = r.inverseEntityMetadata;
+            if (r.isWithJoinColumn) {
+              const jc = isObj(r.options.joinColumn) && !Array.isArray(r.options.joinColumn) ? r.options.joinColumn : {};
+              const ref = (jc.referencedColumnName && inv.columns.find((c) => c.propertyName === jc.referencedColumnName)) || inv.primaryColumns[0];
+              const dbName = jc.name || camelCase(r.propertyName + '_' + ref.databaseName);
+              let col = m.columns.find((c) => c.databaseName === dbName && !c.isVirtual);
+              if (col) {
+                col.relationMetadata = r;
+                col.referencedColumn = ref;
+              } else {
+                col = Object.assign(makeColumn(m, r.propertyName, { type: ref.type, nullable: r.isNullable }), {
+                  propertyPath: `${r.propertyName}.${ref.propertyName}`, databaseName: dbName, length: ref.length,
+                  isVirtual: true, relationMetadata: r, referencedColumn: ref, isPrimary: false,
+                });
+                m.columns.push(col);
+              }
+              r.joinColumns = [col];
+              if (r.options.createForeignKeyConstraints !== false) {
+                m.foreignKeys.push({ columns: [dbName], refTable: inv.tableName, refColumns: [ref.databaseName], onDelete: r.onDelete || 'NO ACTION', onUpdate: r.onUpdate || 'NO ACTION' });
+              }
+              if (r.isOneToOne) m.uniques.push({ name: naming.relationName(m.tableName, [dbName]), columns: [dbName] });
+            }
+            if (r.isManyToManyOwner) {
+              const jt = isObj(r.options.joinTable) ? r.options.joinTable : {};
+              const ownRef = m.primaryColumns[0];
+              const invRef = inv.primaryColumns[0];
+              const tableName = jt.name || snakeCase(m.tableName + '_' + r.propertyPath.replace(/\./g, '_') + '_' + inv.tableName);
+              const jcName = (jt.joinColumn && jt.joinColumn.name) || camelCase(m.tableName + '_' + ownRef.databaseName);
+              const ijcName = (jt.inverseJoinColumn && jt.inverseJoinColumn.name) || camelCase(inv.tableName + '_' + invRef.databaseName);
+              const junction = { dataSource: ds, name: tableName, targetName: '', tableName, tablePath: tableName, isJunction: true, columns: [], relations: [], uniques: [], checks: [], foreignKeys: [], target: tableName };
+              const jcol = (name, ref) => Object.assign(makeColumn(junction, name, { type: ref.type, primary: true }), { length: ref.length, referencedColumn: ref, relationMetadata: r });
+              const c1 = jcol(jcName, ownRef);
+              const c2 = jcol(ijcName, invRef);
+              junction.columns = [c1, c2];
+              junction.primaryColumns = [c1, c2];
+              junction.indices = [{ name: naming.indexName(tableName, [jcName]), columns: [jcName] }, { name: naming.indexName(tableName, [ijcName]), columns: [ijcName] }];
+              junction.foreignKeys = [
+                { columns: [jcName], refTable: m.tableName, refColumns: [ownRef.databaseName], onDelete: r.onDelete || 'CASCADE', onUpdate: r.onUpdate || 'CASCADE' },
+                { columns: [ijcName], refTable: inv.tableName, refColumns: [invRef.databaseName], onDelete: (r.inverseRelation && r.inverseRelation.onDelete) || 'CASCADE', onUpdate: 'CASCADE' },
+              ];
+              r.joinColumns = [c1];
+              r.inverseJoinColumns = [c2];
+              r.junctionEntityMetadata = junction;
+              r.joinTableName = tableName;
+              junctions.push(junction);
+            }
+          }
+        }
+        for (const m of metas) {
+          for (const r of m.relations) {
+            if (r.isManyToManyNotOwner && r.inverseRelation) { r.junctionEntityMetadata = r.inverseRelation.junctionEntityMetadata; r.joinTableName = r.inverseRelation.joinTableName; }
+          }
+        }
+        // vincoli e indici dichiarati nello schema
+        for (const m of metas) {
+          const o = m.schema.options;
+          const dbNames = (cols) => [].concat(cols || []).map((p) => { const c = m.columns.find((x) => x.propertyName === p || x.databaseName === p); return c ? c.databaseName : p; });
+          const own = [];
+          for (const c of m.columns) if (c.isUnique && !c.isVirtual) own.push({ name: naming.uniqueName(m.tableName, [c.databaseName]), columns: [c.databaseName] });
+          m.uniques = own.concat(m.uniques);
+          for (const u of o.uniques || []) { const cols = dbNames(u.columns); m.uniques.push({ name: u.name || naming.uniqueName(m.tableName, cols), columns: cols }); }
+          m.checks = (o.checks || []).map((ch) => ({ name: ch.name || naming.checkName(m.tableName, ch.expression), expression: ch.expression }));
+          m.indices = (o.indices || []).map((ix) => { const cols = dbNames(ix.columns); return { name: ix.name || naming.indexName(m.tableName, cols, ix.where), columns: cols, unique: !!ix.unique, where: ix.where }; });
+          m.eagerRelations = m.relations.filter((r) => r.isEager);
+          m.createDateColumn = m.columns.find((c) => c.isCreateDate);
+          m.updateDateColumn = m.columns.find((c) => c.isUpdateDate);
+        }
+        for (const m of metas.concat(junctions)) {
+          m.findColumnWithPropertyPathStrict = (p) => m.columns.find((c) => c.propertyPath === p);
+          m.findColumnWithPropertyPath = (p) => {
+            const c = m.columns.find((x) => x.propertyPath === p);
+            if (c) return c;
+            const r = m.relations.find((x) => x.propertyPath === p);
+            return r && r.joinColumns.length === 1 ? r.joinColumns[0] : undefined;
+          };
+          m.findColumnWithDatabaseName = (n) => m.columns.find((c) => c.databaseName === n);
+          m.findRelationWithPropertyPath = (p) => m.relations.find((r) => r.propertyPath === p);
+          m.hasMultiplePrimaryKeys = m.primaryColumns.length > 1;
+        }
+        return { metas, junctions };
+      }
+
+      // valori delle colonne dentro un'entità (anche le chiavi esterne: dall'oggetto collegato o dall'id)
+      function columnValue(c, entity) {
+        if (!isObj(entity)) return undefined;
+        if (c.relationMetadata && c.referencedColumn && !c.entityMetadata.isJunction) {
+          const rel = entity[c.relationMetadata.propertyName];
+          if (isObj(rel) && !isOperator(rel) && !ArrayBuffer.isView(rel)) return rel[c.referencedColumn.propertyName];
+          if (!c.isVirtual) return entity[c.propertyName];
+          return rel;
+        }
+        return entity[c.propertyName];
+      }
+      const idMap = (meta, entity) => {
+        const out = {};
+        for (const c of meta.primaryColumns) { const v = columnValue(c, entity); if (v === undefined || v === null) return undefined; out[c.propertyName] = v; }
+        return out;
+      };
+      function createEntity(meta, fromDb) {
+        if (meta.targetClass) return fromDb ? Object.create(meta.targetClass.prototype) : new meta.targetClass();
+        return {};
+      }
+      // create()/merge(): solo le proprietà conosciute (colonne e relazioni)
+      function plainToEntity(meta, entity, plain) {
+        if (!isObj(plain)) return entity;
+        for (const c of meta.columns) {
+          if (c.isVirtual) continue;
+          if (c.propertyName in plain && plain[c.propertyName] !== undefined) entity[c.propertyName] = plain[c.propertyName];
+        }
+        for (const r of meta.relations) {
+          if (!(r.propertyName in plain) || plain[r.propertyName] === undefined) continue;
+          const v = plain[r.propertyName];
+          const inv = r.inverseEntityMetadata;
+          if (Array.isArray(v)) entity[r.propertyName] = v.map((x) => (isObj(x) ? plainToEntity(inv, createEntity(inv), x) : x));
+          else if (isObj(v)) entity[r.propertyName] = plainToEntity(inv, isObj(entity[r.propertyName]) ? entity[r.propertyName] : createEntity(inv), v);
+          else entity[r.propertyName] = v;
+        }
+        return entity;
+      }
+
+      // ------------------------------------------------------------ driver e query runner
+      const DRIVERS = ['aurora-mysql', 'aurora-postgres', 'better-sqlite3', 'capacitor', 'cockroachdb', 'cordova', 'expo', 'mariadb', 'mongodb', 'mssql', 'mysql', 'nativescript', 'oracle', 'postgres', 'react-native', 'sap', 'spanner', 'sqljs'];
+      const DRIVER_PKG = {
+        postgres: ['Postgres', 'pg'], cockroachdb: ['Postgres', 'pg'], 'aurora-postgres': ['Postgres', 'pg'],
+        mysql: ['Mysql', 'mysql2'], mariadb: ['Mysql', 'mysql2'], 'aurora-mysql': ['Mysql', 'mysql2'],
+        mssql: ['mssql', 'mssql'], oracle: ['Oracle', 'oracledb'], mongodb: ['MongoDB', 'mongodb'], sqljs: ['sql.js', 'sql.js'],
+        sap: ['SAP Hana', '@sap/hana-client'], spanner: ['Spanner', '@google-cloud/spanner'],
+      };
+      function createDriver(ds) {
+        const type = ds.options.type;
+        if (!DRIVERS.includes(type)) throw new MissingDriverError(type, DRIVERS);
+        if (type !== 'better-sqlite3') {
+          if (DRIVER_PKG[type]) throw new DriverPackageNotInstalledError(DRIVER_PKG[type][0], DRIVER_PKG[type][1]);
+          throw unsupported(`Il driver "${type}" di TypeORM`);
+        }
+        let Database;
+        try { Database = makeRequire({ filename: `${CWD}/node_modules/typeorm/index.js`, children: [] })('better-sqlite3'); } catch (e) { throw new DriverPackageNotInstalledError('SQLite', 'better-sqlite3'); }
+        if (!ds.options.database) throw new DriverOptionNotSetError('database');
+        const driver = {
+          options: ds.options,
+          db: null,
+          queryRunner: null,
+          connect() {
+            const file = ds.options.database;
+            if (file !== ':memory:' && !String(file).startsWith('file:')) mkdirp(path.dirname(path.resolve(CWD, file)));
+            driver.db = new Database(file, { readonly: !!ds.options.readonly, fileMustExist: !!ds.options.fileMustExist });
+            driver.db.pragma('foreign_keys = ON');
+          },
+          disconnect() { if (driver.db) driver.db.close(); },
+        };
+        driver.queryRunner = new QueryRunner(ds, driver);
+        return driver;
+      }
+
+      class QueryRunner {
+        constructor(ds, driver) {
+          Object.defineProperties(this, { dataSource: { value: ds }, connection: { value: ds }, driver: { value: driver } });
+          this.isReleased = false;
+          this.isTransactionActive = false;
+          this.transactionDepth = 0;
+          this.data = {};
+        }
+        get manager() { return this._manager || (this._manager = new EntityManager(this.dataSource, this)); }
+        async connect() { return this.driver.db; }
+        async release() { /* SQLite: una connessione sola, condivisa */ }
+        async query(sql, parameters = [], useStructuredResult = false) {
+          if (parameters && !Array.isArray(parameters)) throw new NamedPlaceholdersNotSupportedError();
+          const ds = this.dataSource;
+          const params = (parameters || []).map((p) => (typeof p === 'boolean' ? (p ? 1 : 0) : p));
+          ds.logger.logQuery(sql, params);
+          try {
+            const db = this.driver.db;
+            if (!db) throw new TypeError('The database connection is not open');
+            const st = db.prepare(sql);
+            if (st.reader) {
+              const raw = st.all(...params);
+              return useStructuredResult ? { raw, records: raw, affected: undefined } : raw;
+            }
+            const r = st.run(...params);
+            return useStructuredResult ? { raw: r.lastInsertRowid, records: [], affected: r.changes } : r.lastInsertRowid;
+          } catch (err) {
+            ds.logger.logQueryError(err, sql, params);
+            throw new QueryFailedError(sql, params, err);
+          }
+        }
+        async startTransaction() {
+          if (this.transactionDepth === 0) await this.query('BEGIN TRANSACTION');
+          else await this.query(`SAVEPOINT typeorm_${this.transactionDepth}`);
+          this.transactionDepth++;
+          this.isTransactionActive = true;
+        }
+        async commitTransaction() {
+          if (!this.isTransactionActive) throw new TransactionNotStartedError();
+          if (this.transactionDepth > 1) await this.query(`RELEASE SAVEPOINT typeorm_${this.transactionDepth - 1}`);
+          else await this.query('COMMIT');
+          this.transactionDepth--;
+          this.isTransactionActive = this.transactionDepth > 0;
+        }
+        async rollbackTransaction() {
+          if (!this.isTransactionActive) throw new TransactionNotStartedError();
+          if (this.transactionDepth > 1) await this.query(`ROLLBACK TO SAVEPOINT typeorm_${this.transactionDepth - 1}`);
+          else await this.query('ROLLBACK');
+          this.transactionDepth--;
+          this.isTransactionActive = this.transactionDepth > 0;
+        }
+        // nelle migrazioni: lo schema si cambia con query() (come nei file creati da migration:generate)
+        async hasTable(t) {
+          const name = typeof t === 'string' ? t : t.name;
+          return (await this.query('SELECT * FROM "sqlite_master" WHERE "type" = \'table\' AND "name" = ?', [name])).length > 0;
+        }
+        async hasColumn(t, column) {
+          const name = typeof t === 'string' ? t : t.name;
+          const col = typeof column === 'string' ? column : column.name;
+          return this.driver.db.pragma(`table_xinfo(${q(name)})`).some((c) => c.name === col);
+        }
+        async dropTable(t, ifExist) { await this.query(`DROP TABLE ${ifExist ? 'IF EXISTS ' : ''}${q(typeof t === 'string' ? t : t.name)}`); }
+        async clearTable(t) { await this.query(`DELETE FROM ${q(t)}`); }
+      }
+      for (const m of ['createTable', 'addColumn', 'addColumns', 'dropColumn', 'dropColumns', 'renameColumn', 'changeColumn', 'renameTable', 'createIndex', 'dropIndex', 'createForeignKey', 'dropForeignKey', 'createUniqueConstraint', 'createPrimaryKey', 'getTable', 'getTables']) {
+        QueryRunner.prototype[m] = function () { return Promise.reject(unsupported(`queryRunner.${m}() (scrivi l'SQL con queryRunner.query(…))`)); };
+      }
+
+      // ------------------------------------------------------------ query builder
+      function newExpressionMap() {
+        return {
+          queryType: 'select', mainAlias: null, aliases: [], selects: [], joinAttributes: [], wheres: [], havings: [],
+          orderBys: {}, groupBys: [], skip: undefined, take: undefined, limit: undefined, offset: undefined,
+          parameters: {}, aliasNamePrefixingEnabled: true, valuesSet: undefined, insertColumns: [],
+          extraAppendedAndWhereCondition: '', queryEntity: false, subQuery: false, selectDistinct: false,
+          relationLoadStrategy: 'join', useTransaction: false, withDeleted: false,
+        };
+      }
+      function cloneExpressionMap(em) {
+        const out = Object.assign({}, em);
+        out.aliases = em.aliases.slice();
+        out.selects = em.selects.map((s) => Object.assign({}, s));
+        out.joinAttributes = em.joinAttributes.map((j) => Object.assign({}, j));
+        out.wheres = em.wheres.slice();
+        out.havings = em.havings.slice();
+        out.orderBys = Object.assign({}, em.orderBys);
+        out.groupBys = em.groupBys.slice();
+        out.parameters = Object.assign({}, em.parameters);
+        return out;
+      }
+
+      class QueryBuilder {
+        constructor(ds, queryRunner, expressionMap) {
+          Object.defineProperties(this, { connection: { value: ds, writable: true }, dataSource: { value: ds, writable: true } });
+          this.queryRunner = queryRunner;
+          this.expressionMap = expressionMap || newExpressionMap();
+          this.parameterIndex = 0;
+          this['@instanceof'] = Symbol.for('QueryBuilder');
+        }
+        get alias() {
+          if (!this.expressionMap.mainAlias) throw new TypeORMError('Main alias is not set');
+          return this.expressionMap.mainAlias.name;
+        }
+        escape(n) { return q(n); }
+        createFromAlias(target, aliasName) {
+          const meta = typeof target === 'string' && target.startsWith('(') ? null : this.dataSource.findMetadata(target);
+          if (meta) return { type: 'from', name: aliasName || meta.targetName || meta.name, metadata: meta, tablePath: meta.tablePath };
+          if (typeof target === 'string' && target.startsWith('(')) return { type: 'from', name: aliasName, subQuery: target };
+          if (typeof target === 'function' && !isSchema(target)) {
+            const sub = target(this.subQuery());
+            this.setParameters(sub.getParameters());
+            return { type: 'from', name: aliasName, subQuery: sub.getQuery() };
+          }
+          if (typeof target !== 'string') throw new EntityMetadataNotFoundError(target);
+          return { type: 'from', name: aliasName || target, tablePath: target };
+        }
+        setMainAlias(alias) {
+          this.expressionMap.aliases = this.expressionMap.aliases.filter((a) => a.type !== 'from');
+          this.expressionMap.aliases.unshift(alias);
+          this.expressionMap.mainAlias = alias;
+        }
+        setParameter(key, value) {
+          if (typeof value === 'function') throw new TypeORMError(`Function parameter isn't supported in the parameters. Please check "${key}" parameter.`);
+          if (!/^([A-Za-z0-9_.]+)$/.test(key)) throw new TypeORMError('QueryBuilder parameter keys may only contain numbers, letters, underscores, or periods.');
+          if (this.parentQueryBuilder) this.parentQueryBuilder.setParameter(key, value);
+          this.expressionMap.parameters[key] = value;
+          return this;
+        }
+        setParameters(params) { for (const [k, v] of Object.entries(params || {})) this.setParameter(k, v); return this; }
+        hasParameter(k) { return (this.parentQueryBuilder && this.parentQueryBuilder.hasParameter(k)) || k in this.expressionMap.parameters; }
+        createParameter(value) {
+          let n;
+          do { n = `orm_param_${this.parameterIndex++}`; } while (this.hasParameter(n));
+          this.setParameter(n, value);
+          return `:${n}`;
+        }
+        getParameters() { return Object.assign({}, this.expressionMap.parameters); }
+        getSql() { return this.getQueryAndParameters()[0]; }
+        getQueryAndParameters() { return escapeQueryWithParameters(this.getQuery(), this.getParameters()); }
+        printSql() { const [s, p] = this.getQueryAndParameters(); this.dataSource.logger.logQuery(s, p); return this; }
+        obtainQueryRunner() { return this.queryRunner || this.dataSource.createQueryRunner(); }
+        setQueryRunner(qr) { this.queryRunner = qr; return this; }
+        callListeners() { return this; }
+        useTransaction(v) { this.expressionMap.useTransaction = v; return this; }
+        setOption() { return this; }
+        comment() { return this; }
+        cache() { return this; }
+        subQuery() {
+          const qb = new SelectQueryBuilder(this.dataSource, this.queryRunner);
+          qb.expressionMap.subQuery = true;
+          qb.parentQueryBuilder = this;
+          return qb;
+        }
+        replacePropertyNames(statement) {
+          const replacements = {};
+          for (const alias of this.expressionMap.aliases) {
+            if (!alias.metadata) continue;
+            const prefix = this.expressionMap.aliasNamePrefixingEnabled && alias.name ? `${alias.name}.` : '';
+            const r = replacements[prefix] || (replacements[prefix] = {});
+            for (const rel of alias.metadata.relations) if (rel.joinColumns.length) r[rel.propertyPath] = rel.joinColumns[0].databaseName;
+            for (const rel of alias.metadata.relations) for (const jc of rel.joinColumns.concat(rel.inverseJoinColumns)) r[`${rel.propertyPath}.${jc.referencedColumn.propertyPath}`] = jc.databaseName;
+            for (const c of alias.metadata.columns) r[c.databaseName] = c.databaseName;
+            for (const c of alias.metadata.columns) r[c.propertyName] = c.databaseName;
+            for (const c of alias.metadata.columns) r[c.propertyPath] = c.databaseName;
+          }
+          const keys = Object.keys(replacements);
+          if (!keys.length) return statement;
+          const prefixes = keys.map(escRe).join('|');
+          const re = new RegExp('([ =(]|^.{0})' + (prefixes ? '(' + prefixes + ')' : '') + '([^ =(),]+)(?=[ =),]|.{0}$)', 'gm');
+          return statement.replace(re, (...m) => {
+            if (prefixes) {
+              const rep = replacements[m[2]] && replacements[m[2]][m[3]];
+              if (rep && Object.prototype.hasOwnProperty.call(replacements[m[2]], m[3])) return `${m[1]}${q(m[2].slice(0, -1))}.${q(rep)}`;
+            } else {
+              const rep = replacements[''][m[2]];
+              if (rep && Object.prototype.hasOwnProperty.call(replacements[''], m[2])) return `${m[1]}${q(rep)}`;
+            }
+            return m[0];
+          });
+        }
+        // WHERE
+        getWhereCondition(where) {
+          if (typeof where === 'string') return where;
+          if (isBrackets(where)) {
+            const wqb = new SelectQueryBuilder(this.dataSource, this.queryRunner);
+            wqb.parentQueryBuilder = this;
+            wqb.expressionMap.mainAlias = this.expressionMap.mainAlias;
+            wqb.expressionMap.aliases = this.expressionMap.aliases;
+            wqb.expressionMap.aliasNamePrefixingEnabled = this.expressionMap.aliasNamePrefixingEnabled;
+            wqb.expressionMap.parameters = this.expressionMap.parameters;
+            wqb.expressionMap.joinAttributes = this.expressionMap.joinAttributes;
+            wqb.parameterIndex = this.parameterIndex;
+            where.whereFactory(wqb);
+            this.parameterIndex = Math.max(this.parameterIndex, wqb.parameterIndex);
+            return { operator: kind(where, 'NotBrackets') ? 'not' : 'brackets', condition: wqb.expressionMap.wheres };
+          }
+          if (typeof where === 'function') return where(this);
+          const wheres = Array.isArray(where) ? where : [where];
+          const clauses = [];
+          for (const w of wheres) {
+            const conditions = [];
+            for (const [aliasPath, value] of this.getPredicates(w)) conditions.push({ type: 'and', condition: this.getWherePredicateCondition(aliasPath, value) });
+            clauses.push({ type: 'or', condition: conditions });
+          }
+          return clauses.length === 1 ? clauses[0].condition : clauses;
+        }
+        *getPredicates(where) {
+          const main = this.expressionMap.mainAlias;
+          if (main && main.metadata) {
+            for (const key of Object.keys(where || {})) {
+              const meta = main.metadata;
+              const prefix = (p) => (this.expressionMap.aliasNamePrefixingEnabled ? `${main.name}.${p}` : p);
+              const column = meta.findColumnWithPropertyPathStrict(key);
+              if (column) { yield [prefix(column.propertyPath), where[key]]; continue; }
+              const rel = meta.findRelationWithPropertyPath(key);
+              if (rel && rel.joinColumns.length && !rel.isManyToMany) {
+                for (const jc of rel.joinColumns) {
+                  const v = where[key];
+                  yield [prefix(jc.propertyPath), isObj(v) && !isOperator(v) ? v[jc.referencedColumn.propertyName] : v];
+                }
+                continue;
+              }
+              throw new EntityPropertyNotFoundError(key, meta);
+            }
+          } else {
+            for (const key of Object.keys(where || {})) yield [this.expressionMap.aliasNamePrefixingEnabled ? `${this.alias}.${key}` : key, where[key]];
+          }
+        }
+        getWherePredicateCondition(aliasPath, value) {
+          if (isOperator(value)) {
+            const parameters = [];
+            if (value.useParameter) {
+              if (value.objectLiteralParameters) this.setParameters(value.objectLiteralParameters);
+              else if (value.multipleParameters) for (const v of value.value) parameters.push(this.createParameter(v));
+              else parameters.push(this.createParameter(value.value));
+            }
+            if (value.type === 'raw') {
+              if (value.getSql) return value.getSql(aliasPath);
+              return { operator: 'equal', parameters: [aliasPath, value.value] };
+            }
+            if (value.type === 'not') {
+              if (value.child) return { operator: 'not', condition: this.getWherePredicateCondition(aliasPath, value.child) };
+              return { operator: 'notEqual', parameters: [aliasPath, ...parameters] };
+            }
+            if (value.type === 'and' || value.type === 'or') {
+              return { operator: value.type, parameters: value.value.map((o) => this.createWhereConditionExpression(this.getWherePredicateCondition(aliasPath, o))) };
+            }
+            return { operator: value.type, parameters: [aliasPath, ...parameters] };
+          }
+          return { operator: 'equal', parameters: [aliasPath, this.createParameter(value)] };
+        }
+        createWhereConditionExpression(condition, alwaysWrap = false) {
+          if (typeof condition === 'string') return condition;
+          if (Array.isArray(condition)) {
+            if (!condition.length) return '1=1';
+            if (condition.length === 1 && !alwaysWrap) return this.createWhereClausesExpression(condition);
+            return '(' + this.createWhereClausesExpression(condition) + ')';
+          }
+          const p = condition.parameters || [];
+          switch (condition.operator) {
+            case 'lessThan': return `${p[0]} < ${p[1]}`;
+            case 'lessThanOrEqual': return `${p[0]} <= ${p[1]}`;
+            case 'moreThan': return `${p[0]} > ${p[1]}`;
+            case 'moreThanOrEqual': return `${p[0]} >= ${p[1]}`;
+            case 'notEqual': return `${p[0]} != ${p[1]}`;
+            case 'equal': return `${p[0]} = ${p[1]}`;
+            case 'ilike': return `UPPER(${p[0]}) LIKE UPPER(${p[1]})`;
+            case 'like': return `${p[0]} LIKE ${p[1]}`;
+            case 'between': return `${p[0]} BETWEEN ${p[1]} AND ${p[2]}`;
+            case 'in': return p.length <= 1 ? '0=1' : `${p[0]} IN (${p.slice(1).join(', ')})`;
+            case 'any': return `${p[0]} = ANY(${p[1]})`;
+            case 'isNull': return `${p[0]} IS NULL`;
+            case 'not': return `NOT(${this.createWhereConditionExpression(condition.condition)})`;
+            case 'brackets': return `${this.createWhereConditionExpression(condition.condition, true)}`;
+            case 'and': return '(' + p.join(' AND ') + ')';
+            case 'or': return '(' + p.join(' OR ') + ')';
+          }
+          throw new TypeError(`Unsupported FindOperator ${condition.operator}`);
+        }
+        createWhereClausesExpression(clauses) {
+          return clauses.map((cl, i) => {
+            const e = this.createWhereConditionExpression(cl.condition);
+            if (cl.type === 'and') return (i > 0 ? 'AND ' : '') + e;
+            if (cl.type === 'or') return (i > 0 ? 'OR ' : '') + e;
+            return e;
+          }).join(' ').trim();
+        }
+        createWhereExpression() {
+          const list = [];
+          const w = this.createWhereClausesExpression(this.expressionMap.wheres);
+          if ((this.expressionMap.queryType === 'update' || this.expressionMap.queryType === 'delete') && this.expressionMap.wheres.length > 0 && (!w.length || w === '1=1')) {
+            throw new TypeORMError(`Empty criteria(s) are not allowed for the ${this.expressionMap.queryType} operation. Provide a WHERE condition, or build the query without one to intentionally affect all rows.`);
+          }
+          if (w.length && w !== '1=1') list.push(w);
+          if (this.expressionMap.extraAppendedAndWhereCondition) list.push(this.expressionMap.extraAppendedAndWhereCondition);
+          if (!list.length) return '';
+          if (list.length === 1) return ` WHERE ${list[0]}`;
+          return ` WHERE ( ${list.join(' ) AND ( ')} )`;
+        }
+        getWhereInIdsCondition(ids) {
+          const meta = this.expressionMap.mainAlias.metadata;
+          const norm = (Array.isArray(ids) ? ids : [ids]).map((id) => (isObj(id) ? id : { [meta.primaryColumns[0].propertyName]: id }));
+          if (!meta.hasMultiplePrimaryKeys) {
+            const pc = meta.primaryColumns[0];
+            const values = norm.map((id) => id[pc.propertyName]);
+            return { [pc.propertyName]: values.length === 1 ? operators.Equal(values[0]) : operators.In(values) };
+          }
+          return new Brackets((qb) => { for (const d of norm) qb.orWhere(new Brackets((b) => b.where(d))); });
+        }
+        where(where, parameters) {
+          this.expressionMap.wheres = [];
+          const c = this.getWhereCondition(where);
+          if (c) this.expressionMap.wheres = [{ type: 'simple', condition: c }];
+          if (parameters) this.setParameters(parameters);
+          return this;
+        }
+        andWhere(where, parameters) {
+          this.expressionMap.wheres.push({ type: 'and', condition: this.getWhereCondition(where) });
+          if (parameters) this.setParameters(parameters);
+          return this;
+        }
+        orWhere(where, parameters) {
+          this.expressionMap.wheres.push({ type: 'or', condition: this.getWhereCondition(where) });
+          if (parameters) this.setParameters(parameters);
+          return this;
+        }
+        whereInIds(ids) { return this.where(this.getWhereInIdsCondition(ids)); }
+        andWhereInIds(ids) { return this.andWhere(this.getWhereInIdsCondition(ids)); }
+        orWhereInIds(ids) { return this.orWhere(this.getWhereInIdsCondition(ids)); }
+        whereExists(sub) { return this.where(...this.getExistsCondition(sub)); }
+        andWhereExists(sub) { return this.andWhere(...this.getExistsCondition(sub)); }
+        getExistsCondition(sub) {
+          const c = sub.clone().orderBy().groupBy().offset(undefined).limit(undefined).skip(undefined).take(undefined).select('1');
+          return [`EXISTS (${c.getQuery()})`, c.getParameters()];
+        }
+        // dal select agli altri tipi di query
+        update(entityOrSet, maybeSet) {
+          const t = isSchema(entityOrSet) ? entityOrSet.options.name : entityOrSet;
+          const isTarget = typeof t === 'function' || typeof t === 'string';
+          if (isTarget) this.setMainAlias(this.createFromAlias(t));
+          this.expressionMap.queryType = 'update';
+          this.expressionMap.valuesSet = maybeSet || (isTarget ? undefined : entityOrSet);
+          return new UpdateQueryBuilder(this);
+        }
+        delete() { this.expressionMap.queryType = 'delete'; return new DeleteQueryBuilder(this); }
+        insert() { this.expressionMap.queryType = 'insert'; return new InsertQueryBuilder(this); }
+        async execute() {
+          const [sql, params] = this.getQueryAndParameters();
+          return this.obtainQueryRunner().query(sql, params);
+        }
+      }
+
+      // :nome → ? (i numeri vanno direttamente nel testo, come nel driver SQLite di TypeORM)
+      function escapeQueryWithParameters(sql, parameters) {
+        const escaped = [];
+        if (!parameters || !Object.keys(parameters).length) return [sql, escaped];
+        sql = sql.replace(/:(\.\.\.)?([A-Za-z0-9_.]+)/g, (full, isArray, key) => {
+          if (!Object.prototype.hasOwnProperty.call(parameters, key)) return full;
+          const value = parameters[key];
+          if (isArray) return [].concat(value).map((v) => { escaped.push(v); return '?'; }).join(', ');
+          if (typeof value === 'function') return value();
+          if (typeof value === 'number') return String(value);
+          if (typeof value === 'boolean') { escaped.push(+value); return '?'; }
+          if (value instanceof Date) { escaped.push(toUtcDatetime(value)); return '?'; }
+          escaped.push(value);
+          return '?';
+        });
+        return [sql, escaped];
+      }
+
+      function getRelationJoinType(relation, parentJoinType = 'inner') {
+        if (parentJoinType === 'left') return 'left';
+        if (!relation.isNullable && relation.isWithJoinColumn) return 'inner';
+        return 'left';
+      }
+
+      class SelectQueryBuilder extends QueryBuilder {
+        constructor(ds, queryRunner, expressionMap) {
+          super(ds, queryRunner, expressionMap);
+          this.findOptions = {};
+          this.selects = [];
+          this.joins = [];
+          this.conditions = '';
+        }
+        clone() {
+          const qb = new SelectQueryBuilder(this.dataSource, this.queryRunner, cloneExpressionMap(this.expressionMap));
+          qb.parameterIndex = this.parameterIndex;
+          qb.findOptions = this.findOptions;
+          return qb;
+        }
+        getQuery() {
+          let sql = this.createSelectExpression() + this.createJoinExpression() + this.createWhereExpression() + this.createGroupByExpression() +
+            this.createHavingExpression() + this.createOrderByExpression() + this.createLimitOffsetExpression();
+          sql = sql.trim();
+          if (this.expressionMap.subQuery) sql = '(' + sql + ')';
+          return this.replacePropertyNames(sql);
+        }
+        select(selection, aliasName) {
+          this.expressionMap.queryType = 'select';
+          if (Array.isArray(selection)) this.expressionMap.selects = selection.map((s) => ({ selection: s }));
+          else if (typeof selection === 'function') {
+            const sub = selection(this.subQuery());
+            this.setParameters(sub.getParameters());
+            this.expressionMap.selects.push({ selection: sub.getQuery(), aliasName });
+          } else if (selection) this.expressionMap.selects = [{ selection, aliasName }];
+          return this;
+        }
+        addSelect(selection, aliasName) {
+          if (!selection) return this;
+          if (Array.isArray(selection)) this.expressionMap.selects = this.expressionMap.selects.concat(selection.map((s) => ({ selection: s })));
+          else if (typeof selection === 'function') {
+            const sub = selection(this.subQuery());
+            this.setParameters(sub.getParameters());
+            this.expressionMap.selects.push({ selection: sub.getQuery(), aliasName });
+          } else this.expressionMap.selects.push({ selection, aliasName });
+          return this;
+        }
+        distinct(v = true) { this.expressionMap.selectDistinct = v; return this; }
+        from(target, aliasName) { this.setMainAlias(this.createFromAlias(target, aliasName)); return this; }
+        addFrom(target, aliasName) { this.expressionMap.aliases.push(this.createFromAlias(target, aliasName)); return this; }
+        fromDummy() { this.setMainAlias({ type: 'from', name: 'dummy_table', subQuery: '(SELECT 1 AS dummy_column)' }); return this; }
+        innerJoin(e, a, c, p) { this.join('INNER', e, a, c, p); return this; }
+        leftJoin(e, a, c, p) { this.join('LEFT', e, a, c, p); return this; }
+        innerJoinAndSelect(e, a, c, p) { this.addSelect(a); this.innerJoin(e, a, c, p); return this; }
+        leftJoinAndSelect(e, a, c, p) { this.addSelect(a); this.leftJoin(e, a, c, p); return this; }
+        join(direction, entityOrProperty, aliasName, condition, parameters) {
+          if (parameters) this.setParameters(parameters);
+          const em = this.expressionMap;
+          const ja = { direction, entityOrProperty, condition, aliasName };
+          let relation = null;
+          let meta = null;
+          if (typeof entityOrProperty === 'string' && /^[^.( ]+\.[^.]+/.test(entityOrProperty) && !this.dataSource.findMetadata(entityOrProperty)) {
+            const [parentAlias, ...rest] = entityOrProperty.split('.');
+            const parent = em.aliases.find((a) => a.name === parentAlias);
+            if (parent && parent.metadata) {
+              const propPath = rest.join('.');
+              relation = parent.metadata.findRelationWithPropertyPath(propPath);
+              if (!relation) throw new TypeORMError(`Relation with property path ${propPath} in entity was not found.`);
+              Object.assign(ja, { parentAlias, relationPropertyPath: propPath, relation });
+              meta = relation.inverseEntityMetadata;
+            }
+          }
+          if (!relation) meta = typeof entityOrProperty === 'string' && entityOrProperty.startsWith('(') ? null : this.dataSource.findMetadata(entityOrProperty);
+          ja.metadata = meta;
+          ja.tablePath = meta ? meta.tablePath : typeof entityOrProperty === 'string' && !entityOrProperty.startsWith('(') ? entityOrProperty : undefined;
+          ja.isMany = !!relation && (relation.isOneToMany || relation.isManyToMany);
+          if (relation && relation.isManyToMany) ja.junctionAlias = relation.isOwning ? ja.parentAlias + '_' + aliasName : aliasName + '_' + ja.parentAlias;
+          ja.alias = { type: 'join', name: aliasName, metadata: meta, tablePath: ja.tablePath, subQuery: typeof entityOrProperty === 'string' && entityOrProperty.startsWith('(') ? entityOrProperty : undefined };
+          em.aliases.push(ja.alias);
+          if (relation && relation.junctionEntityMetadata) em.aliases.push({ type: 'join', name: ja.junctionAlias, metadata: relation.junctionEntityMetadata });
+          em.joinAttributes.push(ja);
+        }
+        joinIsSelected(ja) {
+          return this.expressionMap.selects.some((s) => s.selection === ja.alias.name || (ja.metadata && ja.metadata.columns.some((c) => s.selection === ja.alias.name + '.' + c.propertyPath)));
+        }
+        createSelectExpression() {
+          const em = this.expressionMap;
+          if (!em.mainAlias) throw new TypeORMError('Cannot build query because main alias is not set (call qb#from method)');
+          const all = [];
+          const excluded = [];
+          if (em.mainAlias.metadata) {
+            all.push(...this.buildEscapedEntityColumnSelects(em.mainAlias.name, em.mainAlias.metadata));
+            excluded.push(...this.findEntityColumnSelects(em.mainAlias.name, em.mainAlias.metadata));
+          }
+          for (const j of em.joinAttributes) {
+            if (j.metadata) {
+              all.push(...this.buildEscapedEntityColumnSelects(j.alias.name, j.metadata));
+              excluded.push(...this.findEntityColumnSelects(j.alias.name, j.metadata));
+            } else {
+              const sel = em.selects.find((s) => s.selection === j.alias.name);
+              if (sel) { all.push({ selection: q(j.alias.name) + '.*' }); excluded.push(sel); }
+            }
+          }
+          em.selects.filter((s) => !excluded.includes(s)).forEach((s) => all.push({ selection: s.selection, aliasName: s.aliasName }));
+          if (!all.length) all.push({ selection: '*' });
+          const froms = em.aliases.filter((a) => a.type === 'from' && (a.tablePath || a.subQuery)).map((a) => (a.subQuery ? a.subQuery + ' ' + q(a.name) : q(a.tablePath) + ' ' + q(a.name)));
+          return (em.selectDistinct ? 'SELECT DISTINCT ' : 'SELECT ') + all.map((s) => s.selection + (s.aliasName ? ' AS ' + q(s.aliasName) : '')).join(', ') + ' FROM ' + froms.join(', ');
+        }
+        buildEscapedEntityColumnSelects(aliasName, meta) {
+          const em = this.expressionMap;
+          const hasMain = em.selects.some((s) => s.selection === aliasName);
+          const columns = [];
+          if (hasMain) columns.push(...meta.columns.filter((c) => c.isSelect));
+          const byPath = new Map(meta.columns.map((c) => [`${aliasName}.${c.propertyPath}`, c]));
+          columns.push(...em.selects.map((s) => byPath.get(s.selection)).filter(Boolean));
+          if (!columns.length) return [];
+          const missingPk = em.queryEntity ? meta.primaryColumns.filter((c) => !columns.includes(c)) : [];
+          const out = [];
+          for (const c of columns.concat(missingPk)) {
+            const sel = `${q(aliasName)}.${q(c.databaseName)}`;
+            const named = em.selects.filter((s) => s.selection === aliasName + '.' + c.propertyPath);
+            if (named.length) named.forEach((s) => out.push({ selection: sel, aliasName: s.aliasName || `${aliasName}_${c.databaseName}` }));
+            else out.push({ selection: sel, aliasName: `${aliasName}_${c.databaseName}` });
+          }
+          return out;
+        }
+        findEntityColumnSelects(aliasName, meta) {
+          return this.expressionMap.selects.filter((s) => s.selection === aliasName || meta.columns.some((c) => s.selection === aliasName + '.' + c.propertyPath));
+        }
+        createJoinExpression() {
+          const trees = [];
+          const mapped = {};
+          for (const ja of this.expressionMap.joinAttributes) {
+            const node = { children: [], ja };
+            const parent = ja.parentAlias ? mapped[ja.parentAlias] : undefined;
+            if (parent) parent.children.push(node); else trees.push(node);
+            mapped[ja.alias.name] = node;
+          }
+          return trees.map((t) => this.joinTree(t)).join(' ');
+        }
+        joinTree({ children, ja }) {
+          const rel = ja.relation;
+          const dest = ja.alias.name;
+          const appended = ja.condition ? ' AND (' + ja.condition + ')' : '';
+          const parent = ja.parentAlias;
+          const childJoins = (children || []).map((c) => this.joinTree(c)).join(' ');
+          const nest = ja.direction === 'LEFT' && (children || []).some((c) => c.ja.direction === 'INNER');
+          if (!parent || !rel) return this.joinClause(ja.direction, ja.alias.subQuery || q(ja.tablePath), dest, ja.condition || '', childJoins, nest);
+          if (rel.isManyToOne || rel.isOneToOneOwner) {
+            const cond = rel.joinColumns.map((jc) => `${dest}.${jc.referencedColumn.propertyPath}=${parent}.${rel.propertyPath}.${jc.referencedColumn.propertyPath}`).join(' AND ');
+            return this.joinClause(ja.direction, q(ja.tablePath), dest, cond + appended, childJoins, nest);
+          }
+          if (rel.isOneToMany || rel.isOneToOneNotOwner) {
+            if (!rel.inverseRelation) throw new TypeORMError(`Relation ${rel.entityMetadata.name}.${rel.propertyName} does not have join columns.`);
+            const cond = rel.inverseRelation.joinColumns.map((jc) => `${dest}.${rel.inverseRelation.propertyPath}.${jc.referencedColumn.propertyPath}=${parent}.${jc.referencedColumn.propertyPath}`).join(' AND ');
+            return this.joinClause(ja.direction, q(ja.tablePath), dest, cond + appended, childJoins, nest);
+          }
+          const jAlias = ja.junctionAlias;
+          const owner = rel.isOwning ? rel : rel.inverseRelation;
+          if (!owner) throw new TypeORMError(`Relation ${rel.entityMetadata.name}.${rel.propertyName} does not have join columns.`);
+          let jCond;
+          let dCond;
+          if (rel.isOwning) {
+            jCond = rel.joinColumns.map((c) => `${jAlias}.${c.propertyPath}=${parent}.${c.referencedColumn.propertyPath}`).join(' AND ');
+            dCond = rel.inverseJoinColumns.map((c) => `${dest}.${c.referencedColumn.propertyPath}=${jAlias}.${c.propertyPath}`).join(' AND ');
+          } else {
+            jCond = owner.inverseJoinColumns.map((c) => `${jAlias}.${c.propertyPath}=${parent}.${c.referencedColumn.propertyPath}`).join(' AND ');
+            dCond = owner.joinColumns.map((c) => `${dest}.${c.referencedColumn.propertyPath}=${jAlias}.${c.propertyPath}`).join(' AND ');
+          }
+          return this.joinClause(ja.direction, q(rel.junctionEntityMetadata.tablePath), jAlias, jCond) + this.joinClause(ja.direction, q(ja.tablePath), dest, dCond + appended, childJoins, nest);
+        }
+        joinClause(direction, table, alias, condition, childJoins = '', nest = false) {
+          const joined = nest ? '(' + table + ' ' + q(alias) + childJoins + ')' : table + ' ' + q(alias);
+          return ' ' + direction + ' JOIN ' + joined + (condition ? ' ON ' + condition : '') + (nest ? '' : childJoins);
+        }
+        groupBy(g) { this.expressionMap.groupBys = g ? [g] : []; return this; }
+        addGroupBy(g) { this.expressionMap.groupBys.push(g); return this; }
+        createGroupByExpression() { return this.expressionMap.groupBys.length ? ' GROUP BY ' + this.expressionMap.groupBys.join(', ') : ''; }
+        having(h, p) { this.expressionMap.havings = [{ type: 'simple', condition: this.getWhereCondition(h) }]; if (p) this.setParameters(p); return this; }
+        andHaving(h, p) { this.expressionMap.havings.push({ type: 'and', condition: this.getWhereCondition(h) }); if (p) this.setParameters(p); return this; }
+        orHaving(h, p) { this.expressionMap.havings.push({ type: 'or', condition: this.getWhereCondition(h) }); if (p) this.setParameters(p); return this; }
+        createHavingExpression() {
+          if (!this.expressionMap.havings.length) return '';
+          const c = this.createWhereClausesExpression(this.expressionMap.havings);
+          return c ? ' HAVING ' + c : '';
+        }
+        validateOrder(sort) {
+          for (const [k, v] of Object.entries(sort)) {
+            if (typeof v === 'string') { if (v !== 'ASC' && v !== 'DESC') throw new TypeORMError(`Invalid order direction "${v}" for "${k}". Allowed values: ASC, DESC.`); }
+            else if (isObj(v)) {
+              if (v.order !== 'ASC' && v.order !== 'DESC') throw new TypeORMError(`Invalid order direction "${v.order}" for "${k}". Allowed values: ASC, DESC.`);
+              if (v.nulls !== undefined && v.nulls !== 'NULLS FIRST' && v.nulls !== 'NULLS LAST') throw new TypeORMError(`Invalid nulls option "${v.nulls}" for "${k}". Allowed values: NULLS FIRST, NULLS LAST.`);
+            } else throw new TypeORMError(`Invalid order-by value for "${k}". Expected "ASC", "DESC", or { order, nulls } object.`);
+          }
+        }
+        orderBy(sort, order = 'ASC', nulls) {
+          if (!sort) { this.expressionMap.orderBys = {}; return this; }
+          if (typeof sort === 'object') { this.validateOrder(sort); this.expressionMap.orderBys = sort; return this; }
+          const c = nulls ? { [sort]: { order, nulls } } : { [sort]: order };
+          this.validateOrder(c);
+          this.expressionMap.orderBys = c;
+          return this;
+        }
+        addOrderBy(sort, order = 'ASC', nulls) {
+          const c = nulls ? { [sort]: { order, nulls } } : { [sort]: order };
+          this.validateOrder(c);
+          this.expressionMap.orderBys[sort] = c[sort];
+          return this;
+        }
+        createOrderByExpression() {
+          const em = this.expressionMap;
+          const keys = Object.keys(em.orderBys);
+          if (!keys.length) return '';
+          return ' ORDER BY ' + keys.map((col) => {
+            const ov = typeof em.orderBys[col] === 'string' ? em.orderBys[col] : em.orderBys[col].order + ' ' + em.orderBys[col].nulls;
+            if (/[;'"\\]/.test(ov)) throw new TypeORMError(`Unsafe order-by value "${ov}" for "${col}".`);
+            if (em.selects.find((s) => s.aliasName === col)) return q(col) + ' ' + ov;
+            const sel = em.selects.find((s) => s.selection === col);
+            if (sel && !sel.aliasName && col.includes('.')) {
+              const [an, ...rest] = col.split('.');
+              const alias = em.aliases.find((a) => a.name === an);
+              const c = alias && alias.metadata && alias.metadata.findColumnWithPropertyPath(rest.join('.'));
+              if (c) return q(`${an}_${c.databaseName}`) + ' ' + ov;
+            }
+            return col + ' ' + ov;
+          }).join(', ');
+        }
+        num(label, v) {
+          const n = typeof v === 'number' || v === undefined || v === null ? v : Number(v);
+          if (n !== undefined && n !== null && isNaN(n)) throw new TypeORMError(`Provided "${label}" value is not a number. Please provide a numeric value.`);
+          return n;
+        }
+        limit(n) { this.expressionMap.limit = this.num('limit', n); return this; }
+        offset(n) { this.expressionMap.offset = this.num('offset', n); return this; }
+        take(n) { this.expressionMap.take = this.num('take', n); return this; }
+        skip(n) { this.expressionMap.skip = this.num('skip', n); return this; }
+        createLimitOffsetExpression() {
+          const em = this.expressionMap;
+          let { offset, limit } = em;
+          if (offset === undefined && limit === undefined && em.joinAttributes.length === 0) { offset = em.skip; limit = em.take; }
+          const hasL = limit !== undefined && limit !== null;
+          const hasO = offset !== undefined && offset !== null;
+          if (hasL && hasO) return ' LIMIT ' + limit + ' OFFSET ' + offset;
+          if (hasL) return ' LIMIT ' + limit;
+          if (hasO) return ' LIMIT -1 OFFSET ' + offset;
+          return '';
+        }
+        withDeleted() { return this; }
+        setLock() { return this; }
+        relationCountAlias() { return this; }
+
+        // find options → query builder (come SelectQueryBuilder.applyFindOptions)
+        setFindOptions(o) {
+          if (o && typeof o === 'object' && 'join' in o && o.join != null) throw new TypeORMError('"join" option has been removed. Use "relations" for left joins or QueryBuilder for other join types. See the v1 migration guide for details.');
+          if (o && Array.isArray(o.select)) throw new TypeORMError('String-array "select" syntax has been removed. Use object syntax instead, e.g. select: { id: true, name: true }. See the v1 migration guide for details.');
+          if (o && Array.isArray(o.relations)) throw new TypeORMError('String-array "relations" syntax has been removed. Use object syntax instead, e.g. relations: { profile: true, posts: true }. See the v1 migration guide for details.');
+          this.findOptions = o || {};
+          this.applyFindOptions();
+          return this;
+        }
+        applyFindOptions() {
+          const fo = this.findOptions;
+          const main = this.expressionMap.mainAlias;
+          if (!main || !main.metadata) return;
+          if (fo.select) this.buildSelect(fo.select, main.metadata, main.name);
+          if (this.selects.length) this.select(this.selects);
+          this.selects = [];
+          if (fo.relations) {
+            this.buildRelations(fo.relations, fo.select, main.metadata, main.name);
+            if (fo.loadEagerRelations !== false) this.buildEagerRelations(fo.relations, fo.select, main.metadata, main.name);
+          }
+          if (this.selects.length) this.addSelect(this.selects);
+          if (fo.where) {
+            this.conditions = this.buildWhere(fo.where, main.metadata, main.name);
+            if (this.conditions.length) this.andWhere(this.conditions.startsWith('(') ? this.conditions : `(${this.conditions})`);
+          }
+          if (fo.order) this.buildOrder(fo.order, main.metadata, main.name);
+          for (const j of this.joins) {
+            const path = `${j.parentAlias}.${j.relationMetadata.propertyPath}`;
+            if (j.select && !j.selection) { if (j.type === 'inner') this.innerJoinAndSelect(path, j.alias); else this.leftJoinAndSelect(path, j.alias); }
+            else if (j.type === 'inner') this.innerJoin(path, j.alias); else this.leftJoin(path, j.alias);
+          }
+          if (fo.skip !== undefined) this.skip(fo.skip);
+          if (fo.take !== undefined) this.take(fo.take);
+          if (fo.loadEagerRelations !== false) this.joinEagerRelations(main.name, main.metadata);
+          if (fo.transaction === true) this.expressionMap.useTransaction = true;
+        }
+        joinEagerRelations(alias, meta, prefix) {
+          for (const r of meta.eagerRelations || []) {
+            const rAlias = `${alias}_${r.propertyPath.replace('.', '_')}`;
+            if (this.expressionMap.joinAttributes.some((j) => j.alias.name === rAlias)) continue;
+            if (getRelationJoinType(r) === 'inner') this.innerJoinAndSelect(`${alias}.${r.propertyPath}`, rAlias);
+            else this.leftJoinAndSelect(`${alias}.${r.propertyPath}`, rAlias);
+            if (r.inverseEntityMetadata !== meta) this.joinEagerRelations(rAlias, r.inverseEntityMetadata);
+          }
+        }
+        buildSelect(select, meta, alias) {
+          for (const key in select) {
+            if (select[key] === undefined || select[key] === false) continue;
+            const column = meta.findColumnWithPropertyPathStrict(key);
+            const relation = meta.findRelationWithPropertyPath(key);
+            if (!column && !relation) throw new EntityPropertyNotFoundError(key, meta);
+            if (column) this.selects.push(alias + '.' + key);
+          }
+        }
+        buildRelations(relations, selection, meta, alias, parentJoinType = 'inner') {
+          if (!relations) return;
+          for (const name of Object.keys(relations)) {
+            const value = relations[name];
+            const relation = meta.findRelationWithPropertyPath(name);
+            if (!relation) throw new EntityPropertyNotFoundError(name, meta);
+            const joinAlias = alias + '__' + alias + '_' + name.replace('.', '_');
+            const joinType = getRelationJoinType(relation, parentJoinType);
+            if (value === true || typeof value === 'object') {
+              const sel = selection && typeof selection[name] === 'object' ? selection[name] : undefined;
+              this.joins.push({ type: joinType, select: true, selection: sel, alias: joinAlias, parentAlias: alias, relationMetadata: relation });
+              if (sel) this.buildSelect(sel, relation.inverseEntityMetadata, joinAlias);
+            }
+            if (typeof value === 'object') this.buildRelations(value, selection && typeof selection === 'object' ? selection[name] : undefined, relation.inverseEntityMetadata, joinAlias, joinType);
+          }
+        }
+        buildEagerRelations(relations, selection, meta, alias) {
+          if (!relations) return;
+          for (const name of Object.keys(relations)) {
+            const value = relations[name];
+            const relation = meta.findRelationWithPropertyPath(name);
+            if (!relation) throw new EntityPropertyNotFoundError(name, meta);
+            const joinAlias = alias + '__' + alias + '_' + name.replace('.', '_');
+            if (value === true || typeof value === 'object') {
+              const pj = this.joins.find((j) => j.alias === joinAlias);
+              for (const er of relation.inverseEntityMetadata.eagerRelations || []) {
+                const ea = joinAlias + '__' + joinAlias + '_' + er.propertyPath.replace('.', '_');
+                if (!this.joins.find((j) => j.alias === ea)) this.joins.push({ type: getRelationJoinType(er, pj ? pj.type : 'inner'), select: true, alias: ea, parentAlias: joinAlias, relationMetadata: er });
+              }
+            }
+            if (typeof value === 'object') this.buildEagerRelations(value, undefined, relation.inverseEntityMetadata, joinAlias);
+          }
+        }
+        buildOrder(order, meta, alias) {
+          for (const key in order) {
+            if (order[key] === undefined) continue;
+            const column = meta.findColumnWithPropertyPathStrict(key);
+            const relation = meta.findRelationWithPropertyPath(key);
+            if (!column && !relation) throw new EntityPropertyNotFoundError(key, meta);
+            if (column) {
+              let dir = typeof order[key] === 'object' ? order[key].direction : order[key];
+              dir = dir === 'DESC' || dir === 'desc' || dir === -1 ? 'DESC' : 'ASC';
+              let nulls = typeof order[key] === 'object' ? order[key].nulls : undefined;
+              nulls = nulls && nulls.toLowerCase() === 'first' ? 'NULLS FIRST' : nulls && nulls.toLowerCase() === 'last' ? 'NULLS LAST' : undefined;
+              this.addOrderBy(`${alias}.${key}`, dir, nulls);
+            } else {
+              const joinAlias = alias + '__' + alias + '_' + key.replace('.', '_');
+              if (!this.joins.find((j) => j.alias === joinAlias)) {
+                const pj = this.joins.find((j) => j.alias === alias);
+                this.joins.push({ type: getRelationJoinType(relation, pj ? pj.type : 'inner'), select: false, alias: joinAlias, parentAlias: alias, relationMetadata: relation });
+              }
+              this.buildOrder(order[key], relation.inverseEntityMetadata, joinAlias);
+            }
+          }
+        }
+        buildWhere(where, meta, alias) {
+          let condition = '';
+          if (Array.isArray(where)) {
+            if (where.length) condition = where.map((w) => this.buildWhere(w, meta, alias)).filter(Boolean).map((c) => '(' + c + ')').join(' OR ');
+          } else {
+            const ands = [];
+            for (const key in where) {
+              let value = where[key];
+              const column = meta.findColumnWithPropertyPathStrict(key);
+              const relation = meta.findRelationWithPropertyPath(key);
+              if (!column && !relation) throw new EntityPropertyNotFoundError(key, meta);
+              const behavior = this.dataSource.options.invalidWhereValuesBehavior || {};
+              if (value === undefined) {
+                if ((behavior.undefined || 'throw') === 'throw') throw new TypeORMError(`Undefined value encountered in property '${alias}.${key}' of a where condition. Set 'invalidWhereValuesBehavior.undefined' to 'ignore' in connection options to skip properties with undefined values.`);
+                continue;
+              }
+              if (value === null) {
+                const nb = behavior.null || 'throw';
+                if (nb === 'ignore') continue;
+                if (nb === 'throw') {
+                  if (column) throw new TypeORMError(`Null value encountered in property '${alias}.${key}' of a where condition. To match with SQL NULL, the IsNull() operator must be used. Set 'invalidWhereValuesBehavior.null' to 'ignore' or 'sql-null' in connection options to skip or handle null values.`);
+                  throw new TypeORMError(`Null value encountered in property '${alias}.${key}' of a where condition. Set 'invalidWhereValuesBehavior.null' to 'ignore' or 'sql-null' in connection options to skip or handle null values.`);
+                }
+              }
+              if (column) {
+                const aliasPath = `${alias}.${key}`;
+                if (value === null) { ands.push(`${aliasPath} IS NULL`); continue; }
+                if (kind(value, 'EqualOperator')) value = value.value;
+                if (column.transformer && !isOperator(value)) value = toDb({ transformer: column.transformer }, value);
+                ands.push(this.createWhereConditionExpression(this.getWherePredicateCondition(aliasPath, value)));
+              } else {
+                if (value === null) { ands.push(`${alias}.${key} IS NULL`); continue; }
+                if (typeof value === 'object' && !isOperator(value)) {
+                  const ks = Object.keys(value);
+                  if (!ks.length) continue;
+                  if (ks.every((k) => value[k] === undefined)) {
+                    if (((this.dataSource.options.invalidWhereValuesBehavior || {}).undefined || 'throw') === 'throw') throw new TypeORMError(`Undefined value encountered in nested relation '${alias}.${key}' of a where condition. All properties of the nested object are undefined. Set 'invalidWhereValuesBehavior.undefined' to 'ignore' in connection options to skip properties with undefined values.`);
+                    continue;
+                  }
+                }
+                if (isOperator(value)) {
+                  if (relation.isManyToOne || relation.isOneToOneOwner) ands.push(this.createWhereConditionExpression(this.getWherePredicateCondition(`${alias}.${key}`, value)));
+                  else throw new Error("This relation isn't supported by given find operator");
+                } else {
+                  const joinAlias = alias + '__' + alias + '_' + relation.propertyPath.replace('.', '_');
+                  if (!this.joins.find((j) => j.alias === joinAlias)) {
+                    const pj = this.joins.find((j) => j.alias === alias);
+                    this.joins.push({ type: getRelationJoinType(relation, pj ? pj.type : 'inner'), select: false, alias: joinAlias, parentAlias: alias, relationMetadata: relation });
+                  }
+                  const c = this.buildWhere(value, relation.inverseEntityMetadata, joinAlias);
+                  if (c) ands.push(c);
+                }
+              }
+            }
+            condition = ands.length ? '(' + ands.join(') AND (') + ')' : ands.join(' AND ');
+          }
+          return condition.length ? '(' + condition + ')' : condition;
+        }
+
+        // esecuzione
+        async loadRawResults(qr) {
+          const [sql, params] = this.getQueryAndParameters();
+          return (await qr.query(sql, params, true)).records;
+        }
+        async withTransaction(fn) {
+          const qr = this.obtainQueryRunner();
+          let ours = false;
+          try {
+            if (this.expressionMap.useTransaction && !qr.isTransactionActive) { await qr.startTransaction(); ours = true; }
+            const r = await fn(qr);
+            if (ours) await qr.commitTransaction();
+            return r;
+          } catch (e) {
+            if (ours) { try { await qr.rollbackTransaction(); } catch (x) { /* ignora */ } }
+            throw e;
+          }
+        }
+        getRawMany() { this.expressionMap.queryEntity = false; return this.withTransaction((qr) => this.loadRawResults(qr)); }
+        async getRawOne() { return (await this.getRawMany())[0]; }
+        getRawAndEntities() { this.expressionMap.queryEntity = true; return this.withTransaction((qr) => this.executeEntitiesAndRawResults(qr)); }
+        async getMany() { return (await this.getRawAndEntities()).entities; }
+        async getOne() { const r = (await this.getRawAndEntities()).entities[0]; return r === undefined ? null : r; }
+        async getOneOrFail() {
+          const e = await this.getOne();
+          if (!e) throw new EntityNotFoundError(this.expressionMap.mainAlias.metadata ? this.expressionMap.mainAlias.metadata.target : this.expressionMap.mainAlias.name, this.expressionMap.parameters);
+          return e;
+        }
+        getCount() { this.expressionMap.queryEntity = false; return this.withTransaction((qr) => this.executeCountQuery(qr)); }
+        getExists() { this.expressionMap.queryEntity = false; return this.withTransaction((qr) => this.executeExistsQuery(qr)); }
+        async getManyAndCount() {
+          return this.withTransaction(async (qr) => {
+            this.expressionMap.queryEntity = true;
+            const er = await this.executeEntitiesAndRawResults(qr);
+            this.expressionMap.queryEntity = false;
+            let count = this.lazyCount(er);
+            if (count === undefined) count = await this.executeCountQuery(qr);
+            return [er.entities, count];
+          });
+        }
+        lazyCount(er) {
+          const em = this.expressionMap;
+          const hasLimit = em.limit !== undefined && em.limit !== null;
+          if (em.joinAttributes.length > 0 && hasLimit) return undefined;
+          const hasTake = em.take !== undefined && em.take !== null;
+          const max = hasLimit ? em.limit : hasTake ? em.take : undefined;
+          if (max !== undefined && er.entities.length === max) return undefined;
+          const hasSkip = em.skip !== undefined && em.skip !== null && em.skip > 0;
+          const hasOffset = em.offset !== undefined && em.offset !== null && em.offset > 0;
+          if (er.entities.length === 0 && (hasSkip || hasOffset)) return undefined;
+          return er.entities.length + (hasOffset ? em.offset : hasSkip ? em.skip : 0);
+        }
+        computeCountExpression() {
+          const em = this.expressionMap;
+          const main = em.mainAlias.name;
+          const meta = em.mainAlias.metadata;
+          if (this.findOptions && this.findOptions.select) {
+            const cols = [];
+            for (const s of em.selects) {
+              const [an, ...rest] = s.selection.split('.');
+              if (!rest.length) continue;
+              const a = em.aliases.find((x) => x.name === an && x.metadata);
+              const c = a && a.metadata.findColumnWithPropertyPath(rest.join('.'));
+              if (c) cols.push(`${q(an)}.${q(c.databaseName)}`);
+            }
+            if (cols.length) return 'COUNT(DISTINCT(' + Array.from(new Set(cols)).join(" || '|;|' || ") + '))';
+          }
+          if (em.joinAttributes.length === 0) return 'COUNT(1)';
+          return 'COUNT(DISTINCT(' + meta.primaryColumns.map((c) => `${q(main)}.${q(c.databaseName)}`).join(" || '|;|' || ") + '))';
+        }
+        async executeCountQuery(qr) {
+          const countSql = this.computeCountExpression();
+          const res = await this.clone().orderBy().groupBy().offset(undefined).limit(undefined).skip(undefined).take(undefined).select(countSql, 'cnt').loadRawResults(qr);
+          if (!res || !res[0] || !res[0].cnt) return 0;
+          return parseInt(res[0].cnt);
+        }
+        async executeExistsQuery(qr) {
+          const r = await this.dataSource.createQueryBuilder().fromDummy().select('1', 'row_exists').whereExists(this).limit(1).loadRawResults(qr);
+          return r.length > 0;
+        }
+        orderCombined(parent) {
+          const em = this.expressionMap;
+          const sel = [];
+          const obj = {};
+          for (const crit of Object.keys(em.orderBys)) {
+            if (crit.includes('.')) {
+              const [an, ...rest] = crit.split('.');
+              const p = rest.join('.');
+              const alias = em.aliases.find((a) => a.name === an);
+              const c = alias && alias.metadata ? alias.metadata.findColumnWithPropertyPath(p) || alias.metadata.findColumnWithDatabaseName(p) : null;
+              const key = q(parent) + '.' + q(`${an}_${c ? c.databaseName : p}`);
+              sel.push(key);
+              obj[key] = em.orderBys[crit];
+            } else if (em.selects.find((s) => s.selection === crit || s.aliasName === crit)) {
+              const key = q(parent) + '.' + q(crit);
+              sel.push(key);
+              obj[key] = em.orderBys[crit];
+            } else { sel.push(''); obj[crit] = em.orderBys[crit]; }
+          }
+          return [sel.join(', '), obj];
+        }
+        async executeEntitiesAndRawResults(qr) {
+          const em = this.expressionMap;
+          if (!em.mainAlias) throw new TypeORMError('Alias is not set. Use "from" method to set an alias.');
+          let raw;
+          if ((em.skip || em.take) && em.joinAttributes.length > 0) {
+            // paginazione con le JOIN: prima gli id (DISTINCT), poi le righe di quegli id
+            const [selects, orderBys] = this.orderCombined('distinctAlias');
+            const meta = em.mainAlias.metadata;
+            const mainName = em.mainAlias.name;
+            const querySelects = meta.primaryColumns.map((pc) => {
+              const colAlias = q(`${mainName}_${pc.databaseName}`);
+              if (!orderBys[colAlias]) orderBys[colAlias] = 'ASC';
+              return `${q('distinctAlias')}.${colAlias} AS ${q(`ids_${mainName}_${pc.databaseName}`)}`;
+            });
+            const original = this.clone();
+            const pag = new SelectQueryBuilder(this.dataSource, qr)
+              .select(`DISTINCT ${querySelects.join(', ')}`)
+              .addSelect(selects)
+              .from(`(${original.orderBy().getQuery()})`, 'distinctAlias')
+              .offset(em.skip)
+              .limit(em.take)
+              .orderBy(orderBys)
+              .setParameters(this.getParameters());
+            pag.expressionMap.orderBys = orderBys;
+            raw = await pag.loadRawResults(qr);
+            if (raw.length > 0) {
+              let condition;
+              const params = {};
+              if (meta.hasMultiplePrimaryKeys) {
+                condition = raw.map((r, i) => meta.primaryColumns.map((pc) => {
+                  const k = `orm_distinct_ids_${i}_${pc.databaseName}`;
+                  params[k] = r[`ids_${mainName}_${pc.databaseName}`];
+                  return `${mainName}.${pc.propertyPath}=:${k}`;
+                }).join(' AND ')).join(' OR ');
+              } else {
+                const ids = raw.map((r) => r[`ids_${mainName}_${meta.primaryColumns[0].databaseName}`]);
+                if (ids.every((id) => typeof id === 'number')) condition = `${mainName}.${meta.primaryColumns[0].propertyPath} IN (${ids.join(', ')})`;
+                else { params.orm_distinct_ids = ids; condition = `${mainName}.${meta.primaryColumns[0].propertyPath} IN (:...orm_distinct_ids)`; }
+              }
+              const c = this.clone();
+              c.expressionMap.extraAppendedAndWhereCondition = condition;
+              c.setParameters(params);
+              raw = await c.loadRawResults(qr);
+            }
+          } else raw = await this.loadRawResults(qr);
+          let entities = [];
+          if (raw.length > 0) entities = this.transform(raw, em.mainAlias);
+          return { raw, entities };
+        }
+        // righe → entità (raggruppate per chiave primaria, con le relazioni dalle JOIN)
+        transform(rows, alias) {
+          const meta = alias.metadata;
+          const keys = meta.primaryColumns.map((c) => `${alias.name}_${c.databaseName}`);
+          const pkSelected = keys.some((k) => k in (rows[0] || {}));
+          const groups = new Map();
+          rows.forEach((r, i) => {
+            const id = pkSelected ? (keys.length === 1 ? String(r[keys[0]]) : JSON.stringify(keys.map((k) => r[k]))) : `row_${i}`;
+            if (!groups.has(id)) groups.set(id, []);
+            groups.get(id).push(r);
+          });
+          const out = [];
+          for (const g of groups.values()) {
+            const e = this.transformGroup(g, alias);
+            if (e !== undefined) out.push(e);
+          }
+          return out;
+        }
+        transformGroup(rows, alias) {
+          const meta = alias.metadata;
+          const entity = createEntity(meta, true);
+          const selections = new Set(this.expressionMap.selects.map((s) => s.selection));
+          let hasColumns = false;
+          for (const c of meta.columns) {
+            if (c.isVirtual) continue;
+            if (!selections.has(alias.name) && !selections.has(`${alias.name}.${c.propertyPath}`)) continue;
+            const v = rows[0][`${alias.name}_${c.databaseName}`];
+            if (v === undefined) continue;
+            if (v !== null) hasColumns = true;
+            entity[c.propertyName] = fromDb(c, v);
+          }
+          let hasRelations = false;
+          for (const j of this.expressionMap.joinAttributes) {
+            if (!j.metadata || !this.joinIsSelected(j)) continue;
+            if (!j.relation || j.parentAlias !== alias.name || !meta.relations.includes(j.relation)) continue;
+            let result = this.transform(rows, j.alias);
+            result = !j.isMany ? result[0] : result;
+            result = !j.isMany && result === undefined ? null : result;
+            if (result === undefined) continue;
+            entity[j.relation.propertyName] = result;
+            hasRelations = true;
+          }
+          if (hasColumns) return entity;
+          return undefined;
+        }
+      }
+
+      class UpdateQueryBuilder extends QueryBuilder {
+        constructor(base) {
+          super(base.dataSource, base.queryRunner, base.expressionMap);
+          this.parameterIndex = base.parameterIndex;
+          this.expressionMap.aliasNamePrefixingEnabled = false;
+        }
+        set(values) { this.expressionMap.valuesSet = values; return this; }
+        getQuery() {
+          const em = this.expressionMap;
+          const meta = em.mainAlias.metadata;
+          const values = em.valuesSet;
+          if (!values || !Object.keys(values).length) throw new UpdateValuesMissingError();
+          const sets = [];
+          const touched = [];
+          for (const key of Object.keys(values)) {
+            let v = values[key];
+            if (meta) {
+              let cols = [];
+              const c = meta.findColumnWithPropertyPathStrict(key);
+              if (c) cols = [c];
+              else {
+                const r = meta.findRelationWithPropertyPath(key);
+                if (r && r.joinColumns.length && !r.isManyToMany) cols = r.joinColumns;
+                else throw new EntityPropertyNotFoundError(key, meta);
+              }
+              for (const col of cols) {
+                let val = col.relationMetadata && !col.isVirtual ? v : col.relationMetadata ? (isObj(v) ? v[col.referencedColumn.propertyName] : v) : v;
+                touched.push(col);
+                if (typeof val === 'function') sets.push(`${q(col.databaseName)} = ${val()}`);
+                else sets.push(`${q(col.databaseName)} = ${this.createParameter(toDb(col, val))}`);
+              }
+            } else sets.push(`${q(key)} = ${typeof v === 'function' ? v() : this.createParameter(v)}`);
+          }
+          if (meta && meta.updateDateColumn && !touched.includes(meta.updateDateColumn)) sets.push(`${q(meta.updateDateColumn.databaseName)} = CURRENT_TIMESTAMP`);
+          const table = meta ? meta.tablePath : em.mainAlias.tablePath;
+          return this.replacePropertyNames(`UPDATE ${q(table)} SET ${sets.join(', ')}${this.createWhereExpression()}`);
+        }
+        async execute() {
+          const [sql, params] = this.getQueryAndParameters();
+          const r = await this.obtainQueryRunner().query(sql, params, true);
+          const out = new UpdateResult();
+          out.raw = r.records;
+          out.affected = r.affected;
+          return out;
+        }
+        orderBy() { return this; }
+        limit() { return this; }
+      }
+
+      class DeleteQueryBuilder extends QueryBuilder {
+        constructor(base) {
+          super(base.dataSource, base.queryRunner, base.expressionMap);
+          this.parameterIndex = base.parameterIndex;
+          this.expressionMap.aliasNamePrefixingEnabled = false;
+        }
+        from(target, aliasName) { this.setMainAlias(this.createFromAlias(target, aliasName)); return this; }
+        getQuery() {
+          const em = this.expressionMap;
+          const table = em.mainAlias.metadata ? em.mainAlias.metadata.tablePath : em.mainAlias.tablePath;
+          return this.replacePropertyNames(`DELETE FROM ${q(table)}${this.createWhereExpression()}`);
+        }
+        async execute() {
+          const [sql, params] = this.getQueryAndParameters();
+          const r = await this.obtainQueryRunner().query(sql, params, true);
+          const out = new DeleteResult();
+          out.raw = r.records;
+          out.affected = r.affected;
+          return out;
+        }
+      }
+
+      class InsertQueryBuilder extends QueryBuilder {
+        constructor(base) {
+          super(base.dataSource, base.queryRunner, base.expressionMap);
+          this.parameterIndex = base.parameterIndex;
+        }
+        into(target, columns) { this.setMainAlias(this.createFromAlias(target)); this.expressionMap.insertColumns = columns || []; return this; }
+        values(v) { this.expressionMap.valuesSet = v; return this; }
+        orIgnore() { this.expressionMap.onIgnore = true; return this; }
+        updateEntity() { return this; }
+        insertColumns() {
+          const meta = this.expressionMap.mainAlias.metadata;
+          if (!meta) return [];
+          const wanted = this.expressionMap.insertColumns;
+          if (wanted && wanted.length) return meta.columns.filter((c) => wanted.includes(c.propertyPath) || wanted.includes(c.databaseName));
+          return meta.columns.filter((c) => c.isInsert !== false);
+        }
+        getQuery() {
+          const em = this.expressionMap;
+          const meta = em.mainAlias.metadata;
+          const rows = [].concat(em.valuesSet || []);
+          if (!rows.length) throw new TypeORMError('Cannot perform insert query because values are not defined. Call "qb.values(...)" method to specify inserted values.');
+          let cols;
+          let tuples;
+          if (meta) {
+            cols = this.insertColumns();
+            tuples = rows.map((row) => '(' + cols.map((c) => this.valueExpression(c, row)).join(', ') + ')');
+          } else {
+            cols = Object.keys(rows[0]).map((k) => ({ databaseName: k, propertyName: k }));
+            tuples = rows.map((row) => '(' + cols.map((c) => (row[c.propertyName] === undefined || row[c.propertyName] === null ? 'NULL' : typeof row[c.propertyName] === 'function' ? row[c.propertyName]() : this.createParameter(row[c.propertyName]))).join(', ') + ')');
+          }
+          const table = meta ? meta.tablePath : em.mainAlias.tablePath;
+          return `INSERT ${em.onIgnore ? 'OR IGNORE ' : ''}INTO ${q(table)}(${cols.map((c) => q(c.databaseName)).join(', ')}) VALUES ${tuples.join(', ')}`;
+        }
+        valueExpression(c, row) {
+          let value = columnValue(c, row);
+          if (c.isGenerated && c.generationStrategy === 'uuid' && value === undefined) {
+            value = G.crypto.randomUUID();
+            this._uuids = this._uuids || new Map();
+            this._uuids.set(row, value);
+          }
+          if (value === undefined) {
+            if (c.isGenerated && c.generationStrategy === 'increment') return 'NULL';
+            if (c.isVersion) return '1';
+            if (c.default !== undefined && c.default !== null) return defaultSql(c);
+            return 'NULL';
+          }
+          if (typeof value === 'function') return value();
+          return this.createParameter(toDb(c, value));
+        }
+        async execute() {
+          const em = this.expressionMap;
+          const meta = em.mainAlias.metadata;
+          const rows = [].concat(em.valuesSet || []);
+          const qr = this.obtainQueryRunner();
+          const [sql, params] = this.getQueryAndParameters();
+          const r = await qr.query(sql, params, true);
+          const out = new InsertResult();
+          out.raw = r.raw;
+          if (!meta) return out;
+          const gen = meta.primaryColumns.find((c) => c.isGenerated && c.generationStrategy === 'increment');
+          rows.forEach((row, i) => {
+            const id = {};
+            for (const pc of meta.primaryColumns) {
+              let v = columnValue(pc, row);
+              if (v === undefined && pc === gen) v = r.raw - (rows.length - 1 - i);
+              if (v === undefined && this._uuids && this._uuids.has(row)) v = this._uuids.get(row);
+              id[pc.propertyName] = v;
+            }
+            out.identifiers.push(id);
+            out.generatedMaps.push(Object.assign({}, id));
+          });
+          await reloadGenerated(this.dataSource, qr, meta, rows, out);
+          return out;
+        }
+      }
+      // dopo un INSERT: rilegge le colonne con un default (o la data di creazione)
+      async function reloadGenerated(ds, qr, meta, rows, result) {
+        const extra = meta.columns.filter((c) => !c.isPrimary && !c.isVirtual && (c.default !== undefined || c.isGenerated || c.isCreateDate || c.isUpdateDate || c.isVersion));
+        if (extra.length && result.identifiers.length) {
+          const name = meta.targetName || meta.name;
+          const qb = new SelectQueryBuilder(ds, qr)
+            .select(meta.primaryColumns.map((c) => `${name}.${c.propertyPath}`))
+            .addSelect(extra.map((c) => `${name}.${c.propertyPath}`))
+            .from(meta.target, name)
+            .where(result.identifiers.length === 1 ? result.identifiers[0] : result.identifiers);
+          const loaded = await qb.getMany();
+          result.identifiers.forEach((id, i) => {
+            const found = loaded.find((e) => meta.primaryColumns.every((pc) => e[pc.propertyName] === id[pc.propertyName]));
+            if (found) for (const c of extra) if (c.propertyName in found) result.generatedMaps[i][c.propertyName] = found[c.propertyName];
+          });
+        }
+        rows.forEach((row, i) => {
+          if (!isObj(row)) return;
+          for (const c of meta.columns) {
+            if (c.isVirtual || c.isPrimary) continue;
+            if (row[c.propertyName] === undefined && !(c.propertyName in result.generatedMaps[i])) row[c.propertyName] = null;
+          }
+          Object.assign(row, result.generatedMaps[i]);
+        });
+      }
+
+      // ------------------------------------------------------------ save / remove
+      async function loadDatabaseRows(ds, qr, meta, entities) {
+        const withId = entities.filter((e) => idMap(meta, e));
+        if (!withId.length) return new Map();
+        const name = meta.targetName || meta.name;
+        const ids = withId.map((e) => idMap(meta, e));
+        const qb = new SelectQueryBuilder(ds, qr).select(name).from(meta.target, name).whereInIds(ids.length === 1 ? ids[0] : ids);
+        const { raw } = await qb.getRawAndEntities();
+        const out = new Map();
+        for (const e of withId) {
+          const id = idMap(meta, e);
+          const row = raw.find((r) => meta.primaryColumns.every((pc) => sameValue(pc, r[`${name}_${pc.databaseName}`], toDb(pc, id[pc.propertyName]))));
+          if (row) out.set(e, row);
+        }
+        return out;
+      }
+      async function loadJunctionIds(ds, qr, meta, rel, entities) {
+        const name = meta.targetName || meta.name;
+        const owner = rel.isOwning ? rel : rel.inverseRelation;
+        const jt = rel.junctionEntityMetadata.tableName;
+        const ridAlias = `${name}_${rel.propertyPath}_rid`;
+        const invTable = rel.inverseEntityMetadata.tableName;
+        const ownCol = rel.isOwning ? owner.joinColumns[0] : owner.inverseJoinColumns[0];
+        const otherCol = rel.isOwning ? owner.inverseJoinColumns[0] : owner.joinColumns[0];
+        const idsOf = entities.map((e) => toDb(ownCol.referencedColumn, columnValue(ownCol.referencedColumn, e)));
+        const lit = (v) => (typeof v === 'number' ? String(v) : `'${String(v).replace(/'/g, "''")}'`);
+        const own = idsOf.length === 1 ? `${q(ridAlias)}.${q(ownCol.databaseName)} = ${lit(idsOf[0])}` : '(' + idsOf.map((v) => `${q(ridAlias)}.${q(ownCol.databaseName)} = ${lit(v)}`).join(' OR ') + ')';
+        const sql = `SELECT ${q(ridAlias)}.${q(otherCol.databaseName)} AS ${q(otherCol.databaseName)}, ${q(ridAlias)}.${q(ownCol.databaseName)} AS ${q(ownCol.databaseName)} FROM ${q(invTable)} ${q(invTable)} INNER JOIN ${q(jt)} ${q(ridAlias)} ON (${own} AND ${q(ridAlias)}.${q(otherCol.databaseName)} = ${q(invTable)}.${q(otherCol.referencedColumn.databaseName)}) ORDER BY ${q(ridAlias)}.${q(otherCol.databaseName)} ASC, ${q(ridAlias)}.${q(ownCol.databaseName)} ASC`;
+        const rows = await qr.query(sql);
+        const out = new Map();
+        entities.forEach((e, i) => out.set(e, rows.filter((r) => sameValue(ownCol, r[ownCol.databaseName], idsOf[i])).map((r) => r[otherCol.databaseName])));
+        return { out, ownCol, otherCol, table: jt };
+      }
+
+      async function persist(manager, meta, input, mode) {
+        const ds = manager.connection;
+        const qr = manager.queryRunner || ds.createQueryRunner();
+        const list = Array.isArray(input) ? input : [input];
+        for (const e of list) if (!isObj(e)) throw new MustBeEntityError(mode, e);
+        if (!list.length) return input;
+        const ops = [];   // operazioni in ordine: { kind: 'insert'|'update'|'delete'|'junction-insert'|'junction-delete', … }
+        if (mode === 'save') {
+          // relazioni con cascade insert: prima gli oggetti collegati nuovi
+          const pre = [];
+          const post = [];
+          const after = [];
+          for (const e of list) {
+            for (const r of meta.relations) {
+              const v = e[r.propertyName];
+              if (v === undefined || v === null || !r.isCascadeInsert) continue;
+              const inv = r.inverseEntityMetadata;
+              if ((r.isManyToOne || r.isOneToOneOwner) && isObj(v) && !idMap(inv, v)) pre.push([inv, v]);
+              if (r.isManyToMany && Array.isArray(v)) for (const x of v) if (isObj(x) && !idMap(inv, x)) after.push([inv, x]);
+              if ((r.isOneToMany || r.isOneToOneNotOwner) && r.inverseRelation) for (const x of [].concat(v)) if (isObj(x) && !idMap(inv, x)) post.push([inv, x, r, e]);
+            }
+          }
+          const rows = await loadDatabaseRows(ds, qr, meta, list);
+          const related = new Map();
+          for (const r of meta.relations) {
+            if (!r.isCascadeUpdate) continue;
+            for (const e of list) {
+              for (const x of [].concat(e[r.propertyName] === undefined || e[r.propertyName] === null ? [] : e[r.propertyName])) {
+                if (!isObj(x) || !idMap(r.inverseEntityMetadata, x)) continue;
+                if (!related.has(r.inverseEntityMetadata)) related.set(r.inverseEntityMetadata, []);
+                if (!related.get(r.inverseEntityMetadata).includes(x)) related.get(r.inverseEntityMetadata).push(x);
+              }
+            }
+          }
+          const relatedRows = new Map();
+          for (const [m, xs] of related) relatedRows.set(m, await loadDatabaseRows(ds, qr, m, xs));
+          const m2m = meta.relations.filter((r) => r.isManyToMany && r.junctionEntityMetadata && list.some((e) => Array.isArray(e[r.propertyName])));
+          const junctions = new Map();
+          for (const r of m2m) {
+            const existing = list.filter((e) => rows.has(e));
+            if (existing.length) junctions.set(r, await loadJunctionIds(ds, qr, meta, r, existing));
+          }
+          const diffOf = (m, e, row) => {
+            const name = m.targetName || m.name;
+            const diff = [];
+            for (const c of m.columns) {
+              if (c.isPrimary || c.isCreateDate || c.isUpdate === false || c.isUpdateDate || c.isVersion) continue;
+              const v = c.isVirtual ? (e[c.relationMetadata.propertyName] === undefined ? undefined : columnValue(c, e)) : columnValue(c, e);
+              if (v === undefined) continue;
+              const dbv = row[`${name}_${c.databaseName}`];
+              if (!sameValue(c, c.isVirtual ? toDb(c.referencedColumn, v) : fromDb(c, toDb(c, v)), c.isVirtual ? dbv : fromDb(c, dbv))) diff.push(c);
+            }
+            return diff;
+          };
+          const updates = [];
+          const inserts = [];
+          for (const e of list) {
+            const row = rows.get(e);
+            if (!row) { inserts.push(e); continue; }
+            const diff = diffOf(meta, e, row);
+            const jIns = [];
+            const jDel = [];
+            for (const r of m2m) {
+              const v = e[r.propertyName];
+              if (!Array.isArray(v) || !junctions.has(r)) continue;
+              const j = junctions.get(r);
+              const old = j.out.get(e) || [];
+              const now = v.map((x) => (isObj(x) ? columnValue(j.otherCol.referencedColumn, x) : x)).filter((x) => x !== undefined && x !== null);
+              for (const id of now) if (!old.some((o) => sameValue(j.otherCol, o, id))) jIns.push([r, id]);
+              for (const id of old) if (!now.some((n) => sameValue(j.otherCol, n, id))) jDel.push([r, id]);
+            }
+            updates.push({ e, diff, jIns, jDel });
+          }
+          // ordine: le entità da cui si dipende (N-1), l'entità, i figli (1-N), gli oggetti N-N, la tabella ponte
+          for (const [m, x] of pre) ops.push({ kind: 'insert', meta: m, entity: x });
+          for (const e of inserts) ops.push({ kind: 'insert', meta, entity: e });
+          for (const [m, x, r, parent] of post) ops.push({ kind: 'insert', meta: m, entity: x, parentRel: r, parent });
+          for (const [m, x] of after) ops.push({ kind: 'insert', meta: m, entity: x });
+          // le righe della tabella ponte: un solo INSERT per relazione
+          for (const r of m2m) {
+            const owners = inserts.filter((e) => Array.isArray(e[r.propertyName]) && e[r.propertyName].length);
+            if (owners.length) ops.push({ kind: 'junction-insert', rel: r, pairs: () => [].concat(...owners.map((e) => e[r.propertyName].map((x) => [e, isObj(x) ? columnValue((r.isOwning ? r.inverseJoinColumns[0] : r.inverseRelation.joinColumns[0]).referencedColumn, x) : x]))).filter((p) => p[1] !== undefined && p[1] !== null) });
+          }
+          for (const r of m2m) {
+            const pairs = [].concat(...updates.map((u) => u.jIns.filter((x) => x[0] === r).map((x) => [u.e, x[1]])));
+            if (pairs.length) ops.push({ kind: 'junction-insert', rel: r, pairs: () => pairs });
+          }
+          for (const u of updates) if (u.diff.length) ops.push({ kind: 'update', meta, entity: u.e, diff: u.diff });
+          for (const [m, xs] of related) {
+            const rr = relatedRows.get(m);
+            for (const x of xs) {
+              if (!rr.has(x)) { ops.push({ kind: 'insert', meta: m, entity: x }); continue; }
+              const diff = diffOf(m, x, rr.get(x));
+              if (diff.length) ops.push({ kind: 'update', meta: m, entity: x, diff });
+            }
+          }
+          for (const u of updates) if (u.jDel.length) ops.push({ kind: 'junction-delete', meta, entity: u.e, items: u.jDel });
+        } else {
+          const rows = await loadDatabaseRows(ds, qr, meta, list);
+          for (const r of meta.relations.filter((x) => x.isManyToManyOwner)) {
+            const existing = list.filter((e) => rows.has(e));
+            if (existing.length) await loadJunctionIds(ds, qr, meta, r, existing);
+          }
+          const withId = list.filter((e) => idMap(meta, e));
+          if (withId.length) ops.push({ kind: 'delete', meta, entities: withId });
+        }
+        if (!ops.length) return input;
+        const ours = !qr.isTransactionActive;
+        if (ours) await qr.startTransaction();
+        try {
+          for (const o of ops) await runOp(ds, qr, o);
+          if (ours) await qr.commitTransaction();
+        } catch (err) {
+          if (ours) { try { await qr.rollbackTransaction(); } catch (x) { /* ignora */ } }
+          throw err;
+        }
+        if (mode === 'remove') for (const o of ops) for (const e of o.entities || []) for (const pc of meta.primaryColumns) e[pc.propertyName] = undefined;
+        return input;
+      }
+      async function runOp(ds, qr, o) {
+        if (o.kind === 'insert') {
+          if (o.parentRel) {
+            // il figlio di una 1-N: la chiave esterna arriva dal padre (senza toccare l'oggetto del figlio)
+            const inv = o.parentRel.inverseRelation;
+            const row = Object.assign({}, o.entity);
+            if (row[inv.propertyName] === undefined) row[inv.propertyName] = o.parent;
+            await new SelectQueryBuilder(ds, qr).insert().into(o.meta.target).values(row).execute();
+            for (const k of Object.keys(row)) if (k !== inv.propertyName && o.entity[k] === undefined) o.entity[k] = row[k];
+            return;
+          }
+          await new SelectQueryBuilder(ds, qr).insert().into(o.meta.target).values(o.entity).execute();
+          return;
+        }
+        if (o.kind === 'update') {
+          const set = {};
+          for (const c of o.diff) {
+            if (c.isVirtual) set[c.relationMetadata.propertyName] = columnValue(c, o.entity);
+            else set[c.propertyName] = columnValue(c, o.entity);
+          }
+          const qb = new SelectQueryBuilder(ds, qr).update(o.meta.target).set(set).whereInIds(idMap(o.meta, o.entity));
+          await qb.execute();
+          return;
+        }
+        if (o.kind === 'delete') {
+          const ids = o.entities.map((e) => idMap(o.meta, e));
+          await new SelectQueryBuilder(ds, qr).delete().from(o.meta.target).whereInIds(ids.length === 1 ? ids[0] : ids).execute();
+          return;
+        }
+        if (o.kind === 'junction-insert') {
+          const r = o.rel;
+          const owner = r.isOwning ? r : r.inverseRelation;
+          const ownCol = r.isOwning ? owner.joinColumns[0] : owner.inverseJoinColumns[0];
+          const otherCol = r.isOwning ? owner.inverseJoinColumns[0] : owner.joinColumns[0];
+          const pairs = o.pairs();
+          if (!pairs.length) return;
+          const cols = owner.joinColumns.concat(owner.inverseJoinColumns);
+          const qb = new SelectQueryBuilder(ds, qr).insert().into(r.junctionEntityMetadata.tableName);
+          const values = pairs.map(([e, id]) => ({ [ownCol.databaseName]: columnValue(ownCol.referencedColumn, e), [otherCol.databaseName]: id }));
+          const lit = (v) => qb.createParameter(v);
+          const sql = `INSERT INTO ${q(r.junctionEntityMetadata.tableName)}(${cols.map((c) => q(c.databaseName)).join(', ')}) VALUES ${values.map((v) => '(' + cols.map((c) => lit(v[c.databaseName])).join(', ') + ')').join(', ')}`;
+          const [s, p] = escapeQueryWithParameters(sql, qb.getParameters());
+          await qr.query(s, p);
+          return;
+        }
+        if (o.kind === 'junction-delete') {
+          const parts = [];
+          const params = {};
+          let n = 0;
+          for (const [r, id] of o.items) {
+            const owner = r.isOwning ? r : r.inverseRelation;
+            const ownCol = r.isOwning ? owner.joinColumns[0] : owner.inverseJoinColumns[0];
+            const otherCol = r.isOwning ? owner.inverseJoinColumns[0] : owner.joinColumns[0];
+            const a = `orm_param_${n++}`;
+            const b = `orm_param_${n++}`;
+            params[a] = columnValue(ownCol.referencedColumn, o.entity);
+            params[b] = id;
+            parts.push({ table: r.junctionEntityMetadata.tableName, sql: `(${q(ownCol.databaseName)} = :${a} AND ${q(otherCol.databaseName)} = :${b})` });
+          }
+          const byTable = new Map();
+          for (const p of parts) { if (!byTable.has(p.table)) byTable.set(p.table, []); byTable.get(p.table).push(p.sql); }
+          for (const [table, conds] of byTable) {
+            const [s, p] = escapeQueryWithParameters(`DELETE FROM ${q(table)} WHERE ${conds.join(' OR ')}`, params);
+            await qr.query(s, p);
+          }
+        }
+      }
+
+      // ------------------------------------------------------------ EntityManager e Repository
+      class EntityManager {
+        constructor(ds, queryRunner) {
+          this['@instanceof'] = Symbol.for('EntityManager');
+          Object.defineProperties(this, {
+            connection: { value: ds, enumerable: false },
+            dataSource: { value: ds, enumerable: false },
+            repositories: { value: new Map(), enumerable: false },
+          });
+          this.queryRunner = queryRunner;
+        }
+        meta(target) { return this.connection.getMetadata(target); }
+        getRepository(target) {
+          if (!this.repositories.has(target)) this.repositories.set(target, new Repository(target, this, this.queryRunner));
+          return this.repositories.get(target);
+        }
+        async transaction(a, b) {
+          const fn = typeof a === 'function' ? a : b;
+          if (typeof fn !== 'function') throw new TypeORMError('Transaction method requires callback in second parameter if isolation level is supplied.');
+          const qr = this.queryRunner || this.connection.createQueryRunner();
+          await qr.startTransaction();
+          try {
+            const result = await fn(qr.manager);
+            await qr.commitTransaction();
+            return result;
+          } catch (err) {
+            try { await qr.rollbackTransaction(); } catch (x) { /* ignora */ }
+            throw err;
+          }
+        }
+        async query(sql, params) { return (this.queryRunner || this.connection.createQueryRunner()).query(sql, params); }
+        createQueryBuilder(target, alias, queryRunner) {
+          if (alias) return this.connection.createQueryBuilder(target, alias, queryRunner || this.queryRunner);
+          return this.connection.createQueryBuilder(queryRunner || this.queryRunner);
+        }
+        hasId(target, entity) { return !!idMap(this.meta(entity === undefined ? target.constructor : target), entity === undefined ? target : entity); }
+        getId(target, entity) { const m = this.meta(entity === undefined ? target.constructor : target); const id = idMap(m, entity === undefined ? target : entity); return id && !m.hasMultiplePrimaryKeys ? id[m.primaryColumns[0].propertyName] : id; }
+        create(target, plain) {
+          const m = this.meta(target);
+          if (Array.isArray(plain)) return plain.map((p) => plainToEntity(m, createEntity(m), p));
+          return plainToEntity(m, createEntity(m), plain || {});
+        }
+        merge(target, entity, ...plains) { const m = this.meta(target); for (const p of plains) plainToEntity(m, entity, p); return entity; }
+        async preload(target, plain) {
+          const m = this.meta(target);
+          const id = idMap(m, plain);
+          if (!id) return undefined;
+          const e = await this.findOneBy(target, id);
+          return e ? this.merge(target, e, plain) : undefined;
+        }
+        splitTarget(op, args) {
+          if (args.length >= 2 && (typeof args[0] === 'string' || typeof args[0] === 'function' || isSchema(args[0]))) {
+            const v = args[1];
+            if (Array.isArray(v) ? v.some((x) => !isObj(x)) : !isObj(v)) throw new MustBeEntityError(op, v);
+            return [args[0], v];
+          }
+          const v = args[0];
+          if (Array.isArray(v) ? v.some((x) => !isObj(x)) : !isObj(v)) throw new MustBeEntityError(op, v);
+          const first = Array.isArray(v) ? v[0] : v;
+          const t = first && first.constructor && first.constructor !== Object ? first.constructor : 'Object';
+          return [t, v];
+        }
+        async save(...args) {
+          const [target, entity] = this.splitTarget('save', args);
+          if (Array.isArray(entity) && !entity.length) return entity;
+          return persist(this, this.meta(target), entity, 'save');
+        }
+        async remove(...args) {
+          const [target, entity] = this.splitTarget('remove', args);
+          if (Array.isArray(entity) && !entity.length) return entity;
+          return persist(this, this.meta(target), entity, 'remove');
+        }
+        async insert(target, entity) {
+          const m = this.meta(target);
+          return this.createQueryBuilder().insert().into(m.target).values(entity).execute();
+        }
+        criteriaCheck(op, criteria) {
+          if (criteria === undefined || criteria === null || criteria === '' || (Array.isArray(criteria) && !criteria.length) || (isObj(criteria) && !Array.isArray(criteria) && !(criteria instanceof Date) && !Object.keys(criteria).length)) {
+            throw new TypeORMError(`Empty criteria(s) are not allowed for the ${op} method.`);
+          }
+          return typeof criteria === 'string' || typeof criteria === 'number' || criteria instanceof Date || Array.isArray(criteria);
+        }
+        async update(target, criteria, partial) {
+          const byId = this.criteriaCheck('update', criteria);
+          const qb = this.createQueryBuilder().update(this.meta(target).target).set(partial);
+          return (byId ? qb.whereInIds(criteria) : qb.where(criteria)).execute();
+        }
+        async delete(target, criteria) {
+          const byId = this.criteriaCheck('delete', criteria);
+          const qb = this.createQueryBuilder().delete().from(this.meta(target).target);
+          return (byId ? qb.whereInIds(criteria) : qb.where(criteria)).execute();
+        }
+        async increment(target, conditions, propertyPath, value) {
+          const m = this.meta(target);
+          const c = m.findColumnWithPropertyPath(propertyPath);
+          if (!c) throw new EntityPropertyNotFoundError(propertyPath, m);
+          if (isNaN(Number(value))) throw new TypeORMError('Column value must be numeric');
+          return this.createQueryBuilder().update(m.target).set({ [propertyPath]: () => `${q(c.databaseName)} + ${value}` }).where(conditions).execute();
+        }
+        async decrement(target, conditions, propertyPath, value) {
+          const m = this.meta(target);
+          const c = m.findColumnWithPropertyPath(propertyPath);
+          if (!c) throw new EntityPropertyNotFoundError(propertyPath, m);
+          if (isNaN(Number(value))) throw new TypeORMError('Column value must be numeric');
+          return this.createQueryBuilder().update(m.target).set({ [propertyPath]: () => `${q(c.databaseName)} - ${value}` }).where(conditions).execute();
+        }
+        qb(target, options) {
+          const m = this.meta(target);
+          const qb = this.createQueryBuilder(m.target, (options && options.comment && false) || m.targetName || m.name);
+          return qb.setFindOptions(options || {});
+        }
+        async find(target, options) { return this.qb(target, options).getMany(); }
+        async findBy(target, where) { return this.qb(target, { where }).getMany(); }
+        async findAndCount(target, options) { return this.qb(target, options).getManyAndCount(); }
+        async findAndCountBy(target, where) { return this.qb(target, { where }).getManyAndCount(); }
+        async findOne(target, options) {
+          if (!options || !options.where) throw new Error('You must provide selection conditions in order to find a single row.');
+          return this.qb(target, Object.assign({}, options, { take: 1 })).getOne();
+        }
+        async findOneBy(target, where) { return this.qb(target, { where, take: 1 }).getOne(); }
+        async findOneOrFail(target, options) {
+          const e = await this.findOne(target, options);
+          if (e === null) throw new EntityNotFoundError(target, options);
+          return e;
+        }
+        async findOneByOrFail(target, where) {
+          const e = await this.findOneBy(target, where);
+          if (e === null) throw new EntityNotFoundError(target, where);
+          return e;
+        }
+        async count(target, options) { return this.qb(target, options).getCount(); }
+        async countBy(target, where) { return this.qb(target, { where }).getCount(); }
+        async exists(target, options) { return this.qb(target, options).getExists(); }
+        async existsBy(target, where) { return this.qb(target, { where }).getExists(); }
+        async callAggregateFun(target, fn, column, where = {}) {
+          const m = this.meta(target);
+          const c = m.findColumnWithPropertyPath(column);
+          if (!c) throw new EntityPropertyNotFoundError(column, m);
+          const qb = this.createQueryBuilder(m.target, m.name).setFindOptions({ where });
+          const r = await qb.select(`${fn}(${q(qb.alias)}.${q(c.databaseName)})`, fn).getRawOne();
+          return r[fn] === null || r[fn] === undefined ? null : parseFloat(r[fn]);
+        }
+        sum(t, c, w) { return this.callAggregateFun(t, 'SUM', c, w); }
+        average(t, c, w) { return this.callAggregateFun(t, 'AVG', c, w); }
+        minimum(t, c, w) { return this.callAggregateFun(t, 'MIN', c, w); }
+        maximum(t, c, w) { return this.callAggregateFun(t, 'MAX', c, w); }
+        async clear(target) { return this.query(`DELETE FROM ${q(this.meta(target).tablePath)}`); }
+        release() { return this.queryRunner ? this.queryRunner.release() : Promise.resolve(); }
+      }
+
+      class Repository {
+        constructor(target, manager, queryRunner) {
+          this.target = target;
+          Object.defineProperty(this, 'manager', { value: manager, enumerable: false });
+          this.queryRunner = queryRunner;
+        }
+        get metadata() { return this.manager.connection.getMetadata(this.target); }
+        createQueryBuilder(alias, queryRunner) { return this.manager.createQueryBuilder(this.metadata.target, alias || this.metadata.targetName || this.metadata.name, queryRunner || this.queryRunner); }
+        hasId(e) { return this.manager.hasId(this.metadata.target, e); }
+        getId(e) { return this.manager.getId(this.metadata.target, e); }
+        create(plain) { return this.manager.create(this.metadata.target, plain); }
+        merge(entity, ...plains) { return this.manager.merge(this.metadata.target, entity, ...plains); }
+        preload(plain) { return this.manager.preload(this.metadata.target, plain); }
+        save(entity) { return this.manager.save(this.metadata.target, entity); }
+        remove(entity) { return this.manager.remove(this.metadata.target, entity); }
+        insert(entity) { return this.manager.insert(this.metadata.target, entity); }
+        update(criteria, partial) { return this.manager.update(this.metadata.target, criteria, partial); }
+        delete(criteria) { return this.manager.delete(this.metadata.target, criteria); }
+        increment(c, p, v) { return this.manager.increment(this.metadata.target, c, p, v); }
+        decrement(c, p, v) { return this.manager.decrement(this.metadata.target, c, p, v); }
+        count(o) { return this.manager.count(this.metadata.target, o); }
+        countBy(w) { return this.manager.countBy(this.metadata.target, w); }
+        exists(o) { return this.manager.exists(this.metadata.target, o); }
+        existsBy(w) { return this.manager.existsBy(this.metadata.target, w); }
+        sum(c, w) { return this.manager.sum(this.metadata.target, c, w); }
+        average(c, w) { return this.manager.average(this.metadata.target, c, w); }
+        minimum(c, w) { return this.manager.minimum(this.metadata.target, c, w); }
+        maximum(c, w) { return this.manager.maximum(this.metadata.target, c, w); }
+        find(o) { return this.manager.find(this.metadata.target, o); }
+        findBy(w) { return this.manager.findBy(this.metadata.target, w); }
+        findAndCount(o) { return this.manager.findAndCount(this.metadata.target, o); }
+        findAndCountBy(w) { return this.manager.findAndCountBy(this.metadata.target, w); }
+        findOne(o) { return this.manager.findOne(this.metadata.target, o); }
+        findOneBy(w) { return this.manager.findOneBy(this.metadata.target, w); }
+        findOneOrFail(o) { return this.manager.findOneOrFail(this.metadata.target, o); }
+        findOneByOrFail(w) { return this.manager.findOneByOrFail(this.metadata.target, w); }
+        query(sql, params) { return this.manager.query(sql, params); }
+        clear() { return this.manager.clear(this.metadata.target); }
+        extend(custom) { return Object.assign(Object.create(this), custom); }
+      }
+
+      // ------------------------------------------------------------ synchronize
+      function columnDef(c, multiPk) {
+        let s = q(c.databaseName) + ' ' + (c.enum ? 'varchar' : fullType(c));
+        if (c.enum) s += ` CHECK( ${q(c.databaseName)} IN (${c.enum.map((v) => `'${v}'`).join(',')}) )`;
+        if (c.isPrimary && !multiPk) s += ' PRIMARY KEY';
+        if (c.isGenerated && c.generationStrategy === 'increment') s += ' AUTOINCREMENT';
+        if (c.isNullable !== true) s += ' NOT NULL';
+        const d = defaultSql(c);
+        if (d !== undefined) s += ` DEFAULT (${d})`;
+        return s;
+      }
+      function constraintDefs(m, withFks) {
+        const out = [];
+        for (const u of m.uniques) out.push(`CONSTRAINT ${q(u.name)} UNIQUE (${u.columns.map(q).join(', ')})`);
+        for (const ch of m.checks) out.push(`CONSTRAINT ${q(ch.name)} CHECK (${ch.expression})`);
+        if (withFks) {
+          for (const fk of m.foreignKeys) {
+            let s = `CONSTRAINT ${q(naming.foreignKeyName(m.tableName, fk.columns))} FOREIGN KEY (${fk.columns.map(q).join(', ')}) REFERENCES ${q(fk.refTable)} (${fk.refColumns.map(q).join(', ')})`;
+            if (fk.onDelete) s += ` ON DELETE ${fk.onDelete}`;
+            if (fk.onUpdate) s += ` ON UPDATE ${fk.onUpdate}`;
+            out.push(s);
+          }
+        }
+        if (m.primaryColumns.length > 1) out.push(`PRIMARY KEY (${m.primaryColumns.map((c) => q(c.databaseName)).join(', ')})`);
+        return out;
+      }
+      const expectedColumns = (m) => m.columns.map((c) => [c.databaseName, columnDef(c, m.primaryColumns.length > 1)]);
+      const tableSql = (name, cols, constraints) => `CREATE TABLE ${q(name)} (${cols.map((c) => c[1]).concat(constraints).join(', ')})`;
+      const createTableSql = (m, withFks, name) => tableSql(name || m.tableName, expectedColumns(m), constraintDefs(m, withFks));
+      // la definizione salvata in sqlite_master: colonne (in ordine) e vincoli
+      function parseTableSql(sql) {
+        const body = sql.slice(sql.indexOf('(') + 1, sql.lastIndexOf(')'));
+        const items = [];
+        let depth = 0;
+        let quote = null;
+        let cur = '';
+        for (const ch of body) {
+          if (quote) { if (ch === quote) quote = null; cur += ch; continue; }
+          if (ch === '"' || ch === "'" || ch === '`') { quote = ch; cur += ch; continue; }
+          if (ch === '(') depth++;
+          if (ch === ')') depth--;
+          if (ch === ',' && depth === 0) { items.push(cur.trim()); cur = ''; continue; }
+          cur += ch;
+        }
+        if (cur.trim()) items.push(cur.trim());
+        const cols = [];
+        const constraints = [];
+        for (const it of items) {
+          if (/^(CONSTRAINT|PRIMARY\s+KEY|UNIQUE|CHECK|FOREIGN\s+KEY)\b/i.test(it)) { constraints.push(it); continue; }
+          const m = /^"((?:[^"]|"")*)"|^`([^`]*)`|^\[([^\]]*)\]|^(\S+)/.exec(it);
+          const name = m ? (m[1] !== undefined ? m[1].replace(/""/g, '"') : m[2] || m[3] || m[4]) : it;
+          cols.push([name, it]);
+        }
+        return { cols, constraints };
+      }
+      const createIndexSql = (m, ix) => `CREATE ${ix.unique ? 'UNIQUE ' : ''}INDEX ${q(ix.name)} ON ${q(m.tableName)} (${ix.columns.map(q).join(', ')}) ${ix.where ? 'WHERE ' + ix.where : ''}`;
+      async function recreateTable(qr, m, newCols, oldNames, dropIndexes, positional) {
+        for (const name of dropIndexes) await qr.query(`DROP INDEX ${q(name)}`);
+        const tmp = `temporary_${m.tableName}`;
+        await qr.query(tableSql(tmp, newCols, constraintDefs(m, true)));
+        let newNames = newCols.map((c) => c[0]);
+        let old = oldNames.slice();
+        if (!positional) {
+          newNames = newNames.filter((n) => old.includes(n));
+          old = newNames.slice();
+        } else if (old.length < newNames.length) newNames = newNames.filter((n) => old.includes(n));
+        else if (old.length > newNames.length) old = old.filter((n) => newNames.includes(n));
+        if (newNames.length) await qr.query(`INSERT INTO ${q(tmp)}(${newNames.map(q).join(', ')}) SELECT ${old.map(q).join(', ')} FROM ${q(m.tableName)}`);
+        await qr.query(`DROP TABLE ${q(m.tableName)}`);
+        await qr.query(`ALTER TABLE ${q(tmp)} RENAME TO ${q(m.tableName)}`);
+        for (const ix of m.indices) await qr.query(createIndexSql(m, ix));
+      }
+      async function synchronize(ds) {
+        const qr = ds.createQueryRunner();
+        const metas = ds.entityMetadatas.concat(ds.junctionMetadatas);
+        const db = ds.driver.db;
+        db.pragma('foreign_keys = OFF');
+        await qr.startTransaction();
+        try {
+          const list = metas.map((m) => `'${m.tableName}'`).join(',');
+          const tables = metas.length ? await qr.query(`SELECT * FROM "sqlite_master" WHERE "type" = 'table' AND "name" IN (${list})`) : [];
+          if (metas.length) await qr.query(`SELECT * FROM "sqlite_master" WHERE "type" = 'index' AND "tbl_name" IN (${list})`);
+          const indexList = new Map(tables.map((t) => [t.name, db.pragma(`index_list(${q(t.name)})`)]));
+          for (const t of tables) for (const ix of indexList.get(t.name).filter((x) => x.origin === 'u')) await qr.query(`PRAGMA index_info("${ix.name}")`);
+          for (const t of tables) for (const ix of indexList.get(t.name).filter((x) => x.origin === 'c')) await qr.query(`PRAGMA index_info("${ix.name}")`);
+          await qr.query('SELECT * FROM "sqlite_master" WHERE "type" = \'table\' AND "name" = ?', ['typeorm_metadata']);
+          const created = [];
+          for (const m of metas) {
+            if (tables.some((t) => t.name === m.tableName)) continue;
+            await qr.query(createTableSql(m, false));
+            for (const ix of m.indices) await qr.query(createIndexSql(m, ix));
+            created.push(m);
+          }
+          for (const m of metas) {
+            if (created.includes(m)) {
+              if (m.foreignKeys.length) await recreateTable(qr, m, expectedColumns(m), m.columns.map((c) => c.databaseName), m.indices.map((ix) => ix.name), true);
+              continue;
+            }
+            const existing = tables.find((t) => t.name === m.tableName);
+            const myIndexes = (indexList.get(m.tableName) || []).filter((x) => x.origin === 'c').map((x) => x.name);
+            const old = parseTableSql(existing.sql || '');
+            const want = expectedColumns(m);
+            const wantNames = want.map((c) => c[0]);
+            const oldNames = old.cols.map((c) => c[0]);
+            const dropped = oldNames.filter((n) => !wantNames.includes(n));
+            const added = want.filter((c) => !oldNames.includes(c[0]));
+            const changed = want.filter((c) => oldNames.includes(c[0]) && old.cols.find((o) => o[0] === c[0])[1] !== c[1]);
+            const wantCons = constraintDefs(m, true);
+            const sameCons = wantCons.length === old.constraints.length && wantCons.every((c) => old.constraints.includes(c));
+            if (dropped.length || added.length || changed.length || !sameCons) {
+              // una colonna sparita e una nuova dello stesso tipo: TypeORM la considera rinominata
+              const typeOf = (def) => (def.replace(/^("(?:[^"]|"")*"|\S+)\s*/, '').split(/\s/)[0] || '').toLowerCase();
+              const rename = dropped.length === 1 && added.length === 1 && typeOf(old.cols.find((o) => o[0] === dropped[0])[1]) === typeOf(added[0][1]);
+              const newCols = [];
+              for (const [n] of old.cols) {
+                if (dropped.includes(n)) { if (rename) newCols.push(added[0]); continue; }
+                newCols.push(want.find((c) => c[0] === n));
+              }
+              for (const c of added) if (!newCols.includes(c)) newCols.push(c);
+              await recreateTable(qr, m, newCols, oldNames, myIndexes, rename || (!dropped.length && !added.length));
+              continue;
+            }
+            for (const name of myIndexes) if (!m.indices.some((ix) => ix.name === name)) await qr.query(`DROP INDEX ${q(name)}`);
+            for (const ix of m.indices) if (!myIndexes.includes(ix.name)) await qr.query(createIndexSql(m, ix));
+          }
+          await qr.commitTransaction();
+        } catch (err) {
+          try { await qr.rollbackTransaction(); } catch (x) { /* ignora */ }
+          throw err;
+        } finally {
+          db.pragma('foreign_keys = ON');
+        }
+      }
+      async function dropDatabase(ds) {
+        const qr = ds.createQueryRunner();
+        await qr.query('PRAGMA foreign_keys = OFF');
+        const ours = !qr.isTransactionActive;
+        if (ours) await qr.startTransaction();
+        try {
+          const views = await qr.query('SELECT \'DROP VIEW "\' || name || \'";\' as query FROM "sqlite_master" WHERE "type" = \'view\'');
+          for (const v of views) await qr.query(v.query);
+          const tables = await qr.query('SELECT \'DROP TABLE "\' || name || \'";\' as query FROM "sqlite_master" WHERE "type" = \'table\' AND "name" != \'sqlite_sequence\'');
+          for (const t of tables) await qr.query(t.query);
+          if (ours) await qr.commitTransaction();
+        } catch (err) {
+          if (ours) { try { await qr.rollbackTransaction(); } catch (x) { /* ignora */ } }
+          throw err;
+        } finally {
+          await qr.query('PRAGMA foreign_keys = ON');
+        }
+      }
+
+      // ------------------------------------------------------------ migrazioni
+      function buildMigrations(ds) {
+        const list = [];
+        const strings = [];
+        const walk = (v) => {
+          if (typeof v === 'string') strings.push(v);
+          else if (Array.isArray(v)) v.forEach(walk);
+          else if (typeof v === 'function' || isObj(v)) list.push(v);
+        };
+        walk(ds.options.migrations || []);
+        return list.concat(importFromGlobs(strings).filter((v) => typeof v === 'function')).map((m) => (typeof m === 'function' ? new m() : m));
+      }
+      function sourceMigrations(ds) {
+        const all = ds.migrations.map((inst) => {
+          const name = inst.name || inst.constructor.name;
+          const ts = parseInt(String(name).slice(-13), 10);
+          if (!ts || isNaN(ts)) throw new TypeORMError(`${name} migration name is wrong. Migration class name should have a JavaScript timestamp appended.`);
+          return new Migration(undefined, ts, name, inst);
+        });
+        const names = all.map((m) => m.name);
+        const dup = Array.from(new Set(names.filter((n, i) => names.indexOf(n) < i)));
+        if (dup.length) throw Error(`Duplicate migrations: ${dup.join(', ')}`);
+        return all.sort((a, b) => a.timestamp - b.timestamp);
+      }
+      async function migrationsTable(ds, qr) {
+        const t = ds.options.migrationsTableName || 'migrations';
+        if (!(await qr.hasTable(t))) await qr.query(`CREATE TABLE ${q(t)} ("id" integer PRIMARY KEY AUTOINCREMENT NOT NULL, "timestamp" bigint NOT NULL, "name" varchar NOT NULL)`);
+        const rows = await qr.query(`SELECT * FROM ${q(t)} ${q(t)} ORDER BY ${q('id')} DESC`);
+        return { table: t, executed: rows.map((r) => new Migration(r.id, parseInt(r.timestamp), r.name)) };
+      }
+      async function runMigrations(ds, options = {}) {
+        const qr = ds.createQueryRunner();
+        const log = ds.logger;
+        const { table, executed } = await migrationsTable(ds, qr);
+        const all = sourceMigrations(ds);
+        const last = executed.slice().sort((a, b) => b.timestamp - a.timestamp)[0];
+        const pending = all.filter((m) => !executed.find((e) => e.name === m.name));
+        if (!pending.length) { log.logSchemaBuild('No migrations are pending'); return []; }
+        log.logSchemaBuild(`${executed.length} migrations are already loaded in the database.`);
+        log.logSchemaBuild(`${all.length} migrations were found in the source code.`);
+        if (last) log.logSchemaBuild(`${last.name} is the last executed migration. It was executed on ${new Date(last.timestamp).toString()}.`);
+        log.logSchemaBuild(`${pending.length} migrations are new migrations must be executed.`);
+        const mode = options.transaction || 'all';
+        ds.driver.db.pragma('foreign_keys = OFF');
+        let ours = false;
+        try {
+          if (mode === 'all' && !qr.isTransactionActive) { await qr.startTransaction(); ours = true; }
+          const done = [];
+          for (const m of pending) {
+            if (mode === 'each' && !qr.isTransactionActive) await qr.startTransaction();
+            try {
+              if (!options.fake) await m.instance.up(qr);
+              await qr.query(`INSERT INTO ${q(table)}(${q('timestamp')}, ${q('name')}) VALUES (${m.timestamp}, ?)`, [m.name]);
+              if (mode === 'each') await qr.commitTransaction();
+            } catch (err) {
+              log.logMigration(`Migration "${m.name}" failed, error: ${err && err.message}`);
+              if (mode === 'each' && qr.isTransactionActive) { try { await qr.rollbackTransaction(); } catch (x) { /* ignora */ } }
+              throw err;
+            }
+            done.push(m);
+            log.logSchemaBuild(`Migration ${m.name} has been ${options.fake ? '(fake) ' : ''}executed successfully.`);
+          }
+          if (ours) await qr.commitTransaction();
+          return done;
+        } catch (err) {
+          if (ours) { try { await qr.rollbackTransaction(); } catch (x) { /* ignora */ } }
+          throw err;
+        } finally {
+          ds.driver.db.pragma('foreign_keys = ON');
+        }
+      }
+      async function undoLastMigration(ds, options = {}) {
+        const qr = ds.createQueryRunner();
+        const log = ds.logger;
+        const { table, executed } = await migrationsTable(ds, qr);
+        if (!executed.length) { log.logSchemaBuild('No migrations were found in the database. Nothing to revert!'); return; }
+        const last = executed[0];
+        const m = sourceMigrations(ds).find((x) => x.name === last.name);
+        if (!m) throw new TypeORMError(`No migration ${last.name} was found in the source code. Make sure you have this migration in your migrations folder.`);
+        log.logSchemaBuild(`${executed.length} migrations are already loaded in the database.`);
+        log.logSchemaBuild(`${last.name} is the last executed migration. It was executed on ${new Date(last.timestamp).toString()}.`);
+        log.logSchemaBuild('Now reverting it...');
+        const mode = options.transaction || 'all';
+        ds.driver.db.pragma('foreign_keys = OFF');
+        let ours = false;
+        try {
+          if (mode !== 'none' && !qr.isTransactionActive) { await qr.startTransaction(); ours = true; }
+          if (!options.fake) await m.instance.down(qr);
+          await qr.query(`DELETE FROM ${q(table)} WHERE ${q('timestamp')} = ${m.timestamp} AND ${q('name')} = ?`, [m.name]);
+          if (ours) await qr.commitTransaction();
+          log.logSchemaBuild(`Migration ${m.name} has been ${options.fake ? '(fake) ' : ''}reverted successfully.`);
+        } catch (err) {
+          if (ours) { try { await qr.rollbackTransaction(); } catch (x) { /* ignora */ } }
+          throw err;
+        } finally {
+          ds.driver.db.pragma('foreign_keys = ON');
+        }
+      }
+      async function showMigrations(ds) {
+        const qr = ds.createQueryRunner();
+        const { executed } = await migrationsTable(ds, qr);
+        let pending = false;
+        for (const m of sourceMigrations(ds)) {
+          const e = executed.find((x) => x.name === m.name);
+          if (e) ds.logger.logSchemaBuild(`[X] ${e.id} ${m.name}`);
+          else { pending = true; ds.logger.logSchemaBuild(`[ ] ${m.name}`); }
+        }
+        return pending;
+      }
+
+      // ------------------------------------------------------------ DataSource
+      class DataSource {
+        constructor(options) {
+          this['@instanceof'] = Symbol.for('DataSource');
+          this.options = options || {};
+          this.isInitialized = false;
+          this.entityMetadatas = [];
+          this.migrations = [];
+          Object.defineProperties(this, {
+            logger: { value: makeLogger(this.options.logging), writable: true, enumerable: false },
+            junctionMetadatas: { value: [], writable: true, enumerable: false },
+            initializing: { value: false, writable: true, enumerable: false },
+          });
+          this.name = this.options.name || 'default';
+          this.driver = createDriver(this);
+          this.manager = new EntityManager(this);
+        }
+        get isConnected() { return this.isInitialized; }
+        async initialize() {
+          if (this.isInitialized || this.initializing) throw new CannotConnectAlreadyConnectedError();
+          this.initializing = true;
+          try {
+            this.driver.connect();
+            this.isInitialized = true;
+            try {
+              const { metas, junctions } = buildMetadatas(this);
+              this.entityMetadatas = metas;
+              this.junctionMetadatas = junctions;
+              this.migrations = buildMigrations(this);
+              if (this.options.dropSchema) await dropDatabase(this);
+              if (this.options.migrationsRun) await runMigrations(this, { transaction: this.options.migrationsTransactionMode });
+              if (this.options.synchronize) await synchronize(this);
+            } catch (err) {
+              await this.destroy();
+              throw err;
+            }
+          } finally {
+            this.initializing = false;
+          }
+          return this;
+        }
+        async destroy() {
+          if (!this.isInitialized) throw new CannotExecuteNotConnectedError();
+          this.driver.disconnect();
+          this.isInitialized = false;
+        }
+        setOptions(o) {
+          Object.assign(this.options, o);
+          if (o && 'logging' in o) this.logger = makeLogger(this.options.logging);
+          return this;
+        }
+        findMetadata(target) {
+          if (target === undefined || target === null) return undefined;
+          return this.entityMetadatas.find((m) => m.schema === target || m.target === target || (isSchema(target) && m.name === target.options.name) || (typeof target === 'string' && (m.name === target || m.tableName === target)))
+            || (typeof target === 'string' ? this.junctionMetadatas.find((m) => m.tableName === target) : undefined);
+        }
+        hasMetadata(target) { return !!this.findMetadata(target); }
+        getMetadata(target) {
+          const m = this.findMetadata(target);
+          if (!m) throw new EntityMetadataNotFoundError(target);
+          return m;
+        }
+        getRepository(target) { return this.manager.getRepository(target); }
+        createQueryRunner() { return this.driver.queryRunner; }
+        createEntityManager(qr) { return new EntityManager(this, qr); }
+        createQueryBuilder(a, alias, queryRunner) {
+          if (a instanceof QueryRunner) return new SelectQueryBuilder(this, a);
+          if (alias) {
+            const m = this.getMetadata(a);
+            return new SelectQueryBuilder(this, queryRunner).select(alias).from(m.target, alias);
+          }
+          return new SelectQueryBuilder(this, a);
+        }
+        transaction(a, b) { return this.manager.transaction(a, b); }
+        query(sql, params) { return this.manager.query(sql, params); }
+        synchronize() { return synchronize(this); }
+        dropDatabase() { return dropDatabase(this); }
+        runMigrations(o) { return runMigrations(this, o); }
+        undoLastMigration(o) { return undoLastMigration(this, o); }
+        showMigrations() { return showMigrations(this); }
+      }
+
+      // i decoratori (@Entity, @Column…) servono a TypeScript: in JavaScript si usa EntitySchema
+      const decorator = (n) => function () { throw unsupported(`Il decoratore @${n} (serve TypeScript): in JavaScript descrivi l'entità con new EntitySchema({ … })`); };
+      const decorators = {};
+      for (const n of ['Entity', 'Column', 'PrimaryColumn', 'PrimaryGeneratedColumn', 'CreateDateColumn', 'UpdateDateColumn', 'ManyToOne', 'OneToMany', 'ManyToMany', 'OneToOne', 'JoinColumn', 'JoinTable', 'Index', 'Unique', 'Check']) decorators[n] = decorator(n);
+
+      return Object.assign({
+        DataSource, EntitySchema, EntityManager, Repository, QueryRunner, SelectQueryBuilder, UpdateQueryBuilder, DeleteQueryBuilder, InsertQueryBuilder,
+        Brackets, NotBrackets, FindOperator, EqualOperator, InsertResult, UpdateResult, DeleteResult, Migration,
+        Table, TableColumn, TableIndex, TableForeignKey,
+        TypeORMError, QueryFailedError, EntityNotFoundError, EntityMetadataNotFoundError, EntityPropertyNotFoundError, MustBeEntityError,
+        MissingDriverError, DriverPackageNotInstalledError, DriverOptionNotSetError, CannotConnectAlreadyConnectedError, CannotExecuteNotConnectedError,
+        MissingPrimaryColumnError, TransactionNotStartedError,
+      }, operators, decorators);
+    }
+
     // pacchetti npm "integrati" nel simulatore: node_modules/<nome>/index.js contiene solo un marcatore
     // (sub: altri file del pacchetto, per require('dotenv/config') o require('zod/v4'))
     const BUILTIN_PKGS = {
@@ -3740,6 +6300,7 @@
       dotenv: { version: '18.0.9', create: createDotenv, sub: { 'config.js': 'dotenv/config' } },
       ejs: { version: '7.0.2', create: createEjs },
       'better-sqlite3': { version: '12.4.1', create: createBetterSqlite3 },
+      typeorm: { version: '1.1.2', create: createTypeorm },
       'dotenv/config': { internal: true, create: () => { getBuiltin('dotenv').config({ quiet: true }); return {}; } },
     };
     const builtinCache = new Map();
