@@ -17,6 +17,8 @@ function spawn(onMsg) {
     setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
     TextEncoder, TextDecoder, URL, URLSearchParams, performance, crypto: globalThis.crypto,
     atob, btoa, fetch, Response, Headers, console, MessageChannel,
+    // SQLite: nel browser il simulatore usa sql.js (WebAssembly); qui il vero node:sqlite di Node
+    __nodelabSqlite: require('node:sqlite'),
   };
   self.self = self;
   const ctx = vm.createContext(self);

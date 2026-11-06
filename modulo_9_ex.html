@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esercitazioni Modulo 9 — CADMO NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white prose-code">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <div class="flex items-center gap-5 text-sm">
+          <a href="modulo_9.html" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="presentation" class="w-4 h-4"></i><span class="hidden sm:inline">Slide</span></a>
+          <a href="./" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Home</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="bg-gray-950 border-b border-gray-800 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center animate-fade-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-900/30 border border-emerald-500/30 text-xs text-emerald-300 font-mono mb-4 uppercase tracking-wider">
+        <i data-lucide="database" class="w-4 h-4"></i> SQL · JOIN · node:sqlite · injection · migrazioni
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4">Esercitazioni Modulo 9</h1>
+      <p class="text-gray-400 text-lg">Scrivi SQL nella console, indovina che cosa restituiscono le query, attacca (e difendi) una ricerca vulnerabile e completa cinque laboratori, fino al boss del repository SQL.</p>
+      <p class="mt-4 text-sm font-mono text-gray-500"><span data-lab-progress="m9-primo,m9-query,m9-injection,m9-migrazioni,m9-boss"></span> · i progressi restano salvati in questo browser</p>
+    </div>
+  </header>
+
+  <!-- Indice -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+    <div class="flex flex-wrap gap-2 justify-center text-sm">
+      <a href="#guida" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">1 · Guida rapida</a>
+      <a href="#prova" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">2 · Console e indovina</a>
+      <a href="#biblioteca" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">3 · Biblioteca 6.0</a>
+      <a href="#lab" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">4 · Laboratori</a>
+      <a href="#pc" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">5 · Sul tuo PC</a>
+      <a href="#quiz" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">6 · Quiz</a>
+    </div>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-20">
+
+    <!-- 1. GUIDA RAPIDA -->
+    <section id="guida" class="scroll-mt-20 animate-fade-in delay-100">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="book-open" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">1. Guida rapida</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-green-400 mb-2">Le tabelle</h3>
+          <pre class="code small"><code class="language-sql">CREATE TABLE IF NOT EXISTS libri (
+  id        INTEGER PRIMARY KEY,
+  titolo    TEXT NOT NULL,
+  isbn      TEXT UNIQUE,
+  anno      INTEGER CHECK (anno > 1450),
+  autore_id INTEGER REFERENCES autori(id)
+);
+ALTER TABLE libri ADD COLUMN genere TEXT;</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-cyan-400 mb-2">Leggere</h3>
+          <pre class="code small"><code class="language-sql">SELECT titolo, anno FROM libri
+WHERE anno &lt; 1960 AND titolo LIKE '%il%'
+ORDER BY anno DESC LIMIT 10 OFFSET 20;
+
+SELECT genere, COUNT(*) AS n FROM libri
+GROUP BY genere HAVING n &gt; 1;
+-- NULL: IS NULL / IS NOT NULL (mai = NULL)</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-purple-400 mb-2">JOIN e modifiche</h3>
+          <pre class="code small"><code class="language-sql">SELECT l.titolo, a.nome AS autore
+FROM libri l JOIN autori a ON a.id = l.autore_id;
+-- LEFT JOIN: anche le righe "senza coppia" (NULL)
+INSERT INTO autori (nome) VALUES ('Primo Levi');
+UPDATE libri SET anno = 1958 WHERE id = 1;  -- WHERE!
+DELETE FROM libri WHERE id = 9;             -- WHERE!
+BEGIN; … COMMIT;  -- (o ROLLBACK)</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-yellow-400 mb-2">node:sqlite</h3>
+          <pre class="code small"><code class="language-javascript">const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync('biblioteca.db');
+db.exec('CREATE TABLE …');                     // schema
+const st = db.prepare('SELECT * FROM libri WHERE id = ?');
+st.get(1);        // una riga o undefined
+st.all();         // array di righe
+db.prepare('INSERT …').run(a, b); // { changes, lastInsertRowid }</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-red-400 mb-2">Contro la SQL injection</h3>
+          <pre class="code small"><code class="language-javascript">// ❌ mai i dati del client nella stringa SQL
+db.prepare(`… WHERE autore = '${req.query.autore}'`);
+// ✅ segnaposto: posizionali o con nome
+db.prepare('… WHERE autore = ?').all(autore);
+db.prepare('… WHERE id = :id').get({ id });
+db.prepare('… LIKE ?').all(`%${q}%`);   // % nel valore
+// colonne, ORDER BY: whitelist (o z.enum)</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-emerald-400 mb-2">Errori, migrazioni, seed</h3>
+          <pre class="code small"><code class="language-javascript">err.code === 'ERR_SQLITE_ERROR'
+err.errcode === 2067   // UNIQUE      → 409
+err.errcode === 787    // FOREIGN KEY → 409 / 400
+// migrazioni/001-schema.sql, 002-isbn.sql …
+db.prepare('PRAGMA user_version').get();  // versione
+// solo i file nuovi, ognuno in BEGIN … COMMIT
+// seed: solo se COUNT(*) = 0</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. CONSOLE E INDOVINA -->
+    <section id="prova" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-round" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">2. Console SQL e "che cosa restituisce?"</h2>
+      </div>
+
+      <h3 class="text-xl font-bold text-white mt-6 mb-2">La console SQL</h3>
+      <p class="text-gray-400 mb-4">Un vero SQLite con quattro tabelle: <code class="inline">autori</code>, <code class="inline">libri</code>, <code class="inline">utenti</code> e <code class="inline">prestiti</code> (la tabella ponte). Prova gli esempi, poi le sfide qui sotto. Il database resta tra un'esecuzione e l'altra: <kbd>Ripristina</kbd> lo rimette com'era. <kbd>Ctrl</kbd>+<kbd>Invio</kbd> esegue.</p>
+      <div id="console-sql" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <details class="mt-4 bg-gray-800/40 border border-gray-700 rounded-xl p-5">
+        <summary class="cursor-pointer font-semibold text-gray-200">🎯 Sei sfide per la console (con le soluzioni)</summary>
+        <ol class="list-decimal list-inside text-gray-300 space-y-2 mt-4 marker:text-emerald-400">
+          <li>I libri di genere <code class="inline">romanzo</code> disponibili, in ordine alfabetico.</li>
+          <li>Il libro più recente (una riga sola).</li>
+          <li>Per ogni utente, quanti prestiti ha fatto in tutto (anche chi ne ha 0).</li>
+          <li>I titoli dei libri che <strong>nessuno</strong> ha mai preso in prestito.</li>
+          <li>Restituisci il prestito di "Il nome della rosa" (oggi) e rendi di nuovo disponibile il libro, in una transazione.</li>
+          <li>Aggiungi un nuovo utente e prova a inserirne un altro con la stessa email: che cosa succede?</li>
+        </ol>
+        <button onclick="toggleSolution('sol-console')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela le soluzioni</button>
+        <div id="sol-console" class="solution-container mt-4">
+          <pre class="code small"><code class="language-sql">-- 1
+SELECT titolo FROM libri WHERE genere = 'romanzo' AND disponibile = 1 ORDER BY titolo;
+-- 2
+SELECT titolo, anno FROM libri ORDER BY anno DESC LIMIT 1;
+-- 3 (LEFT JOIN + COUNT della colonna, non COUNT(*))
+SELECT u.nome, COUNT(p.id) AS prestiti
+FROM utenti u LEFT JOIN prestiti p ON p.utente_id = u.id
+GROUP BY u.id ORDER BY prestiti DESC;
+-- 4 (LEFT JOIN e poi solo le righe senza coppia; oppure NOT IN / NOT EXISTS)
+SELECT l.titolo FROM libri l LEFT JOIN prestiti p ON p.libro_id = l.id WHERE p.id IS NULL;
+-- 5
+BEGIN;
+UPDATE prestiti SET al = date('now') WHERE libro_id = 7 AND al IS NULL;
+UPDATE libri SET disponibile = 1 WHERE id = 7;
+COMMIT;
+-- 6: la seconda INSERT fallisce con "UNIQUE constraint failed: utenti.email"
+INSERT INTO utenti (nome, email) VALUES ('Luca', 'luca@example.com');
+INSERT INTO utenti (nome, email) VALUES ('Luca B.', 'luca@example.com');</code></pre>
+        </div>
+      </details>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Che cosa restituisce?</h3>
+      <p class="text-gray-400 mb-4">Clicca le righe del risultato nell'ordine giusto. Alcune possono comparire più di una volta, altre mai!</p>
+      <div id="order-game"></div>
+    </section>
+
+    <!-- 3. BIBLIOTECA 6.0 -->
+    <section id="biblioteca" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="library" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">3. Biblioteca 6.0</h2>
+      </div>
+      <p class="text-gray-400 mb-4">La Biblioteca passa da un file JSON a <strong>SQLite</strong>: all'avvio <code class="inline">db.js</code> applica le migrazioni e il seed, i repository parlano SQL (con le JOIN), i vincoli violati diventano 409. Sotto il log c'è il contenuto di <code class="inline">data/biblioteca.db</code>, aggiornato dopo ogni richiesta. Il pulsante <kbd>↻</kbd> riavvia il server mantenendo il file; quello con il database rimette i dati iniziali.</p>
+      <div id="inspector" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <button onclick="toggleSolution('codice-server')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="file-code-2" class="w-4 h-4"></i> Mostra il codice del progetto</button>
+      <div id="codice-server" class="solution-container mt-4">
+        <div id="codice-tabs" class="flex flex-wrap gap-1.5 mb-2"></div>
+        <pre class="code small"><code id="codice-src" class="language-javascript"></code></pre>
+      </div>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">L'attacco: SQL injection</h3>
+      <p class="text-gray-400 mb-4">La stessa ricerca scritta male (<code class="inline">/cerca</code>) e bene (<code class="inline">/sicuro/cerca</code>). Mettiti nei panni dell'attaccante: il log mostra la query che arriva davvero al database. Scrivi i valori direttamente nell'URL del client HTTP (gli spazi vanno bene).</p>
+      <div id="injection" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <button onclick="toggleSolution('sol-inj')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela gli attacchi</button>
+      <div id="sol-inj" class="solution-container mt-4">
+        <pre class="code small"><code class="language-plaintext">/cerca?autore=' OR '1'='1
+   → WHERE autore = '' OR '1'='1'                         sempre vero: tutti i libri
+/cerca?autore=' UNION SELECT nome, email FROM utenti --
+   → WHERE autore = '' UNION SELECT nome, email FROM utenti --'
+     le righe di un'altra tabella, con lo stesso numero di colonne; -- commenta l'apice finale
+/cerca?autore=D'Annunzio
+   → WHERE autore = 'D'Annunzio'                          SQL non valido: 500
+/sicuro/cerca?autore=' OR '1'='1
+   → WHERE autore = ?   con ? = "' OR '1'='1"             nessun autore si chiama così: []</code></pre>
+      </div>
+    </section>
+
+    <!-- 4. LABORATORI -->
+    <section id="lab" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-conical" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">4. Laboratori nel browser</h2>
+      </div>
+      <div class="text-gray-400 mb-8 space-y-2">
+        <p><code class="inline">node:sqlite</code> fa parte di Node: non serve installare niente (nei laboratori con un server c'è già anche <code class="inline">express</code>). Premi <kbd>▶ Esegui</kbd>, guarda l'output (o usa il <strong>Client HTTP</strong>) e poi <kbd>Verifica</kbd>.</p>
+        <p class="text-sm">💡 Il database del simulatore è un vero SQLite (in WebAssembly): la prima esecuzione lo scarica e può richiedere un secondo. Nella scheda <strong>File</strong> clicca un file <code class="inline">.db</code> per vederne le tabelle.</p>
+      </div>
+      <div class="space-y-10" id="labs"></div>
+    </section>
+
+    <!-- 5. MISSIONI SUL PC -->
+    <section id="pc" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="laptop" class="w-6 h-6 text-emerald-400"></i>
+        <h2 class="text-2xl font-bold text-white">5. Missioni sul tuo PC</h2>
+      </div>
+      <div class="space-y-8">
+        <!-- Missione A -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-emerald-900/50 flex items-center justify-center border border-emerald-500/30"><i data-lucide="database" class="w-5 h-5 text-emerald-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione A: La Biblioteca 6.0 sul tuo PC</h3>
+              <p class="text-sm text-emerald-400 font-mono">Focus: node:sqlite, un visualizzatore di database, persistenza, .gitignore</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-emerald-500">
+            <li>Controlla <code class="inline">node -v</code> (serve Node 22.13 o più recente; nel corso usiamo il 24). Crea <code class="inline">corso-node/lezione9</code>, installa <code class="inline">express</code>, <code class="inline">morgan</code> e <code class="inline">zod</code> e ricopia i file della Biblioteca 6.0 (sezione 3, una scheda per file).</li>
+            <li>Avvia con <code class="inline">node --watch server.js</code>: che cosa stampa la prima volta? E la seconda (dopo aver salvato un file qualunque)? Che file è comparso in <code class="inline">data/</code>?</li>
+            <li>Apri <code class="inline">data/biblioteca.db</code> con un visualizzatore: l'estensione <strong>SQLite Viewer</strong> di VS Code, oppure <strong>DB Browser for SQLite</strong>, oppure il comando <code class="inline">sqlite3</code>. Crea un libro con il client HTTP e controlla la tabella.</li>
+            <li>Ferma il server (<kbd>Ctrl</kbd>+<kbd>C</kbd>), cancella il file <code class="inline">.db</code> e riavvia. Poi aggiungi <code class="inline">data/*.db</code> al <code class="inline">.gitignore</code>: perché il database non va su Git, ma le migrazioni sì?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-a')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-a" class="solution-container mt-4">
+            <pre class="code small"><code class="language-bash">mkdir -p corso-node/lezione9 && cd corso-node/lezione9
+npm init -y
+npm install express morgan zod
+mkdir -p migrazioni dati data repositories routes middleware
+# ricopia i file della sezione 3
+node --watch server.js
+
+# 2. primo avvio:   🛠️ migrazione 001-schema.sql · 🛠️ migrazione 002-isbn.sql · 🌱 dati di esempio inseriti
+#    secondo avvio: solo "📚 Biblioteca 6.0 su …": user_version è già 2 e il catalogo non è vuoto.
+#    In data/ c'è biblioteca.db (un file binario: non si apre con un editor di testo).
+#    (Su alcune versioni di Node compare anche "ExperimentalWarning: SQLite is an experimental feature…": si può ignorare.)
+
+# 3. con il comando sqlite3 (da installare a parte, es. sudo apt install sqlite3 / brew install sqlite):
+sqlite3 data/biblioteca.db
+sqlite> .tables
+sqlite> .schema libri
+sqlite> SELECT id, titolo FROM libri ORDER BY id DESC LIMIT 3;
+sqlite> PRAGMA user_version;
+sqlite> .quit
+
+# 4. cancellato il file, al riavvio il database rinasce: migrazioni + seed. Per questo:
+echo "data/*.db" >> .gitignore
+#    il .db contiene DATI (magari di persone vere) e cambia di continuo: non è codice.
+#    Le migrazioni invece SONO codice: descrivono come costruire lo schema, su ogni PC e in produzione.</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione B -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-purple-900/50 flex items-center justify-center border border-purple-500/30"><i data-lucide="book-up" class="w-5 h-5 text-purple-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione B: I prestiti</h3>
+              <p class="text-sm text-purple-400 font-mono">Focus: una nuova migrazione, tabella ponte, transazione, JOIN su tre tabelle</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-purple-500">
+            <li>Scrivi <code class="inline">migrazioni/003-prestiti.sql</code>: una tabella <code class="inline">prestiti</code> con <code class="inline">libro_id</code> (chiave esterna), <code class="inline">lettore</code> (testo obbligatorio), <code class="inline">dal</code> e <code class="inline">al</code> (date ISO, <code class="inline">al</code> vuoto finché il libro non torna). Riavvia: la migrazione parte da sola?</li>
+            <li>Crea <code class="inline">repositories/prestiti.js</code> con <code class="inline">presta(libroId, lettore)</code>: in una <strong>transazione</strong> inserisce il prestito e mette il libro non disponibile. Se il libro non c'è o è già in prestito, niente modifiche.</li>
+            <li>Aggiungi <code class="inline">POST /api/libri/:id/prestito</code> (<code class="inline">{ "lettore": "Giulia" }</code> → 201, 404 o 409) e <code class="inline">DELETE /api/libri/:id/prestito</code> (la restituzione).</li>
+            <li>Aggiungi <code class="inline">GET /api/prestiti</code>: i prestiti in corso con titolo, autore e lettore (JOIN su tre tabelle).</li>
+          </ol>
+          <button onclick="toggleSolution('sol-b')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-b" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-sql">-- migrazioni/003-prestiti.sql
+CREATE TABLE prestiti (
+  id       INTEGER PRIMARY KEY,
+  libro_id INTEGER NOT NULL REFERENCES libri(id),
+  lettore  TEXT NOT NULL,
+  dal      TEXT NOT NULL DEFAULT (date('now')),
+  al       TEXT                                   -- NULL = non ancora restituito
+);
+CREATE INDEX idx_prestiti_libro ON prestiti(libro_id);</code></pre>
+            <pre class="code small"><code class="language-javascript">// repositories/prestiti.js
+const db = require('../db');
+
+// restituisce 'ok', 'non-trovato' o 'gia-in-prestito'
+function presta(libroId, lettore) {
+  const libro = db.prepare('SELECT disponibile FROM libri WHERE id = ?').get(libroId);
+  if (!libro) return 'non-trovato';
+  if (libro.disponibile === 0) return 'gia-in-prestito';
+  db.exec('BEGIN');
+  try {
+    db.prepare('INSERT INTO prestiti (libro_id, lettore) VALUES (?, ?)').run(libroId, lettore);
+    db.prepare('UPDATE libri SET disponibile = 0 WHERE id = ?').run(libroId);
+    db.exec('COMMIT');
+    return 'ok';
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+function restituisci(libroId) {
+  db.exec('BEGIN');
+  try {
+    const { changes } = db.prepare("UPDATE prestiti SET al = date('now') WHERE libro_id = ? AND al IS NULL").run(libroId);
+    if (changes) db.prepare('UPDATE libri SET disponibile = 1 WHERE id = ?').run(libroId);
+    db.exec('COMMIT');
+    return changes > 0;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+function inCorso() {
+  return db.prepare(`
+    SELECT p.id, p.dal, p.lettore, l.titolo, a.nome AS autore
+    FROM prestiti p
+    JOIN libri l  ON l.id = p.libro_id
+    JOIN autori a ON a.id = l.autore_id
+    WHERE p.al IS NULL
+    ORDER BY p.dal`).all();
+}
+
+module.exports = { presta, restituisci, inCorso };
+
+// routes/libri.js
+router.post('/:id/prestito', valida({ params: idParam, body: z.strictObject({ lettore: z.string().trim().min(1) }) }), (req, res) => {
+  const esito = prestiti.presta(req.valido.params.id, req.valido.body.lettore);
+  if (esito === 'non-trovato') throw new NonTrovato('Il libro non esiste');
+  if (esito === 'gia-in-prestito') return res.status(409).json({ errore: 'Il libro è già in prestito' });
+  res.status(201).json(libri.trova(req.valido.params.id));
+});
+router.delete('/:id/prestito', valida({ params: idParam }), (req, res) => {
+  if (!prestiti.restituisci(req.valido.params.id)) throw new NonTrovato('Nessun prestito in corso per questo libro');
+  res.json(libri.trova(req.valido.params.id));
+});
+
+// app.js
+app.get('/api/prestiti', (req, res) => res.json(require('./repositories/prestiti').inCorso()));</code></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 6. QUIZ -->
+    <section id="quiz" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="check-square" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">6. Quiz di verifica</h2>
+      </div>
+      <div id="quiz-box"></div>
+    </section>
+  </main>
+
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm font-mono">studente@nodelab:~$ db.prepare('SELECT * FROM libri WHERE id = ?').get(id)</div>
+  </footer>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m9-biblioteca.js"></script>
+  <script src="assets/labs-m9.js"></script>
+  <script>
+    // ---------------------------------------------------------------- 2. console e indovina
+    NodeLab.sql(document.getElementById('console-sql'), M9_SQL);
+
+    OrderGame.mount(document.getElementById('order-game'), [
+      {
+        title: 'WHERE, ORDER BY, LIMIT',
+        lang: 'sql',
+        cmd: '-- libri: Dune (1965) · Il barone rampante (1957) · Palomar (1983) · Lessico famigliare (1963)',
+        code: `SELECT titolo FROM libri
+WHERE anno > 1960
+ORDER BY anno DESC
+LIMIT 2;`,
+        chips: ['Palomar', 'Dune', 'Lessico famigliare', 'Il barone rampante'],
+        answer: ['Palomar', 'Dune'],
+        explain: 'Prima il `WHERE` (restano Dune, Palomar, Lessico), poi l\'ordine dal più recente, poi le **prime due** righe.',
+      },
+      {
+        title: 'LEFT JOIN',
+        lang: 'sql',
+        cmd: '-- autori: 1 Calvino · 2 Levi · 3 Merini   libri: Il barone rampante (1) · Se questo è un uomo (2) · Antologia (NULL)',
+        code: `SELECT l.titolo, a.nome
+FROM libri l
+LEFT JOIN autori a ON a.id = l.autore_id
+ORDER BY l.titolo;`,
+        chips: ['Antologia | NULL', 'Il barone rampante | Calvino', 'Se questo è un uomo | Levi', 'NULL | Merini', 'Antologia | Merini'],
+        answer: ['Antologia | NULL', 'Il barone rampante | Calvino', 'Se questo è un uomo | Levi'],
+        explain: 'La LEFT JOIN tiene **tutte le righe della tabella a sinistra** (i libri): "Antologia" non ha autore e compare con `NULL`. Merini, che non ha libri, sta nella tabella di destra: non compare.',
+      },
+      {
+        title: 'La trappola di COUNT(*)',
+        lang: 'sql',
+        cmd: '-- autori: Calvino (2 libri) · Levi (1 libro) · Merini (nessun libro)',
+        code: `SELECT a.nome, COUNT(*) AS libri
+FROM autori a
+LEFT JOIN libri l ON l.autore_id = a.id
+GROUP BY a.id
+ORDER BY a.nome;`,
+        chips: ['Calvino | 2', 'Levi | 1', 'Merini | 0', 'Merini | 1', 'Calvino | 1'],
+        answer: ['Calvino | 2', 'Levi | 1', 'Merini | 1'],
+        explain: 'Merini compare con una riga (libro = NULL) e `COUNT(*)` conta le **righe**: 1! Per contare i libri serve `COUNT(l.id)`, che salta i NULL → 0.',
+      },
+      {
+        title: 'run, get e changes',
+        cmd: '$ node prova.js      # la tabella libri è vuota',
+        code: `const ins = db.prepare('INSERT INTO libri (titolo) VALUES (?)');
+console.log(ins.run('Dune'));
+console.log(db.prepare('UPDATE libri SET anno = 1965').run().changes);
+console.log(db.prepare('DELETE FROM libri WHERE id = 42').run().changes);
+console.log(db.prepare('SELECT * FROM libri WHERE id = 42').get());`,
+        chips: ['{ changes: 1, lastInsertRowid: 1 }', '{ changes: 0, lastInsertRowid: 0 }', '1', '0', 'undefined', 'null', '[]'],
+        answer: ['{ changes: 1, lastInsertRowid: 1 }', '1', '0', 'undefined'],
+        explain: '`run()` dice quante righe ha toccato (`changes`) e l\'id appena creato. L\'UPDATE senza WHERE tocca tutte le righe (qui una). Il DELETE di un id che non c\'è: `changes: 0` → in un\'API sarebbe un 404. `get()` senza risultati: `undefined`.',
+      },
+      {
+        title: 'La ricerca vulnerabile',
+        cmd: "$ curl '…/cerca?autore=Primo Levi'  ·  \"…/cerca?autore=' OR 1=1 --\"  ·  \"…/cerca?autore=D'Annunzio\"",
+        prompt: 'Che cosa risponde il server alle tre richieste, in ordine? (Primo Levi ha 2 libri, in tutto sono 6.)',
+        code: `app.get('/cerca', (req, res) => {
+  const sql = \`SELECT * FROM libri WHERE autore = '\${req.query.autore}'\`;
+  res.json(db.prepare(sql).all());
+});`,
+        chips: ['2 libri', 'tutti i 6 libri', '0 libri', 'errore 500'],
+        answer: ['2 libri', 'tutti i 6 libri', 'errore 500'],
+        explain: 'Con `\' OR 1=1 --` la condizione diventa sempre vera (e `--` commenta l\'apice rimasto). Con `D\'Annunzio` l\'apice chiude la stringa troppo presto: SQL non valido, 500. Anche gli utenti onesti rompono la query!',
+      },
+      {
+        title: 'La ricerca parametrizzata',
+        cmd: "$ curl '…/cerca?autore=Primo Levi'  ·  \"…/cerca?autore=' OR 1=1 --\"  ·  \"…/cerca?autore=D'Annunzio\"",
+        prompt: 'Le stesse tre richieste. E adesso?',
+        code: `app.get('/cerca', (req, res) => {
+  const st = db.prepare('SELECT * FROM libri WHERE autore = ?');
+  res.json(st.all(String(req.query.autore ?? '')));
+});`,
+        chips: ['2 libri', 'tutti i 6 libri', '0 libri', '0 libri', 'errore 500'],
+        answer: ['2 libri', '0 libri', '0 libri'],
+        explain: 'Il valore arriva **dopo** che la query è stata compilata: è solo testo da confrontare. Nessun autore si chiama `\' OR 1=1 --` né `D\'Annunzio`: zero risultati, nessun errore.',
+      },
+      {
+        title: 'BOSS: quali migrazioni?',
+        cmd: '$ ls migrazioni/   →   001-schema.sql  002-isbn.sql  003-prestiti.sql  004-indici.sql',
+        prompt: 'Il database ha PRAGMA user_version = 2. Quali file applica il codice qui sotto, e quale versione stampa alla fine?',
+        code: `const { user_version } = db.prepare('PRAGMA user_version').get();
+for (const f of fs.readdirSync('migrazioni').sort()) {
+  const n = parseInt(f, 10);
+  if (n <= user_version) continue;
+  applica(f);                               // BEGIN · il file · PRAGMA user_version = n · COMMIT
+  console.log('applicata', f);
+}
+console.log('versione', db.prepare('PRAGMA user_version').get().user_version);`,
+        chips: ['applicata 001-schema.sql', 'applicata 002-isbn.sql', 'applicata 003-prestiti.sql', 'applicata 004-indici.sql', 'versione 2', 'versione 4'],
+        answer: ['applicata 003-prestiti.sql', 'applicata 004-indici.sql', 'versione 4'],
+        explain: 'Solo i file con un numero **più alto** della versione, in ordine. Dopo ognuno la versione avanza: alla fine è 4. Al prossimo avvio non verrà applicato niente.',
+      },
+    ], { id: 'm9-order' });
+
+    // ---------------------------------------------------------------- 3. biblioteca
+    NodeLab.inspector(document.getElementById('inspector'), {
+      id: 'm9-biblioteca-ex',
+      files: M9_BIBLIOTECA.files, fs: M9_BIBLIOTECA.fs, entry: 'server.js', port: 3000,
+      packages: M9_BIBLIOTECA.packages, persist: true, watch: 'data/biblioteca.db',
+      missions: M9_BIBLIOTECA.missions, presets: M9_BIBLIOTECA.presets,
+    });
+    NodeLab.inspector(document.getElementById('injection'), {
+      id: 'm9-injection-ex',
+      files: M9_INJECTION.files, entry: 'server.js', port: 3000,
+      packages: ['express'], height: '16rem',
+      missions: M9_INJECTION.missions, presets: M9_INJECTION.presets,
+    });
+    (function codiceProgetto() {
+      const tabs = document.getElementById('codice-tabs');
+      const src = document.getElementById('codice-src');
+      const nomi = Object.keys(M9_BIBLIOTECA.files);
+      const lingua = (n) => (n.endsWith('.js') ? 'javascript' : n.endsWith('.sql') ? 'sql' : 'plaintext');
+      function mostra(n) {
+        tabs.querySelectorAll('button').forEach((b) => {
+          b.className = `text-xs font-mono px-2 py-1 rounded border ${b.dataset.f === n ? 'border-green-500 bg-green-500/15 text-white' : 'border-gray-700 bg-gray-900 text-gray-400 hover:text-white'}`;
+        });
+        const testo = M9_BIBLIOTECA.files[n];
+        if (window.hljs) { src.innerHTML = hljs.highlight(testo, { language: lingua(n) }).value; src.classList.add('hljs'); }
+        else src.textContent = testo;
+      }
+      tabs.innerHTML = nomi.map((n) => `<button data-f="${n}">${n}</button>`).join('');
+      tabs.onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) mostra(b.dataset.f); };
+      mostra('db.js');
+    })();
+
+    // ---------------------------------------------------------------- 4. laboratori
+    const labsBox = document.getElementById('labs');
+    for (const cfg of window.M9_LABS) {
+      const el = document.createElement('article');
+      el.id = cfg.id;
+      labsBox.appendChild(el);
+      NodeLab.mount(el, cfg);
+    }
+
+    // ---------------------------------------------------------------- 6. quiz
+    Quiz.mount(document.getElementById('quiz-box'), [
+      {
+        question: 'Nella tabella `libri` c\'è la colonna `autore_id REFERENCES autori(id)`. Che cos\'è?',
+        options: ['Una chiave primaria', 'Una chiave esterna: collega ogni libro a una riga della tabella autori', 'Un indice per velocizzare le ricerche', 'Una copia del nome dell\'autore'],
+        correct: 1,
+        explanation: 'La chiave esterna punta alla chiave primaria di un\'altra tabella. Il nome dell\'autore resta in un posto solo; il database rifiuta un `autore_id` che non esiste.',
+      },
+      {
+        question: 'Un utente può prendere in prestito molti libri e un libro può essere prestato a molti utenti (in tempi diversi). Come si rappresenta?',
+        options: ['Una colonna `libri` in `utenti` con gli id separati da virgole', 'Una tabella ponte `prestiti` con `utente_id` e `libro_id` (e le date)', 'Una chiave esterna in `libri`', 'Non si può in un database relazionale'],
+        correct: 1,
+        explanation: 'È una relazione N-N: serve una terza tabella con due chiavi esterne, che può avere anche dati suoi (dal, al).',
+      },
+      {
+        question: 'Che differenza c\'è tra `WHERE` e `HAVING`?',
+        options: ['Nessuna', '`WHERE` filtra le righe prima del raggruppamento, `HAVING` filtra i gruppi dopo `GROUP BY`', '`HAVING` è più veloce', '`WHERE` funziona solo con i numeri'],
+        correct: 1,
+        explanation: 'Esempio: `WHERE anno > 1950 … GROUP BY genere HAVING COUNT(*) > 1` → prima scarta i libri vecchi, poi tiene solo i generi con più di un libro.',
+      },
+      {
+        question: 'Con `autori LEFT JOIN libri`, che cosa succede a un autore senza libri?',
+        options: ['Sparisce dal risultato', 'Compare, con NULL nelle colonne dei libri', 'Dà errore', 'Compare una volta per ogni libro del catalogo'],
+        correct: 1,
+        explanation: 'La LEFT JOIN tiene tutte le righe della tabella di sinistra. Con la JOIN normale (INNER) l\'autore senza libri non comparirebbe.',
+      },
+      {
+        question: 'Che cosa fa `UPDATE libri SET disponibile = 0;`?',
+        options: ['Niente, manca il WHERE', 'Rende non disponibili TUTTI i libri', 'Chiede una conferma', 'Modifica solo il primo libro'],
+        correct: 1,
+        explanation: 'Senza `WHERE` l\'istruzione vale per tutte le righe, senza avvisi. Prima di UPDATE e DELETE importanti, provate la stessa condizione con un SELECT.',
+      },
+      {
+        question: 'Quale di queste righe è al sicuro dalla SQL injection?',
+        code: `// A
+db.prepare(\`SELECT * FROM libri WHERE id = \${req.params.id}\`).get();
+// B
+db.prepare('SELECT * FROM libri WHERE id = ' + req.params.id).get();
+// C
+db.prepare('SELECT * FROM libri WHERE id = ?').get(req.params.id);`,
+        options: ['A', 'B', 'C', 'Tutte e tre: c\'è `prepare`'],
+        correct: 2,
+        explanation: '`prepare` da solo non protegge: conta **come** si costruisce la stringa. In A e B il testo del client diventa SQL; in C la query è fissa e il valore arriva a parte.',
+      },
+      {
+        question: 'Un\'API accetta `?ordina=anno` e fa `db.prepare(\'SELECT * FROM libri ORDER BY ?\').all(req.query.ordina)`. Che cosa succede?',
+        options: ['Ordina per anno', 'Non ordina: `?` vale solo per i valori, qui ordina per la costante \'anno\'', 'Errore di sintassi', 'È una SQL injection'],
+        correct: 1,
+        explanation: 'I segnaposto non possono sostituire nomi di colonne o parole chiave. Per l\'ordinamento serve un elenco chiuso di colonne ammesse (whitelist, o `z.enum`).',
+      },
+      {
+        question: 'Che cosa restituisce `db.prepare(\'INSERT INTO libri (titolo) VALUES (?)\').run(\'Dune\')`?',
+        options: ['Il libro inserito', '`{ changes: 1, lastInsertRowid: <id del nuovo libro> }`', '`true`', '`undefined`'],
+        correct: 1,
+        explanation: '`lastInsertRowid` è l\'id appena creato (utile per rispondere 201 con il libro); `changes` quante righe sono state toccate.',
+      },
+      {
+        question: 'Salvate `disponibile: true` in una colonna INTEGER con node:sqlite. Che cosa vi restituisce poi `get()`?',
+        options: ['`true`', '`1`', '`"true"`', '`null`'],
+        correct: 1,
+        explanation: 'SQLite non ha un tipo booleano: `true` diventa 1. Il repository lo riconverte (`r.disponibile === 1`). Con better-sqlite3 i booleani danno proprio errore.',
+      },
+      {
+        question: 'Perché lo schema si fa evolvere con le migrazioni, invece di cancellare e ricreare il database?',
+        options: ['Perché è più veloce', 'Perché in produzione il database contiene dati veri, che non si possono perdere: ogni migrazione applica solo la modifica', 'Perché SQLite non permette DROP TABLE', 'Non c\'è un motivo'],
+        correct: 1,
+        explanation: 'Le migrazioni numerate (su Git) portano ogni database, nuovo o vecchio, alla stessa versione, una volta sola e in ordine.',
+      },
+      {
+        question: 'Un prestito richiede un INSERT in `prestiti` e un UPDATE in `libri`. Perché in una transazione?',
+        options: ['Per andare più veloci', 'Perché o vanno a buon fine entrambe o nessuna: mai un prestito registrato con il libro ancora disponibile', 'Perché SQLite lo richiede', 'Per bloccare gli altri utenti'],
+        correct: 1,
+        explanation: '`BEGIN` … `COMMIT`; se qualcosa fallisce `ROLLBACK` riporta tutto a prima. Il database non resta mai "a metà".',
+      },
+      {
+        question: 'Un client crea un libro con un ISBN già presente (colonna `UNIQUE`). Come dovrebbe rispondere l\'API?',
+        options: ['500 Internal Server Error', '409 Conflict, con un messaggio chiaro', '200 OK, ignorando il libro', '404 Not Found'],
+        correct: 1,
+        explanation: 'Non è un bug del server ma un conflitto con i dati esistenti: il gestore degli errori riconosce `errcode` 2067 (UNIQUE) e risponde 409.',
+      },
+    ], { id: 'm9-quiz' });
+
+    if (window.hljs) document.querySelectorAll('pre.code code').forEach((el) => { if (!el.dataset.highlighted && el.id !== 'codice-src') hljs.highlightElement(el); });
+    NodeLab.refreshProgress();
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

@@ -813,7 +813,9 @@
         const file = isFile(p);
         const t = vfs.mtime.get(p) || new Date(0);
         this.dev = 2049; this.mode = file ? 33188 : 16877; this.nlink = 1; this.uid = 1000; this.gid = 1000;
-        this.size = file ? Buffer.byteLength(vfs.files.get(p)) : 4096;
+        if (file) sqlSyncPath(p);
+        const c = file ? vfs.files.get(p) : '';
+        this.size = file ? (isBin(c) ? binSize(c) : Buffer.byteLength(c)) : 4096;
         this.blksize = 4096; this.ino = Math.abs(hashStr(p));
         this.atimeMs = this.mtimeMs = this.ctimeMs = this.birthtimeMs = t.getTime();
         this.atime = this.mtime = this.ctime = this.birthtime = t;
@@ -839,7 +841,9 @@
         if (isDir(a)) throw fsError('EISDIR', 'read', P(p));
         if (!isFile(a)) throw fsError('ENOENT', 'open', P(p));
         const e = encodingOf(opt);
+        sqlSyncPath(a);
         const content = vfs.files.get(a);
+        if (isBin(content)) { const b = Buffer.from(binDecode(content)); return e ? b.toString(e) : b; }
         if (e) return e.toLowerCase().replace('-', '') === 'utf8' ? content : Buffer.from(content).toString(e);
         return Buffer.from(content);
       },
@@ -932,6 +936,7 @@
         const b = abs(to);
         if (isDir(a)) throw fsError('EISDIR', 'copyfile', P(from), P(to));
         if (!isFile(a)) throw fsError('ENOENT', 'copyfile', P(from), P(to));
+        sqlSyncPath(a);
         writeFileRaw(b, vfs.files.get(a), 'copyfile', P(to));
       },
       cpSync(from, to, opt) {
@@ -1071,7 +1076,13 @@
       const out = {};
       const skip = (p) => /\/node_modules\/.+/.test(p);
       for (const d of vfs.dirs) if (d.startsWith('/progetto') && !skip(d)) out[d] = { type: 'dir' };
-      for (const [f, c] of vfs.files) if (f.startsWith('/progetto') && !skip(f)) out[f] = { type: 'file', size: Buffer.byteLength(c), content: c.length < 60000 ? c : c.slice(0, 60000) + '\n…' };
+      sqlFlushAll();
+      for (const [f, c] of vfs.files) {
+        if (!f.startsWith('/progetto') || skip(f)) continue;
+        // i database: il contenuto vero (per i riavvii) + un'anteprima delle tabelle da mostrare
+        if (isBin(c)) out[f] = { type: 'file', size: binSize(c), content: c, binary: true, preview: /\.(db|sqlite3?)$/i.test(f) || sqlFiles.has(f) ? sqlPreviewOf(f, c) : `(file binario, ${binSize(c)} byte)` };
+        else out[f] = { type: 'file', size: Buffer.byteLength(c), content: c.length < 60000 ? c : c.slice(0, 60000) + '\n…' };
+      }
       return out;
     }
 
@@ -3109,6 +3120,616 @@
       return ejs;
     }
 
+    // ------------------------------------------------------------ SQLite
+    // node:sqlite e better-sqlite3 sopra un vero SQLite: sql.js (SQLite compilato in WebAssembly) nel browser,
+    // il node:sqlite di Node negli strumenti di verifica (tools/harness.js passa self.__nodelabSqlite).
+    // Il motore va caricato PRIMA di eseguire il codice (vedi il messaggio 'run').
+    // I file .db stanno nel vfs come testo: BIN_PREFIX + base64; più connessioni allo stesso file
+    // condividono lo stesso database aperto (come due processi che aprono lo stesso file).
+    const SQLJS_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.14.1/';
+    const BIN_PREFIX = '\u0000nodelab:bin:';
+    const isBin = (c) => typeof c === 'string' && c.startsWith(BIN_PREFIX);
+    function bytesToB64(u8) {
+      let s = '';
+      for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, Array.prototype.slice.call(u8, i, i + 0x8000));
+      return btoa(s);
+    }
+    function binDecode(c) {
+      const s = atob(c.slice(BIN_PREFIX.length));
+      const u = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+      return u;
+    }
+    const binEncode = (u8) => BIN_PREFIX + bytesToB64(u8);
+    const binSize = (c) => { const b = c.length - BIN_PREFIX.length; return b ? (b / 4) * 3 - (c.endsWith('==') ? 2 : c.endsWith('=') ? 1 : 0) : 0; };
+
+    let sqlEngine = null;
+    let sqlEngineError = null;
+    let sqlEngineLoading = null;
+    function needsSqlite(msg) {
+      if ((msg.packages || []).includes('better-sqlite3')) return true;
+      const texts = Object.values(msg.files || {}).concat(Object.values(msg.fs || {}));
+      return texts.some((t) => typeof t === 'string' && (t.includes('sqlite') || isBin(t)));
+    }
+    function loadSqlEngine() {
+      if (sqlEngine || sqlEngineError) return Promise.resolve(sqlEngine);
+      if (G.__nodelabSqlite) { sqlEngine = nodeSqliteBackend(G.__nodelabSqlite); return Promise.resolve(sqlEngine); }
+      if (!sqlEngineLoading) {
+        sqlEngineLoading = (async () => {
+          try {
+            const res = await realFetch(SQLJS_BASE + 'sql-wasm.wasm');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const wasmBinary = await res.arrayBuffer();
+            if (typeof G.initSqlJs !== 'function') importScripts(SQLJS_BASE + 'sql-wasm.js');
+            sqlEngine = sqljsBackend(await G.initSqlJs({ wasmBinary }));
+          } catch (e) { sqlEngineError = e; }
+          return sqlEngine;
+        })();
+      }
+      return sqlEngineLoading;
+    }
+
+    // backend: sql.js (browser)
+    function sqljsBackend(SQL) {
+      return {
+        open(bytes) {
+          const db = bytes && bytes.length ? new SQL.Database(bytes) : new SQL.Database();
+          db.exec('PRAGMA foreign_keys = ON');
+          let gen = 0;   // export() chiude e riapre il database: gli statement vanno ripreparati
+          const lastId = () => { const r = db.exec('SELECT last_insert_rowid()'); return r.length ? r[0].values[0][0] : 0; };
+          const bindTo = (st, b) => {
+            if (b.named) {
+              const o = {};
+              for (const k of Object.keys(b.named)) o[k] = b.named[k];
+              st.bind(o);
+            } else st.bind(b.positional);
+          };
+          return {
+            exec(sql) { db.exec(sql); },
+            prepare(sql) {
+              let st = db.prepare(sql);
+              let myGen = gen;
+              const cur = () => { if (myGen !== gen) { st = db.prepare(sql); myGen = gen; } return st; };
+              return {
+                columns: () => cur().getColumnNames(),
+                all(b) {
+                  const s = cur();
+                  bindTo(s, b);
+                  const rows = [];
+                  try { while (s.step()) rows.push(s.get()); } finally { s.reset(); }
+                  return rows;
+                },
+                run(b) {
+                  const s = cur();
+                  bindTo(s, b);
+                  try { while (s.step()) { /* le righe non servono */ } } finally { s.reset(); }
+                  return { changes: db.getRowsModified(), lastInsertRowid: lastId() };
+                },
+                free() { try { st.free(); } catch (e) { /* già libero */ } },
+              };
+            },
+            inTx() {
+              try { db.exec('BEGIN'); } catch (e) { return true; }
+              db.exec('ROLLBACK');
+              return false;
+            },
+            serialize() {
+              const out = db.export();
+              gen++;
+              db.exec('PRAGMA foreign_keys = ON');
+              return out;
+            },
+            close() { db.close(); },
+          };
+        },
+      };
+    }
+
+    // backend: il vero node:sqlite (strumenti di verifica)
+    function nodeSqliteBackend(sqlite) {
+      return {
+        open(bytes) {
+          const db = new sqlite.DatabaseSync(':memory:');
+          if (bytes && bytes.length) db.deserialize(bytes);
+          db.exec('PRAGMA foreign_keys = ON');
+          return {
+            exec(sql) { db.exec(sql); },
+            prepare(sql) {
+              const st = db.prepare(sql);
+              st.setReturnArrays(true);
+              st.setAllowUnknownNamedParameters(true);
+              const args = (b) => (b.named ? [b.named].concat(b.positional) : b.positional);
+              // i risultati arrivano da un altro "realm" (quello di Node): li ricopiamo in array del Worker
+              return {
+                columns: () => Array.from(st.columns(), (c) => c.name),
+                all: (b) => Array.from(st.all(...args(b)), (r) => Array.from(r)),
+                run(b) { const r = st.run(...args(b)); return { changes: Number(r.changes), lastInsertRowid: Number(r.lastInsertRowid) }; },
+                free() {},
+              };
+            },
+            inTx: () => db.isTransaction,
+            serialize: () => db.serialize(),
+            close: () => db.close(),
+          };
+        },
+      };
+    }
+
+    // errori: stessa forma di node:sqlite ({ code: 'ERR_SQLITE_ERROR', errcode, errstr })
+    const SQLITE_ERRSTR = { 1: 'SQL logic error', 5: 'database is locked', 8: 'attempt to write a readonly database', 14: 'unable to open database file', 19: 'constraint failed', 25: 'column index out of range', 26: 'file is not a database' };
+    function errcodeFromMessage(m) {
+      if (/^UNIQUE constraint failed/.test(m)) return 2067;
+      if (/^FOREIGN KEY constraint failed/.test(m)) return 787;
+      if (/^NOT NULL constraint failed/.test(m)) return 1299;
+      if (/^CHECK constraint failed/.test(m)) return 275;
+      if (/constraint failed/.test(m)) return 19;
+      if (/column index out of range/.test(m)) return 25;
+      if (/file is not a database/.test(m)) return 26;
+      if (/database is locked/.test(m)) return 5;
+      if (/readonly database/.test(m)) return 8;
+      return 1;
+    }
+    function nodeErr(Ctor, code, message) {
+      const e = new Ctor(message);
+      e.code = code;
+      return e;
+    }
+    function sqliteError(e) {
+      const message = e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e);
+      // errori "di Node" dal backend degli strumenti (es. ERR_INVALID_STATE): stessa classe e stesso code
+      if (e && typeof e === 'object' && typeof e.code === 'string' && e.code !== 'ERR_SQLITE_ERROR') {
+        return nodeErr(e.name === 'TypeError' ? TypeError : e.name === 'RangeError' ? RangeError : Error, e.code, message);
+      }
+      const errcode = e && typeof e.errcode === 'number' ? e.errcode : errcodeFromMessage(message);
+      const out = new Error(message);
+      out.code = 'ERR_SQLITE_ERROR';
+      out.errcode = errcode;
+      out.errstr = SQLITE_ERRSTR[errcode & 255] || 'SQL logic error';
+      return out;
+    }
+
+    // analisi leggera dell'SQL: istruzioni, parametri del primo statement (?, :nome, @nome, $nome)
+    function sqlScan(sql) {
+      const names = [];
+      let anon = 0;
+      const stmts = [];
+      let start = 0;
+      let has = false;
+      let i = 0;
+      const n = sql.length;
+      const end = (at) => { if (has) stmts.push(sql.slice(start, at + 1)); has = false; start = at + 1; };
+      while (i < n) {
+        const c = sql[i];
+        if (c === "'" || c === '"' || c === '`') {
+          i++;
+          while (i < n) { if (sql[i] === c) { if (sql[i + 1] === c) { i += 2; continue; } break; } i++; }
+          i++; has = true; continue;
+        }
+        if (c === '[') { const e = sql.indexOf(']', i); i = e < 0 ? n : e + 1; has = true; continue; }
+        if (c === '-' && sql[i + 1] === '-') { const e = sql.indexOf('\n', i); i = e < 0 ? n : e + 1; continue; }
+        if (c === '/' && sql[i + 1] === '*') { const e = sql.indexOf('*/', i + 2); i = e < 0 ? n : e + 2; continue; }
+        if (c === ';') { end(i); i++; continue; }
+        if (c === '?') {
+          has = true; i++;
+          while (i < n && sql[i] >= '0' && sql[i] <= '9') i++;
+          if (!stmts.length) anon++;
+          continue;
+        }
+        if ((c === ':' || c === '@' || c === '$') && /[A-Za-z_]/.test(sql[i + 1] || '')) {
+          let j = i + 1;
+          while (j < n && /\w/.test(sql[j])) j++;
+          const name = sql.slice(i, j);
+          if (!stmts.length && !names.includes(name)) names.push(name);
+          i = j; has = true; continue;
+        }
+        if (!/\s/.test(c)) has = true;
+        i++;
+      }
+      end(n - 1);
+      return { stmts, empty: !stmts.length, more: stmts.length > 1, names, anon };
+    }
+    const sqlHead = (s) => s.replace(/^(\s+|--[^\n]*(\n|$)|\/\*[\s\S]*?\*\/)+/, '');
+    function isReadSql(s) {
+      const h = sqlHead(s);
+      if (/^(SELECT|EXPLAIN|VALUES)\b/i.test(h)) return true;
+      if (/^WITH\b/i.test(h)) return !/\b(INSERT|UPDATE|DELETE|REPLACE)\b/i.test(h);
+      return /^PRAGMA\s+[\w.]+\s*(\([^)]*\))?\s*;?\s*$/i.test(h);
+    }
+
+    // i file aperti: percorso → { h, refs, dirty, path }
+    const sqlFiles = new Map();
+    function requireSqlEngine() {
+      if (sqlEngine) return;
+      throw makeError(Error, 'ERR_NODELAB_UNSUPPORTED', sqlEngineError
+        ? `SQLite non è disponibile: il motore (sql.js) non è stato scaricato (${sqlEngineError.message || sqlEngineError}). Controlla la connessione a Internet e riprova.`
+        : 'SQLite non è disponibile in questo punto del simulatore NodeLab.');
+    }
+    function sqlOpen(location, readOnly) {
+      if (location === ':memory:' || location === '') return { h: sqlEngine.open(null), refs: 1, dirty: false, path: null, readOnly: false };
+      const a = path.resolve(CWD, location);
+      const ent = sqlFiles.get(a);
+      if (ent && isFile(a)) { ent.refs++; return ent; }
+      if (isDir(a) || !isDir(path.dirname(a)) || (readOnly && !isFile(a))) throw sqliteError({ message: 'unable to open database file', errcode: 14 });
+      const content = isFile(a) ? vfs.files.get(a) : null;
+      const notDb = content !== null && !isBin(content) && content.length > 0;   // un file di testo
+      const h = sqlEngine.open(content !== null && isBin(content) ? binDecode(content) : null);
+      if (content === null) { vfs.files.set(a, BIN_PREFIX); vfs.mtime.set(a, new Date()); }   // SQLite crea il file
+      const out = { h, refs: 1, dirty: false, path: a, notDb, readOnly: !!readOnly };
+      sqlFiles.set(a, out);
+      return out;
+    }
+    function sqlFlush(ent) {
+      if (!ent.path || !ent.dirty || ent.closed) return;
+      if (sqlFiles.get(ent.path) !== ent || !isFile(ent.path)) { ent.dirty = false; return; }   // file cancellato
+      if (ent.h.inTx()) return;   // a transazione chiusa
+      vfs.files.set(ent.path, binEncode(ent.h.serialize()));
+      vfs.mtime.set(ent.path, new Date());
+      ent.dirty = false;
+    }
+    function sqlFlushAll() { for (const ent of sqlFiles.values()) { try { sqlFlush(ent); } catch (e) { /* ignora */ } } }
+    function sqlSyncPath(a) { const ent = sqlFiles.get(a); if (ent) { try { sqlFlush(ent); } catch (e) { /* ignora */ } } }
+    function sqlRelease(ent) {
+      if (--ent.refs > 0) return;
+      try { sqlFlush(ent); } catch (e) { /* ignora */ }
+      ent.closed = true;
+      try { ent.h.close(); } catch (e) { /* ignora */ }
+      if (ent.path && sqlFiles.get(ent.path) === ent) sqlFiles.delete(ent.path);
+    }
+    function sqlUsable(ent, write) {
+      if (ent.notDb) throw sqliteError({ message: 'file is not a database', errcode: 26 });
+      if (write && ent.readOnly) throw sqliteError({ message: 'attempt to write a readonly database', errcode: 8 });
+    }
+    function sqlExec(ent, sql) {
+      const info = sqlScan(sql);
+      const write = info.stmts.some((s) => !isReadSql(s));
+      sqlUsable(ent, write);
+      if (write) ent.dirty = true;
+      try { ent.h.exec(sql); } catch (e) { throw sqliteError(e); }
+    }
+    // valori JavaScript → SQLite (come node:sqlite: true → 1, undefined e oggetti → errore)
+    function sqlValue(v, idx, strict) {
+      if (v === null || typeof v === 'number' || typeof v === 'string') return v;
+      if (typeof v === 'bigint') return Number(v);
+      if (typeof v === 'boolean' && !strict) return v ? 1 : 0;
+      if (ArrayBuffer.isView(v)) return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+      if (strict) throw new TypeError('SQLite3 can only bind numbers, strings, bigints, buffers, and null');
+      throw nodeErr(TypeError, 'ERR_INVALID_ARG_TYPE', `Provided value cannot be bound to SQLite parameter ${idx}.`);
+    }
+    function sqlCell(v) {
+      if (v !== null && typeof v === 'object' && ArrayBuffer.isView(v)) return new Uint8Array(v);
+      return v;
+    }
+    // anteprima leggibile del database (per il riquadro "watch" e l'albero dei file)
+    function sqlPreview(h) {
+      const q = (sql) => { const s = h.prepare(sql); try { return { cols: s.columns(), rows: s.all({ positional: [] }) }; } finally { s.free(); } };
+      const tabs = q("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid").rows.map((r) => r[0]);
+      if (!tabs.length) return '(database vuoto: nessuna tabella)';
+      const cell = (v) => {
+        if (v === null) return 'NULL';
+        if (typeof v === 'object') return `<BLOB ${v.length} byte>`;
+        const s = String(v).replace(/\s+/g, ' ');
+        return s.length > 28 ? s.slice(0, 27) + '…' : s;
+      };
+      return tabs.map((t) => {
+        const id = '"' + t.replace(/"/g, '""') + '"';
+        const n = q(`SELECT count(*) FROM ${id}`).rows[0][0];
+        const { cols, rows } = q(`SELECT * FROM ${id} LIMIT 15`);
+        const body = rows.map((r) => r.map(cell));
+        const w = cols.map((c, i) => Math.max(c.length, ...body.map((r) => r[i].length)));
+        const line = (l, m, r) => l + w.map((x) => '─'.repeat(x + 2)).join(m) + r;
+        const row = (cells) => '│' + cells.map((c, i) => ' ' + c.padEnd(w[i]) + ' ').join('│') + '│';
+        const out = [`${t} · ${n} ${n === 1 ? 'riga' : 'righe'}`, line('┌', '┬', '┐'), row(cols), line('├', '┼', '┤'), ...body.map(row), line('└', '┴', '┘')];
+        if (n > rows.length) out.push(`… altre ${n - rows.length} righe`);
+        return out.join('\n');
+      }).join('\n\n');
+    }
+    function sqlPreviewOf(p, content) {
+      if (!sqlEngine) return '(database SQLite)';
+      try {
+        const ent = sqlFiles.get(p);
+        if (ent && !ent.closed && !ent.notDb) return sqlPreview(ent.h);
+        const h = sqlEngine.open(binDecode(content));
+        try { return sqlPreview(h); } finally { h.close(); }
+      } catch (e) { return '(database SQLite)'; }
+    }
+
+    // node:sqlite
+    let sqliteModule = null;
+    function createSqlite() {
+      requireSqlEngine();
+      if (sqliteModule) return sqliteModule;
+      const priv = new WeakMap();
+      const TOKEN = {};
+      const dbState = (db) => {
+        const s = priv.get(db);
+        if (!s) throw new TypeError('Illegal invocation');
+        if (!s.ent) throw nodeErr(Error, 'ERR_INVALID_STATE', 'database is not open');
+        return s;
+      };
+      class StatementSync {
+        constructor(token, state) {
+          if (token !== TOKEN) throw nodeErr(TypeError, 'ERR_ILLEGAL_CONSTRUCTOR', 'Illegal constructor');
+          priv.set(this, state);
+        }
+        run(...args) {
+          const s = stState(this);
+          const r = exec(s, args, 'run');
+          return { changes: r.changes, lastInsertRowid: s.bigints ? BigInt(r.lastInsertRowid) : r.lastInsertRowid };
+        }
+        get(...args) { return exec(stState(this), args, 'all')[0]; }
+        all(...args) { return exec(stState(this), args, 'all'); }
+        iterate(...args) { return exec(stState(this), args, 'all')[Symbol.iterator](); }
+        columns() {
+          const s = stState(this);
+          return s.bs.columns().map((name) => Object.assign(Object.create(null), { column: null, database: 'main', name, table: null, type: null }));
+        }
+        get sourceSQL() { return stState(this).source; }
+        get expandedSQL() {
+          const s = stState(this);
+          const vals = s.last || [];
+          let k = 0;
+          const lit = (v) => (v === null || v === undefined ? 'NULL' : typeof v === 'number' ? (Number.isInteger(v) ? v + '.0' : String(v)) : typeof v === 'string' ? `'${v.replace(/'/g, "''")}'` : "x''");
+          return s.source.replace(/\?\d*|[:@$][A-Za-z_]\w*|'(?:[^']|'')*'/g, (m) => (m[0] === "'" ? m : lit(m[0] === '?' ? vals[k++] : (s.lastNamed || {})[m])));
+        }
+        setReadBigInts(v) { stState(this).bigints = !!v; }
+        setReturnArrays(v) { stState(this).arrays = !!v; }
+        setAllowBareNamedParameters(v) { stState(this).bare = !!v; }
+        setAllowUnknownNamedParameters(v) { stState(this).unknown = !!v; }
+      }
+      function stState(st) {
+        const s = priv.get(st);
+        if (!s) throw new TypeError('Illegal invocation');
+        if (!s.db.ent || s.db.ent !== s.ent) throw nodeErr(Error, 'ERR_INVALID_STATE', 'database is not open');
+        return s;
+      }
+      function bind(s, args) {
+        let named = null;
+        let positional = args;
+        if (args.length && args[0] !== null && typeof args[0] === 'object' && !ArrayBuffer.isView(args[0])) { named = args[0]; positional = args.slice(1); }
+        const out = { named: null, positional: positional.map((v, i) => sqlValue(v, i + 1)) };
+        if (named) {
+          out.named = {};
+          for (const k of Object.keys(named)) {
+            let target = null;
+            if (/^[:@$]/.test(k)) target = s.info.names.includes(k) ? k : null;
+            else if (s.bare) target = ['$', ':', '@'].map((p) => p + k).find((x) => s.info.names.includes(x)) || null;
+            if (!target) {
+              if (s.unknown) continue;
+              throw nodeErr(Error, 'ERR_INVALID_STATE', `Unknown named parameter '${k}'`);
+            }
+            out.named[target] = sqlValue(named[k], s.info.names.indexOf(target) + 1);
+          }
+        }
+        s.last = out.positional;
+        s.lastNamed = out.named;
+        return out;
+      }
+      function exec(s, args, kind) {
+        const b = bind(s, args);
+        sqlUsable(s.ent, s.write);
+        if (s.write) s.ent.dirty = true;
+        let raw;
+        try { raw = kind === 'run' ? s.bs.run(b) : s.bs.all(b); } catch (e) { throw sqliteError(e); }
+        if (kind === 'run') return raw;
+        const cols = s.bs.columns();
+        const conv = (v) => { v = sqlCell(v); return s.bigints && Number.isInteger(v) ? BigInt(v) : v; };
+        return raw.map((r) => {
+          if (s.arrays) return Array.from(r, conv);
+          const o = Object.create(null);
+          cols.forEach((c, i) => { o[c] = conv(r[i]); });
+          return o;
+        });
+      }
+      class DatabaseSync {
+        constructor(location, options) {
+          if (!new.target) throw nodeErr(TypeError, 'ERR_CONSTRUCT_CALL_REQUIRED', 'Cannot call constructor without `new`');
+          if (location instanceof URL) location = decodeURIComponent(location.pathname);
+          else if (location instanceof Uint8Array) location = toBuffer(location).toString();
+          if (typeof location !== 'string' || location.includes('\0')) throw nodeErr(TypeError, 'ERR_INVALID_ARG_TYPE', 'The "path" argument must be a string, Uint8Array, or URL without null bytes.');
+          if (options !== undefined && (options === null || typeof options !== 'object')) throw nodeErr(TypeError, 'ERR_INVALID_ARG_TYPE', 'The "options" argument must be an object.');
+          options = options || {};
+          priv.set(this, { location, readOnly: !!options.readOnly, fk: options.enableForeignKeyConstraints !== false, ent: null });
+          if (options.open !== false) this.open();
+        }
+        open() {
+          const s = priv.get(this);
+          if (s.ent) throw nodeErr(Error, 'ERR_INVALID_STATE', 'database is already open');
+          s.ent = sqlOpen(s.location, s.readOnly);
+          if (!s.fk) s.ent.h.exec('PRAGMA foreign_keys = OFF');
+        }
+        close() {
+          const s = dbState(this);
+          sqlRelease(s.ent);
+          s.ent = null;
+        }
+        get isOpen() { return !!priv.get(this).ent; }
+        get isTransaction() { return dbState(this).ent.h.inTx(); }
+        location() { return dbState(this).ent.path; }
+        prepare(sql) {
+          const s = dbState(this);
+          if (typeof sql !== 'string') throw nodeErr(TypeError, 'ERR_INVALID_ARG_TYPE', 'The "sql" argument must be a string.');
+          const info = sqlScan(sql);
+          if (info.empty) throw nodeErr(Error, 'ERR_INVALID_ARG_VALUE', 'The SQL query contains no statements.');
+          sqlUsable(s.ent, false);
+          let bs;
+          try { bs = s.ent.h.prepare(sql); } catch (e) { throw sqliteError(e); }
+          return new StatementSync(TOKEN, { db: s, ent: s.ent, bs, info, source: info.stmts[0].replace(/^\s+/, ''), write: !isReadSql(info.stmts[0]), arrays: false, bigints: false, bare: true, unknown: false });
+        }
+        exec(sql) {
+          const s = dbState(this);
+          if (typeof sql !== 'string') throw nodeErr(TypeError, 'ERR_INVALID_ARG_TYPE', 'The "sql" argument must be a string.');
+          sqlExec(s.ent, sql);
+        }
+        function() { throw makeError(Error, 'ERR_NODELAB_UNSUPPORTED', 'db.function() non è disponibile nel simulatore NodeLab.'); }
+        [Symbol.dispose]() { if (this.isOpen) this.close(); }
+      }
+      sqliteModule = { DatabaseSync, StatementSync, constants: { SQLITE_CHANGESET_OMIT: 0, SQLITE_CHANGESET_REPLACE: 1, SQLITE_CHANGESET_ABORT: 2 } };
+      return sqliteModule;
+    }
+
+    // better-sqlite3: stessa base, con le sue regole (oggetti normali, niente booleani, transaction())
+    function createBetterSqlite3() {
+      requireSqlEngine();
+      const priv = new WeakMap();
+      class SqliteError extends Error {
+        constructor(message, code) { super(message); this.code = code; }
+      }
+      Object.defineProperty(SqliteError.prototype, 'name', { value: 'SqliteError', writable: true, configurable: true });
+      const CODES = { 1: 'SQLITE_ERROR', 5: 'SQLITE_BUSY', 8: 'SQLITE_READONLY', 14: 'SQLITE_CANTOPEN', 19: 'SQLITE_CONSTRAINT', 25: 'SQLITE_RANGE', 26: 'SQLITE_NOTADB', 275: 'SQLITE_CONSTRAINT_CHECK', 787: 'SQLITE_CONSTRAINT_FOREIGNKEY', 1299: 'SQLITE_CONSTRAINT_NOTNULL', 1555: 'SQLITE_CONSTRAINT_PRIMARYKEY', 2067: 'SQLITE_CONSTRAINT_UNIQUE' };
+      const wrap = (e) => {
+        const x = sqliteError(e);
+        return x.code === 'ERR_SQLITE_ERROR' ? new SqliteError(x.message, CODES[x.errcode] || CODES[x.errcode & 255] || 'SQLITE_ERROR') : x;
+      };
+      const need = (db) => {
+        const s = priv.get(db);
+        if (!s || !s.ent) throw new TypeError('The database connection is not open');
+        return s;
+      };
+      function Database(filename, options) {
+        if (!new.target) return new Database(filename, options);
+        if (filename == null) filename = '';
+        if (typeof filename !== 'string') throw new TypeError('Expected first argument to be a string');
+        options = options || {};
+        const memory = filename === '' || filename === ':memory:';
+        if (options.fileMustExist && !memory && !isFile(path.resolve(CWD, filename))) throw new SqliteError('unable to open database file', 'SQLITE_CANTOPEN');
+        let ent;
+        try { ent = sqlOpen(memory ? ':memory:' : filename, !!options.readonly); } catch (e) { throw wrap(e); }
+        priv.set(this, { ent, verbose: typeof options.verbose === 'function' ? options.verbose : null });
+        Object.defineProperties(this, {
+          name: { value: filename, enumerable: true },
+          open: { get: () => !!priv.get(this).ent, enumerable: true },
+          inTransaction: { get: () => { const s = priv.get(this); return !!s.ent && s.ent.h.inTx(); }, enumerable: true },
+          readonly: { value: !!options.readonly, enumerable: true },
+          memory: { value: memory, enumerable: true },
+        });
+      }
+      class Statement {
+        constructor(db, sql) {
+          const s = need(db);
+          const info = sqlScan(sql);
+          if (info.empty) throw new RangeError('The supplied SQL string contains no statements');
+          if (info.more) throw new RangeError('The supplied SQL string contains more than one statement');
+          sqlUsable(s.ent, false);
+          let bs;
+          try { bs = s.ent.h.prepare(sql); } catch (e) { throw wrap(e); }
+          const reader = bs.columns().length > 0;
+          priv.set(this, { db, s, ent: s.ent, bs, info, sql, reader, write: !isReadSql(sql), pluck: false, raw: false, bound: null });
+          Object.defineProperties(this, {
+            reader: { value: reader, enumerable: true },
+            readonly: { value: isReadSql(sql), enumerable: true },
+            source: { value: sql, enumerable: true },
+            database: { value: db, enumerable: true },
+            busy: { value: false, enumerable: true },
+          });
+        }
+        run(...a) { const r = go(this, a, 'run'); return { changes: r.changes, lastInsertRowid: r.lastInsertRowid }; }
+        get(...a) { return rows(this, a)[0]; }
+        all(...a) { return rows(this, a); }
+        iterate(...a) { return rows(this, a)[Symbol.iterator](); }
+        pluck(on) { priv.get(this).pluck = on !== false; if (on !== false) priv.get(this).raw = false; return this; }
+        raw(on) { priv.get(this).raw = on !== false; if (on !== false) priv.get(this).pluck = false; return this; }
+        columns() { return priv.get(this).bs.columns().map((name) => ({ name, column: null, table: null, database: 'main', type: null })); }
+        bind(...a) {
+          const st = priv.get(this);
+          if (st.bound) throw new TypeError('The bind() method can only be invoked once per statement object');
+          st.bound = bindArgs(st, a);
+          return this;
+        }
+      }
+      function bindArgs(st, a) {
+        let named = null;
+        const pos = [];
+        for (const x of a) {
+          if (Array.isArray(x)) pos.push(...x);
+          else if (x !== null && typeof x === 'object' && !ArrayBuffer.isView(x)) {
+            if (named) throw new TypeError('You cannot specify named parameters in two different objects');
+            named = x;
+          } else pos.push(x);
+        }
+        const values = pos.map((v, i) => sqlValue(v, i + 1, true));
+        if (values.length < st.info.anon) throw new RangeError('Too few parameter values were provided');
+        if (values.length > st.info.anon) throw new RangeError('Too many parameter values were provided');
+        if (!st.info.names.length) return { named: null, positional: values };
+        const out = {};
+        for (const n of st.info.names) {
+          const bare = n.slice(1);
+          if (!named || !(bare in named)) throw new RangeError(`Missing named parameter "${bare}"`);
+          out[n] = sqlValue(named[bare], 0, true);
+        }
+        return { named: out, positional: values };
+      }
+      function go(stmt, a, kind) {
+        const st = priv.get(stmt);
+        const s = need(st.db);
+        if (s.ent !== st.ent) throw new TypeError('The database connection is not open');
+        let b;
+        if (st.bound) { if (a.length) throw new TypeError('This statement already has bound parameters'); b = st.bound; } else b = bindArgs(st, a);
+        if (s.verbose) s.verbose(st.sql);
+        try { sqlUsable(s.ent, st.write); } catch (e) { throw wrap(e); }
+        if (st.write) s.ent.dirty = true;
+        try { return kind === 'run' ? st.bs.run(b) : st.bs.all(b); } catch (e) { throw wrap(e); }
+      }
+      function rows(stmt, a) {
+        const st = priv.get(stmt);
+        if (!st.reader) throw new TypeError('This statement does not return data. Use run() instead');
+        const cols = st.bs.columns();
+        return go(stmt, a, 'all').map((r) => {
+          if (st.pluck) return sqlCell(r[0]);
+          if (st.raw) return Array.from(r, sqlCell);
+          const o = {};
+          cols.forEach((c, i) => { o[c] = sqlCell(r[i]); });
+          return o;
+        });
+      }
+      Database.prototype.prepare = function (sql) {
+        if (typeof sql !== 'string') throw new TypeError('Expected first argument to be a string');
+        return new Statement(this, sql);
+      };
+      Database.prototype.exec = function (sql) {
+        const s = need(this);
+        if (typeof sql !== 'string') throw new TypeError('Expected first argument to be a string');
+        if (s.verbose) s.verbose(sql);
+        try { sqlExec(s.ent, sql); } catch (e) { throw wrap(e); }
+        return this;
+      };
+      Database.prototype.pragma = function (source, opts) {
+        const st = this.prepare(`PRAGMA ${source}`);
+        if (!st.reader) { st.run(); return []; }
+        return opts && opts.simple ? st.pluck().get() : st.all();
+      };
+      Database.prototype.transaction = function (fn) {
+        if (typeof fn !== 'function') throw new TypeError('Expected first argument to be a function');
+        const db = this;
+        let depth = 0;
+        const wrapped = function (...args) {
+          const s = need(db);
+          const nested = s.ent.h.inTx();
+          const sp = `nodelab_${depth++}`;
+          sqlExec(s.ent, nested ? `SAVEPOINT ${sp}` : 'BEGIN');
+          try {
+            const r = fn.apply(this, args);
+            if (r && typeof r.then === 'function') throw new TypeError('Transaction function cannot return a promise');
+            sqlExec(s.ent, nested ? `RELEASE ${sp}` : 'COMMIT');
+            return r;
+          } catch (e) {
+            if (s.ent.h.inTx()) sqlExec(s.ent, nested ? `ROLLBACK TO ${sp}; RELEASE ${sp}` : 'ROLLBACK');
+            throw e;
+          } finally { depth--; }
+        };
+        Object.assign(wrapped, { deferred: wrapped, immediate: wrapped, exclusive: wrapped, database: db });
+        return wrapped;
+      };
+      Database.prototype.close = function () {
+        const s = priv.get(this);
+        if (s.ent) { sqlRelease(s.ent); s.ent = null; }
+        return this;
+      };
+      Database.prototype.function = function () { throw makeError(Error, 'ERR_NODELAB_UNSUPPORTED', 'db.function() non è disponibile nel simulatore NodeLab.'); };
+      Database.SqliteError = SqliteError;
+      Database.default = Database;
+      return Database;
+    }
+
     // pacchetti npm "integrati" nel simulatore: node_modules/<nome>/index.js contiene solo un marcatore
     // (sub: altri file del pacchetto, per require('dotenv/config') o require('zod/v4'))
     const BUILTIN_PKGS = {
@@ -3118,6 +3739,7 @@
       zod: { version: '4.6.7', create: createZod, sub: { 'v4.js': 'zod' } },
       dotenv: { version: '18.0.9', create: createDotenv, sub: { 'config.js': 'dotenv/config' } },
       ejs: { version: '7.0.2', create: createEjs },
+      'better-sqlite3': { version: '12.4.1', create: createBetterSqlite3 },
       'dotenv/config': { internal: true, create: () => { getBuiltin('dotenv').config({ quiet: true }); return {}; } },
     };
     const builtinCache = new Map();
@@ -3261,10 +3883,11 @@
       worker_threads: notAvailable('worker_threads'),
       cluster: notAvailable('cluster'),
       dns: notAvailable('dns'),
-      sqlite: notAvailable('sqlite'),
+      sqlite: () => createSqlite(),
       test: notAvailable('test'),
     };
     const coreCache = new Map();
+    const SCHEME_ONLY = new Set(['sqlite', 'test']);   // solo con il prefisso: require('node:sqlite')
 
     // ------------------------------------------------------------ moduli
     const moduleCache = new Map();
@@ -3357,7 +3980,7 @@
         if (typeof spec !== 'string') throw argTypeError('id', 'of type string', spec);
         const isNode = spec.startsWith('node:');
         const bare = isNode ? spec.slice(5) : spec;
-        if (CORE[bare]) {
+        if (CORE[bare] && (isNode || !SCHEME_ONLY.has(bare))) {
           if (!coreCache.has(bare)) coreCache.set(bare, CORE[bare]());
           return coreCache.get(bare);
         }
@@ -3381,7 +4004,7 @@
       };
       req.resolve = (spec) => {
         const bare = spec.startsWith('node:') ? spec.slice(5) : spec;
-        if (CORE[bare]) return spec;
+        if (CORE[bare] && (spec !== bare || !SCHEME_ONLY.has(bare))) return spec;
         return resolveFilename(spec, mod.filename);
       };
       req.cache = new Proxy({}, {
@@ -3547,7 +4170,7 @@
           fs,
           path,
           source: Object.fromEntries(Object.entries(sourceFiles).map(([k, v]) => [k.replace(CWD + '/', ''), v])),
-          read(p) { const a = path.resolve(CWD, p); return isFile(a) ? vfs.files.get(a) : null; },
+          read(p) { const a = path.resolve(CWD, p); sqlSyncPath(a); return isFile(a) ? vfs.files.get(a) : null; },
           exists(p) { return exists(path.resolve(CWD, p)); },
           isDir(p) { return isDir(path.resolve(CWD, p)); },
           list(p) { const a = path.resolve(CWD, p || '.'); return isDir(a) ? listChildren(a) : []; },
@@ -3593,7 +4216,10 @@
     // --------------------------------------------------------- messaggi
     G.addEventListener('message', async (ev) => {
       const msg = ev.data;
-      if (msg.type === 'run') runMain(msg);
+      if (msg.type === 'run') {
+        if (needsSqlite(msg)) await loadSqlEngine();
+        runMain(msg);
+      }
       else if (msg.type === 'request') {
         const r = await dispatch(msg);
         post(Object.assign({ type: 'response', id: msg.id }, r));

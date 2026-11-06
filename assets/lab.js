@@ -17,6 +17,7 @@
  * NodeLab.httpClient(el, { send, port, presets, onExchange })
  * NodeLab.inspector(el, { id, files, entry, port, missions, presets, intro, fs, packages, persist, watch, node, env })
  * NodeLab.playground(el, { code, inputs: [{ label, value }], packages, file })   // "prova lo schema" con input JSON
+ * NodeLab.sql(el, { setup, presets: [{ label, sql }], height })                  // console SQL su SQLite
  * ========================================================================== */
 (function () {
   'use strict';
@@ -28,9 +29,9 @@
   const isJs = (n) => /\.(c|m)?js$/.test(n);
   const isTpl = (n) => /\.(ejs|html?)$/.test(n);
   // i modi di CodeMirror per HTML ed EJS si caricano solo nelle pagine che li usano (altrimenti testo semplice)
-  const cmMode = (n) => (n.endsWith('.json') ? { name: 'javascript', json: true } : isJs(n) ? 'javascript' : n.endsWith('.ejs') ? 'application/x-ejs' : isTpl(n) ? 'htmlmixed' : n.endsWith('.css') ? 'css' : 'text/plain');
-  const hlLang = (n) => (n.endsWith('.json') ? 'json' : isJs(n) ? 'javascript' : isTpl(n) ? 'html' : n.endsWith('.css') ? 'css' : /(^|\/)\.env/.test(n) ? 'ini' : 'plaintext');
-  const fileIcon = (n) => (n.endsWith('.json') ? 'file-json' : isJs(n) ? 'file-code-2' : isTpl(n) ? 'file-code' : n.endsWith('.css') ? 'palette' : /(^|\/)\.env/.test(n) ? 'key-round' : 'file-text');
+  const cmMode = (n) => (n.endsWith('.json') ? { name: 'javascript', json: true } : isJs(n) ? 'javascript' : n.endsWith('.ejs') ? 'application/x-ejs' : isTpl(n) ? 'htmlmixed' : n.endsWith('.css') ? 'css' : n.endsWith('.sql') ? 'text/x-sqlite' : 'text/plain');
+  const hlLang = (n) => (n.endsWith('.json') ? 'json' : isJs(n) ? 'javascript' : isTpl(n) ? 'html' : n.endsWith('.css') ? 'css' : n.endsWith('.sql') ? 'sql' : /(^|\/)\.env/.test(n) ? 'ini' : 'plaintext');
+  const fileIcon = (n) => (n.endsWith('.json') ? 'file-json' : isJs(n) ? 'file-code-2' : isTpl(n) ? 'file-code' : n.endsWith('.css') ? 'palette' : n.endsWith('.sql') ? 'database' : /(^|\/)\.env/.test(n) ? 'key-round' : 'file-text');
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem('nodelab:' + k)); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem('nodelab:' + k, JSON.stringify(v)); } catch (e) { /* storage non disponibile */ } },
@@ -104,7 +105,7 @@
       const isDir = snap[p].type === 'dir';
       const nm = name === 'node_modules';
       return `<div class="flex items-center gap-1.5 ${isDir ? '' : 'cursor-pointer hover:text-white'} py-0.5" style="padding-left:${depth * 14}px" ${isDir ? '' : `data-open="${esc(p)}"`}>
-        <i data-lucide="${isDir ? (nm ? 'package' : 'folder') : name.endsWith('.json') ? 'file-json' : name.endsWith('.js') ? 'file-code-2' : 'file-text'}" class="w-3.5 h-3.5 ${isDir ? 'text-yellow-400' : 'text-gray-400'}"></i>
+        <i data-lucide="${isDir ? (nm ? 'package' : 'folder') : name.endsWith('.json') ? 'file-json' : name.endsWith('.js') ? 'file-code-2' : /\.(db|sqlite3?)$/.test(name) ? 'database' : 'file-text'}" class="w-3.5 h-3.5 ${isDir ? 'text-yellow-400' : 'text-gray-400'}"></i>
         <span class="${isDir ? 'text-yellow-200' : ''}">${esc(name)}${isDir ? '/' : ''}</span>
         ${isDir ? '' : `<span class="text-gray-600 ml-auto text-[11px]">${snap[p].size} B</span>`}</div>`;
     }).join('');
@@ -551,7 +552,7 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
     /* --- file system */
     const tree = $('.lab-tree');
     const view = $('.lab-fileview');
-    const openFile = (p, info) => { view.classList.remove('hidden'); view.textContent = `── ${p.replace('/progetto/', '')} ──\n${info.content}`; };
+    const openFile = (p, info) => { view.classList.remove('hidden'); view.classList.toggle('whitespace-pre', info.preview != null); view.classList.toggle('whitespace-pre-wrap', info.preview == null); view.textContent = `── ${p.replace('/progetto/', '')} ──\n${info.preview != null ? info.preview : info.content}`; };
     const showTree = (snap) => renderTree(tree, snap, openFile);
     showTree(localSnapshot(files, cfg.fs));
     $('.lab-fs-toggle').onclick = () => {
@@ -717,8 +718,8 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
           <div class="h-40 overflow-auto p-2 insp-scroll"><div class="term-out insp-out text-xs text-gray-300"></div></div>
         </div>
         ${cfg.watch ? `<div class="term flex flex-col overflow-hidden insp-watchbox transition-shadow">
-          <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700 flex items-center gap-2"><i data-lucide="file-json" class="w-3.5 h-3.5 text-yellow-400"></i><span class="font-mono">${esc(cfg.watch)}</span><span class="insp-watchstate ml-auto text-gray-600">sul disco</span></div>
-          <pre class="insp-watch h-48 overflow-auto p-2 text-xs text-gray-300 whitespace-pre-wrap"></pre>
+          <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700 flex items-center gap-2"><i data-lucide="${/\.(db|sqlite3?)$/.test(cfg.watch) ? 'database' : 'file-json'}" class="w-3.5 h-3.5 text-yellow-400"></i><span class="font-mono">${esc(cfg.watch)}</span><span class="insp-watchstate ml-auto text-gray-600">sul disco</span></div>
+          <pre class="insp-watch h-48 overflow-auto p-2 text-xs text-gray-300 ${/\.(db|sqlite3?)$/.test(cfg.watch) ? 'whitespace-pre' : 'whitespace-pre-wrap'}"></pre>
         </div>` : ''}
       </div>
       <div class="lg:col-span-3 insp-client"></div></div>`;
@@ -731,7 +732,7 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
     function drawWatch(snap) {
       if (!cfg.watch) return;
       const f = snap ? snap['/progetto/' + cfg.watch] : null;
-      const text = f ? f.content : snap ? null : (cfg.fs || {})[cfg.watch];
+      const text = f ? (f.preview != null ? f.preview : f.content) : snap ? null : (cfg.fs || {})[cfg.watch];
       const changed = snap && text !== watched;
       watched = text;
       $('.insp-watch').textContent = text === null ? '(il file non esiste)' : text;
@@ -870,6 +871,146 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
     return { run };
   }
 
+  /* ------------------------------------------------------- Console SQL
+   * Si scrive SQL, gira davvero su SQLite (node:sqlite nel simulatore), i risultati diventano tabelle.
+   * NodeLab.sql(el, { setup: 'CREATE TABLE …; INSERT …;', presets: [{ label, sql }], height: '22rem' })
+   * Il database resta tra un'esecuzione e l'altra; "Ripristina" lo ricrea da setup.
+   */
+  function splitSql(sql) {
+    const out = [];
+    let start = 0;
+    let has = false;
+    for (let i = 0; i < sql.length; i++) {
+      const c = sql[i];
+      if (c === "'" || c === '"' || c === '`') {
+        i++;
+        while (i < sql.length && !(sql[i] === c && sql[i + 1] !== c)) i += sql[i] === c ? 2 : 1;
+        has = true;
+      } else if (c === '-' && sql[i + 1] === '-') { const e = sql.indexOf('\n', i); i = e < 0 ? sql.length : e; }
+      else if (c === '/' && sql[i + 1] === '*') { const e = sql.indexOf('*/', i + 2); i = e < 0 ? sql.length : e + 1; }
+      else if (c === ';') { if (has) out.push(sql.slice(start, i + 1).trim()); start = i + 1; has = false; }
+      else if (!/\s/.test(c)) has = true;
+    }
+    if (has) out.push(sql.slice(start).trim());
+    return out;
+  }
+  function sqlConsole(el, cfg) {
+    const presets = cfg.presets || [];
+    el.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-5 flex flex-col gap-3 min-w-0">
+        ${presets.length ? `<div class="flex flex-wrap items-center gap-1.5">${presets.map((p, i) => `<button data-i="${i}" class="sq-preset text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-950 text-gray-300 hover:border-emerald-500 hover:text-white">${esc(p.label)}</button>`).join('')}</div>` : ''}
+        <textarea class="sq-input w-full h-44 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-100 focus:outline-none focus:border-emerald-500" spellcheck="false" placeholder="SELECT * FROM libri;"></textarea>
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="sq-run px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium flex items-center gap-2" title="Ctrl+Invio"><i data-lucide="play" class="w-4 h-4"></i>Esegui</button>
+          <button class="sq-reset px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm flex items-center gap-2" title="Ricrea il database con i dati iniziali"><i data-lucide="database" class="w-4 h-4"></i>Ripristina</button>
+          <span class="sq-state text-xs text-gray-500 font-mono"></span>
+        </div>
+        <div class="bg-gray-900 border border-gray-700 rounded-lg p-3">
+          <div class="text-xs text-gray-400 mb-2 flex items-center gap-1.5"><i data-lucide="table-2" class="w-3.5 h-3.5 text-emerald-400"></i>Tabelle</div>
+          <div class="sq-schema text-xs font-mono text-gray-300 space-y-1.5"></div>
+        </div>
+      </div>
+      <div class="lg:col-span-7 min-w-0">
+        <div class="sq-out space-y-3 overflow-auto pr-1" style="max-height:${cfg.height || '28rem'}"><p class="text-gray-500 text-sm italic">Scrivi una o più istruzioni SQL (separate da <code class="inline">;</code>) e premi Esegui.</p></div>
+      </div></div>`;
+    const $ = (s) => el.querySelector(s);
+    let proc = null;
+    let db = null;   // il file del database dopo l'ultima esecuzione
+    let current = -1;
+    const drawPresets = () => el.querySelectorAll('.sq-preset').forEach((b) => {
+      const on = Number(b.dataset.i) === current;
+      b.className = `sq-preset text-xs font-mono px-2 py-1 rounded border ${on ? 'border-emerald-400 bg-emerald-500/15 text-white' : 'border-gray-700 bg-gray-950 text-gray-300 hover:border-emerald-500 hover:text-white'}`;
+    });
+    const cell = (v) => (v === null ? '<span class="text-gray-600 italic">NULL</span>' : typeof v === 'number' ? `<span class="text-cyan-300">${v}</span>` : esc(v));
+    const verbo = (sql) => (sql.replace(/^(\s+|--[^\n]*\n|\/\*[\s\S]*?\*\/)+/, '').match(/^\w+/) || [''])[0].toUpperCase();
+    function message(r) {
+      const n = r.changes;
+      const v = verbo(r.sql);
+      if (v === 'INSERT' || v === 'REPLACE') return `✓ ${n} ${n === 1 ? 'riga inserita' : 'righe inserite'} · lastInsertRowid: ${r.id}`;
+      if (v === 'UPDATE') return `✓ ${n} ${n === 1 ? 'riga modificata' : 'righe modificate'}`;
+      if (v === 'DELETE') return `✓ ${n} ${n === 1 ? 'riga eliminata' : 'righe eliminate'}`;
+      return '✓ Eseguito';
+    }
+    function draw(data, stderr) {
+      const box = $('.sq-out');
+      const parts = (data ? data.out : []).map((r) => {
+        const head = `<div class="px-3 py-1.5 bg-gray-800 text-xs font-mono text-gray-400 whitespace-pre-wrap break-words">${esc(r.sql)}</div>`;
+        if (r.error) return `<div class="rounded-lg border border-red-500/50 overflow-hidden">${head}<div class="px-3 py-2 text-sm font-mono text-red-300">Error: ${esc(r.error)}</div></div>`;
+        if (!r.cols) return `<div class="rounded-lg border border-gray-700 overflow-hidden">${head}<div class="px-3 py-2 text-sm font-mono text-green-300">${esc(message(r))}</div></div>`;
+        const table = `<table class="w-full text-xs font-mono"><thead class="bg-gray-900 text-emerald-300"><tr>${r.cols.map((c) => `<th class="text-left px-3 py-1.5 font-semibold border-b border-gray-700">${esc(c)}</th>`).join('')}</tr></thead>
+          <tbody class="divide-y divide-gray-800 text-gray-200">${r.rows.map((row) => `<tr class="hover:bg-gray-800/60">${row.map((v) => `<td class="px-3 py-1 whitespace-nowrap">${cell(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+        const foot = `${r.n} ${r.n === 1 ? 'riga' : 'righe'}${r.n > r.rows.length ? ` (mostrate le prime ${r.rows.length})` : ''}`;
+        return `<div class="rounded-lg border border-gray-700 overflow-hidden">${head}<div class="overflow-x-auto">${r.n ? table : '<div class="px-3 py-2 text-sm text-gray-500 italic">(nessuna riga)</div>'}</div><div class="px-3 py-1 text-[11px] text-gray-500 border-t border-gray-800">${foot}</div></div>`;
+      });
+      if (stderr) parts.push(`<pre class="text-xs text-red-300 whitespace-pre-wrap">${esc(stderr)}</pre>`);
+      box.innerHTML = parts.join('') || '<p class="text-gray-500 text-sm italic">Nessuna istruzione da eseguire.</p>';
+      if (data) {
+        $('.sq-schema').innerHTML = data.tabelle.length ? data.tabelle.map((t) => `<div><span class="text-emerald-300 font-semibold">${esc(t.nome)}</span> <span class="text-gray-500">(${t.colonne.map((c) => `${c.pk ? '🔑' : ''}${esc(c.name)}${c.type ? ` <span class="text-gray-600">${esc(c.type.toLowerCase())}</span>` : ''}`).join(', ')})</span></div>`).join('') : '<span class="text-gray-600 italic">nessuna tabella</span>';
+      }
+    }
+    function run(onlySchema) {
+      if (proc) proc.kill(true);
+      const stmts = onlySchema ? [] : splitSql($('.sq-input').value);
+      const script = `const { DatabaseSync } = require('node:sqlite');
+const fs = require('fs');
+const nuovo = !fs.existsSync('console.db');
+const db = new DatabaseSync('console.db');
+if (nuovo) db.exec(${JSON.stringify(cfg.setup || '')});
+const out = [];
+const cella = (v) => (v instanceof Uint8Array ? '<BLOB ' + v.length + ' byte>' : v);
+for (const sql of ${JSON.stringify(stmts)}) {
+  try {
+    const st = db.prepare(sql);
+    const cols = st.columns().map((c) => c.name);
+    if (cols.length) {
+      st.setReturnArrays(true);
+      const righe = st.all();
+      out.push({ sql, cols, rows: righe.slice(0, 200).map((r) => r.map(cella)), n: righe.length });
+    } else {
+      const r = st.run();
+      out.push({ sql, changes: r.changes, id: r.lastInsertRowid });
+    }
+  } catch (e) { out.push({ sql, error: e.message }); break; }
+}
+const tabelle = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY rowid").all()
+  .map((t) => ({ nome: t.name, colonne: db.prepare('SELECT name, type, pk FROM pragma_table_info(?)').all(t.name).map((c) => ({ ...c })) }));
+db.close();
+console.log('\\u0001' + JSON.stringify({ out, tabelle }));
+`;
+      let stdout = '';
+      let stderr = '';
+      $('.sq-state').textContent = '⏳ esecuzione…';
+      const p = new NodeProcess({
+        files: { 'console.js': script }, entry: 'console.js', fs: db ? { 'console.db': db } : {},
+        onOutput: (s, t) => { if (s === 'stdout') stdout += t; else if (s === 'stderr') stderr += t; },
+        onExit: (info) => {
+          if (p !== proc) return;
+          const f = info.fs && info.fs['/progetto/console.db'];
+          if (f && !info.crashed) db = f.content;
+          const line = stdout.split('\n').find((l) => l.startsWith('\u0001'));
+          let data = null;
+          try { data = line ? JSON.parse(line.slice(1)) : null; } catch (e) { /* ignora */ }
+          $('.sq-state').textContent = '';
+          draw(data, data ? '' : stderr || 'Nessun risultato.');
+          if (onlySchema && data) $('.sq-out').innerHTML = '<p class="text-gray-500 text-sm italic">Database pronto. Scrivi una o più istruzioni SQL (separate da <code class="inline">;</code>) e premi Esegui.</p>';
+        },
+      });
+      proc = p;
+      p.start();
+    }
+    el.querySelectorAll('.sq-preset').forEach((b) => {
+      b.onclick = () => { current = Number(b.dataset.i); $('.sq-input').value = presets[current].sql; drawPresets(); run(); };
+    });
+    $('.sq-input').addEventListener('input', () => { current = -1; drawPresets(); });
+    $('.sq-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); } });
+    $('.sq-run').onclick = () => run();
+    $('.sq-reset').onclick = () => { db = null; run(true); };
+    if (presets.length) { current = 0; $('.sq-input').value = presets[0].sql; drawPresets(); }
+    run(true);
+    icons();
+    return { run };
+  }
+
   /* ------------------------------------------- progresso nella pagina */
   function refreshProgress() {
     document.querySelectorAll('[data-lab-progress]').forEach((badge) => {
@@ -882,5 +1023,5 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
   document.addEventListener('nodelab:progress', refreshProgress);
   document.addEventListener('DOMContentLoaded', refreshProgress);
 
-  window.NodeLab = { mount, httpClient, browser, inspector, playground, ansiToHtml, fnSource, refreshProgress, store };
+  window.NodeLab = { mount, httpClient, browser, inspector, playground, sql: sqlConsole, ansiToHtml, fnSource, refreshProgress, store };
 })();

@@ -23,6 +23,7 @@ assets/
   m6-biblioteca.js    "Biblioteca 3.0" (API REST v1 con il catalogo su file JSON) + scenari di RestGame (modulo 6)
   m7-biblioteca.js    "Biblioteca 4.0" (zod, classi di errore, .env, livelli) + PipelineViz, SortGame e playground (modulo 7)
   m8-biblioteca.js    "Biblioteca 5.0" (pagine EJS, partials, form, PRG), la bacheca del doppio invio e il playground di EJS (modulo 8)
+  m9-biblioteca.js    "Biblioteca 6.0" (Express + node:sqlite: migrazioni, seed, repository, JOIN), la demo di SQL injection e il database della console SQL (modulo 9)
 tools/
   harness.js          esegue il runtime simulato dentro Node (senza browser)
   check-labs.js       verifica soluzioni e codice iniziale dei laboratori
@@ -101,6 +102,9 @@ NodeLab.mount(document.getElementById('lab1'), {
   comprese quelle dei redirect e dei CSS, passa da `onExchange` (quindi dalle missioni).
 - `NodeLab.playground(el, { code, inputs: [{ label, value }], packages, file })` — codice fisso + un valore `input` da scegliere
   o modificare; ▶ lo esegue nel simulatore (es. per provare uno schema zod).
+- `NodeLab.sql(el, { setup, presets: [{ label, sql }], height })` — console SQL: le istruzioni girano su SQLite nel simulatore
+  e i risultati diventano tabelle; il database resta tra un'esecuzione e l'altra ("Ripristina" lo ricrea da `setup`).
+- Nell'inspector `watch` può essere anche un database (`watch: 'data/biblioteca.db'`): compaiono le sue tabelle, aggiornate dopo ogni richiesta.
 - `Quiz.mount(el, [{ question, code?, options, correct, explanation }], { id })`.
 - `OrderGame.mount(el, [{ title, code, chips, answer, explain, cmd?, prompt? }], { id })` — "indovina l'output"
   (`cmd` cambia la riga sopra il terminale, es. `$ curl localhost:3000/api/libri`).
@@ -125,6 +129,7 @@ node tools/check-labs.js assets/labs-m5.js M5_LABS
 node tools/check-labs.js assets/labs-m6.js M6_LABS
 node tools/check-labs.js assets/labs-m7.js M7_LABS
 node tools/check-labs.js assets/labs-m8.js M8_LABS
+node tools/check-labs.js assets/labs-m9.js M9_LABS
 ```
 
 ## Note sul simulatore
@@ -148,9 +153,16 @@ node tools/check-labs.js assets/labs-m8.js M8_LABS
 - **File .env**: `node: '--env-file=.env'` (anche `--env-file-if-exists`, più file), `process.loadEnvFile()`, `util.parseEnv()`
   e **dotenv 18** (`packages: ['dotenv']`, anche `require('dotenv/config')`). Le variabili dell'ambiente vincono sul file.
   Nel terminale: `node --env-file=.env server.js` e `PORT=4000 node server.js` (anche negli script npm).
+- **SQLite**: `node:sqlite` (`DatabaseSync`, `StatementSync`: `exec`, `prepare`, `run/get/all/iterate`, parametri `?` e `:nome/@nome/$nome`,
+  righe con prototipo `null`, `setReturnArrays`, `isTransaction`, errori `ERR_SQLITE_ERROR` con `errcode`/`errstr`) e **better-sqlite3**
+  (`packages: ['better-sqlite3']`: `prepare`, `transaction`, `pragma`, `pluck/raw`, `SqliteError` con i codici `SQLITE_CONSTRAINT_*`).
+  Nel browser il motore è un vero SQLite in WebAssembly (sql.js da cdnjs, scaricato solo quando il codice usa SQLite);
+  `tools/harness.js` usa invece il `node:sqlite` di Node (serve Node 22.13+). Le chiavi esterne sono attive come in Node.
+  I file `.db` stanno nel file system virtuale (codificati in base64): sopravvivono ai riavvii dell'inspector con `persist: true`,
+  più connessioni allo stesso file vedono gli stessi dati. `require('sqlite')` senza `node:` non esiste, come in Node.
 - Moduli disponibili: `fs`, `fs/promises`, `path`, `events`, `os`, `util`, `http`, `url`, `querystring`,
   `crypto` (parziale), `assert`, `buffer`, `timers`, `timers/promises`, `stream` (minimo), `string_decoder`.
 - Il file system è virtuale (radice `/progetto`) e si azzera a ogni esecuzione.
 - `fetch` verso `http://localhost:PORTA` raggiunge i server simulati; verso Internet usa il fetch reale del browser.
-- Non disponibili: `readline` (usa `process.argv`), `child_process`, `net`, `https`, `zlib`, `worker_threads`.
+- Non disponibili: `readline` (usa `process.argv`), `child_process`, `net`, `https`, `zlib`, `worker_threads`, `node:test`; in SQLite `db.function()`.
 - Un ciclo infinito viene interrotto dopo qualche secondo senza bloccare la pagina.

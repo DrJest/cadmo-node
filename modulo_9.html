@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 9 · Database relazionali: SQL e SQLite — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="bg-gray-900">
+
+  <!-- ===================== Esempi di codice (testo puro, niente escape) ===================== -->
+  <script type="text/plain" id="c-create">
+CREATE TABLE autori (
+  id   INTEGER PRIMARY KEY,                -- il numero lo sceglie SQLite
+  nome TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE libri (
+  id          INTEGER PRIMARY KEY,
+  titolo      TEXT NOT NULL,
+  anno        INTEGER CHECK (anno BETWEEN 1450 AND 2100),
+  disponibile INTEGER NOT NULL DEFAULT 1,   -- SQLite non ha i booleani: 0 / 1
+  autore_id   INTEGER NOT NULL REFERENCES autori(id)   -- chiave esterna
+);
+
+-- DROP TABLE libri;               cancella la tabella (e i dati!)
+-- ALTER TABLE libri ADD COLUMN isbn TEXT;    aggiunge una colonna
+</script>
+  <script type="text/plain" id="c-select">
+INSERT INTO libri (titolo, anno, autore_id)
+VALUES ('Palomar', 1983, 1);              -- le colonne non indicate: DEFAULT o NULL
+
+SELECT titolo, anno                       -- quali colonne (* = tutte)
+FROM libri                                -- da quale tabella
+WHERE anno < 1965 AND disponibile = 1     -- quali righe
+ORDER BY anno DESC                        -- in che ordine (ASC è il predefinito)
+LIMIT 10 OFFSET 0;                        -- quante (la paginazione!)
+
+SELECT titolo FROM libri WHERE titolo LIKE '%rosa%';   -- % = qualunque testo
+SELECT titolo FROM libri WHERE anno IS NULL;           -- mai "= NULL"
+</script>
+  <script type="text/plain" id="c-select-out">
+titolo                 anno
+─────────────────────  ────
+Lessico famigliare     1963
+Il barone rampante     1957
+</script>
+  <script type="text/plain" id="c-group">
+SELECT COUNT(*) AS totale FROM libri;               -- una riga: 9
+
+SELECT genere,
+       COUNT(*)  AS quanti,                         -- per ogni gruppo
+       MIN(anno) AS dal,
+       MAX(anno) AS al
+FROM libri
+WHERE anno IS NOT NULL
+GROUP BY genere                                     -- un gruppo per genere
+HAVING COUNT(*) > 1                                 -- filtro SUI GRUPPI
+ORDER BY quanti DESC;
+</script>
+  <script type="text/plain" id="c-group-out">
+genere    quanti  dal   al
+───────   ──────  ────  ────
+romanzo   5       1952  1974
+</script>
+  <script type="text/plain" id="c-modifica">
+UPDATE libri
+SET disponibile = 0, anno = 1958
+WHERE id = 1;                -- ⚠️ senza WHERE: TUTTI i libri
+
+DELETE FROM libri
+WHERE id = 9;                -- ⚠️ senza WHERE: tabella vuota
+
+-- più operazioni "tutte o nessuna": una transazione
+BEGIN;
+  INSERT INTO prestiti (libro_id, utente_id, dal) VALUES (1, 2, '2026-11-05');
+  UPDATE libri SET disponibile = 0 WHERE id = 1;
+COMMIT;                      -- (o ROLLBACK: si torna a prima di BEGIN)
+</script>
+  <script type="text/plain" id="c-node">
+const { DatabaseSync } = require('node:sqlite');   // incluso in Node 24: niente npm
+
+const db = new DatabaseSync('biblioteca.db');      // il file viene creato se manca
+db.exec(`CREATE TABLE IF NOT EXISTS libri (
+  id INTEGER PRIMARY KEY, titolo TEXT NOT NULL, anno INTEGER)`);
+
+const inserisci = db.prepare('INSERT INTO libri (titolo, anno) VALUES (?, ?)');
+console.log(inserisci.run('Palomar', 1983));       // run: INSERT, UPDATE, DELETE
+
+const trova = db.prepare('SELECT * FROM libri WHERE id = ?');
+console.log(trova.get(1));                         // get: la prima riga (o undefined)
+console.log(trova.get(99));
+
+console.log(db.prepare('SELECT titolo FROM libri').all());   // all: tutte le righe
+db.close();
+</script>
+  <script type="text/plain" id="c-node-out">
+{ changes: 1, lastInsertRowid: 1 }
+[Object: null prototype] { id: 1, titolo: 'Palomar', anno: 1983 }
+undefined
+[ [Object: null prototype] { titolo: 'Palomar' } ]
+</script>
+  <script type="text/plain" id="c-node-sqlite">
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync('biblioteca.db');
+
+const st = db.prepare('SELECT * FROM libri WHERE id = ?');
+st.get(1);
+st.run(…);   // → { changes, lastInsertRowid }
+
+db.exec('BEGIN'); /* … */ db.exec('COMMIT');
+</script>
+  <script type="text/plain" id="c-better">
+// npm install better-sqlite3
+const Database = require('better-sqlite3');
+const db = new Database('biblioteca.db');
+
+const st = db.prepare('SELECT * FROM libri WHERE id = ?');
+st.get(1);
+st.run(…);   // → { changes, lastInsertRowid }
+
+const presta = db.transaction((libroId, utenteId) => { /* … */ });
+</script>
+  <script type="text/plain" id="c-injection-no">
+// GET /cerca?autore=…
+const sql = `SELECT titolo FROM libri
+             WHERE autore = '${req.query.autore}'`;
+db.prepare(sql).all();
+
+// autore = ' OR '1'='1
+//   WHERE autore = '' OR '1'='1'      → TUTTI i libri
+// autore = ' UNION SELECT email FROM utenti --
+//   … UNION SELECT email FROM utenti --'   → le email!
+// autore = D'Annunzio
+//   WHERE autore = 'D'Annunzio'       → errore 500
+</script>
+  <script type="text/plain" id="c-injection-si">
+// lo stesso, con un segnaposto
+db.prepare('SELECT titolo FROM libri WHERE autore = ?')
+  .all(req.query.autore);
+
+// nomi:      :autore  @autore  $autore
+db.prepare('SELECT titolo FROM libri WHERE autore = :autore')
+  .all({ autore: req.query.autore });
+
+// LIKE: i % fanno parte del VALORE
+db.prepare('SELECT titolo FROM libri WHERE titolo LIKE ?')
+  .all(`%${q}%`);
+</script>
+  <script type="text/plain" id="c-whitelist">
+// ❌ i ? valgono solo per i VALORI: non per tabelle, colonne, ASC/DESC
+db.prepare('SELECT * FROM libri ORDER BY ?').all(req.query.ordina);   // non ordina!
+
+// ✅ le parti "di struttura" si scelgono da un elenco chiuso
+const ORDINI = { titolo: 'titolo', anno: 'anno', '-anno': 'anno DESC' };
+const ordine = ORDINI[req.query.ordina] ?? 'titolo';    // (o lo valida zod con z.enum)
+db.prepare(`SELECT * FROM libri ORDER BY ${ordine} LIMIT ?`).all(limite);
+</script>
+  <script type="text/plain" id="c-repo">
+// repositories/libri.js — l'UNICO file che conosce la tabella libri
+const db = require('../db');
+
+const BASE = `SELECT l.id, l.titolo, l.anno, l.disponibile, a.nome AS autore
+              FROM libri l JOIN autori a ON a.id = l.autore_id`;
+const daRiga = (r) => r && { ...r, disponibile: r.disponibile === 1 };   // 0/1 → booleano
+
+function trova(id) {
+  return daRiga(db.prepare(`${BASE} WHERE l.id = ?`).get(id));
+}
+
+function crea({ titolo, anno = null, autore_id }) {
+  const { lastInsertRowid } = db.prepare(
+    'INSERT INTO libri (titolo, anno, autore_id) VALUES (?, ?, ?)').run(titolo, anno, autore_id);
+  return trova(lastInsertRowid);
+}
+
+function elimina(id) {
+  return db.prepare('DELETE FROM libri WHERE id = ?').run(id).changes > 0;
+}
+
+module.exports = { trova, crea, elimina };   // stessi nomi del repository su file JSON
+</script>
+  <script type="text/plain" id="c-errori">
+// middleware/errori.js — anche gli errori del database diventano risposte HTTP
+function gestoreErrori(err, req, res, next) {
+  // … ErroreApi, JSON non valido (modulo 7) …
+  if (err.code === 'ERR_SQLITE_ERROR') {
+    if (err.errcode === 2067) {          // UNIQUE: 'UNIQUE constraint failed: libri.isbn'
+      return res.status(409).json({ errore: 'ISBN già presente' });
+    }
+    if (err.errcode === 787) {           // FOREIGN KEY: ci sono righe collegate
+      return res.status(409).json({ errore: 'Ci sono dati collegati' });
+    }
+  }
+  console.error(err);                    // tutto il resto è un bug → 500
+  res.status(500).json({ errore: 'Errore interno del server' });
+}
+</script>
+  <script type="text/plain" id="c-migra">
+progetto/
+├── migrazioni/
+│   ├── 001-schema.sql     CREATE TABLE autori …; CREATE TABLE libri …
+│   └── 002-isbn.sql       ALTER TABLE libri ADD COLUMN isbn TEXT; …
+├── dati/seme.sql          INSERT dei dati di esempio
+└── db.js
+
+// db.js — all'avvio
+const { user_version } = db.prepare('PRAGMA user_version').get();   // es. 1
+for (const file of fs.readdirSync(cartella).sort()) {
+  const n = parseInt(file, 10);                 // '002-isbn.sql' → 2
+  if (n <= user_version) continue;              // già applicata
+  db.exec('BEGIN');
+  try {
+    db.exec(fs.readFileSync(path.join(cartella, file), 'utf8'));
+    db.exec(`PRAGMA user_version = ${n}`);
+    db.exec('COMMIT');
+  } catch (err) { db.exec('ROLLBACK'); throw err; }
+}
+// seed: solo se il catalogo è vuoto
+if (db.prepare('SELECT COUNT(*) AS n FROM libri').get().n === 0) db.exec(seme);
+</script>
+  <script type="text/plain" id="c-pg">
+// npm install pg      (PostgreSQL gira come server, es. in Docker)
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+const { rows } = await pool.query(
+  'SELECT * FROM libri WHERE autore_id = $1 AND anno > $2',   // $1, $2…
+  [autoreId, 1950],
+);
+</script>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/m9-biblioteca.js"></script>
+  <script>
+    // nei blocchi text/plain il tag di chiusura degli script è scritto con la barra "escapata"
+    const C = (id) => document.getElementById(id).textContent.replace(/^\n/, '').replace(/<\\\/script>/g, '<\/script>');
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const code = (s) => `<code class="inline">${esc(s)}</code>`;
+    const md = (t) => esc(t).replace(/`([^`]+)`/g, '<code class="inline">$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    const TABLE = (head, rows) => `<div class="overflow-x-auto rounded-xl border border-gray-700"><table class="w-full text-left text-sm md:text-base">
+      <thead class="bg-gray-800 text-gray-300"><tr>${head.map((h) => `<th class="px-4 py-2 font-semibold">${h}</th>`).join('')}</tr></thead>
+      <tbody class="divide-y divide-gray-800 text-gray-200">${rows.map((r) => `<tr class="bg-gray-900/60">${r.map((c) => `<td class="px-4 py-2">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    const NOTE = (items) => `<ul class="slide-items space-y-3 text-base md:text-xl text-gray-300 mt-6">${items.map((t) => `<li class="flex"><span class="text-green-500 mr-4 font-mono">$</span><span>${md(t)}</span></li>`).join('')}</ul>`;
+
+    // una tabella "del database": nome, colonne (🔑 chiave primaria, 🔗 chiave esterna), righe
+    const DBT = (nome, cols, rows, opt = {}) => `<div class="rounded-xl border ${opt.border || 'border-gray-700'} overflow-x-auto bg-gray-950/60">
+      <div class="px-3 py-1.5 bg-gray-800 text-sm font-mono font-bold ${opt.color || 'text-emerald-300'}">${nome}</div>
+      <table class="w-full text-xs md:text-sm font-mono"><thead><tr>${cols.map((c) => `<th class="text-left px-3 py-1 border-b border-gray-700 whitespace-nowrap ${c.startsWith('🔑') ? 'text-yellow-300' : c.startsWith('🔗') ? 'text-cyan-300' : 'text-gray-400'}">${c}</th>`).join('')}</tr></thead>
+      <tbody class="text-gray-200">${rows.map((r) => `<tr class="${r.hl ? 'bg-yellow-500/10' : ''}">${(r.v || r).map((v) => `<td class="px-3 py-0.5 whitespace-nowrap ${v === 'NULL' ? 'text-gray-500 italic' : ''}">${v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+
+    const MODELLO_HTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div class="lg:col-span-7 space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-3 items-center">
+          <div>${DBT('autori', ['🔑 id', 'nome'], [['1', 'Italo Calvino'], ['2', 'Primo Levi'], ['3', 'Alda Merini']])}</div>
+          <div>${DBT('libri', ['🔑 id', 'titolo', 'anno', '🔗 autore_id'], [['1', 'Il barone rampante', '1957', '1'], ['2', 'Le città invisibili', '1972', '1'], ['3', 'Se questo è un uomo', '1947', '2']])}</div>
+        </div>
+        <p class="text-sm text-gray-400 font-mono text-center">libri.autore_id ──▶ autori.id &nbsp;·&nbsp; "il libro 3 è di Primo Levi"</p>
+      </div>
+      <div class="lg:col-span-5">${NOTE([
+        '**Tabella**: un tipo di cosa (autori, libri). **Riga**: una cosa. **Colonna**: un dato, con un tipo.',
+        '🔑 **Chiave primaria**: identifica la riga, unica e mai NULL (`id`).',
+        '🔗 **Chiave esterna**: un riferimento alla riga di un\'altra tabella. Il nome dell\'autore sta **in un posto solo**.',
+        'Lo **schema** (tabelle, colonne, vincoli) si decide prima: il database rifiuta i dati che non lo rispettano.',
+      ])}</div></div>`;
+
+    const RELAZIONI_HTML = TABLE(['Relazione', 'Esempio', 'Come si fa'], [
+      ['<strong>1 – N</strong> (uno a molti)', 'un autore → molti libri', `una chiave esterna nel lato "molti": ${code('libri.autore_id')}`],
+      ['<strong>N – N</strong> (molti a molti)', 'utenti ↔ libri presi in prestito', `una <strong>tabella ponte</strong> con due chiavi esterne: ${code('prestiti(libro_id, utente_id, dal, al)')}`],
+      ['<strong>1 – 1</strong>', 'utente → profilo', `una chiave esterna ${code('UNIQUE')} (spesso basta una tabella sola)`],
+    ]) + NOTE([
+      'La tabella ponte può avere **dati suoi**: la data del prestito e quella della restituzione.',
+      'Niente liste dentro una colonna (`"1,4,7"`): non si possono né cercare né collegare. Ogni valore nella sua riga.',
+    ]);
+
+    const JOIN_HTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <div class="lg:col-span-4 space-y-3">
+        ${DBT('autori a', ['🔑 id', 'nome'], [['1', 'Calvino'], ['2', 'Levi'], ['3', 'Merini']])}
+        ${DBT('libri l', ['titolo', '🔗 autore_id'], [['Il barone rampante', '1'], ['Le città invisibili', '1'], ['Se questo è un uomo', '2']])}
+      </div>
+      <div class="lg:col-span-8 space-y-3">
+        <pre class="code small"><code class="language-sql">SELECT a.nome, l.titolo
+FROM autori a
+JOIN libri l ON l.autore_id = a.id;       -- solo le coppie che combaciano</code></pre>
+        ${DBT('JOIN (INNER)', ['nome', 'titolo'], [['Calvino', 'Il barone rampante'], ['Calvino', 'Le città invisibili'], ['Levi', 'Se questo è un uomo']], { color: 'text-cyan-300' })}
+        <pre class="code small"><code class="language-sql">SELECT a.nome, COUNT(l.id) AS libri
+FROM autori a
+LEFT JOIN libri l ON l.autore_id = a.id   -- TUTTI gli autori, anche senza libri
+GROUP BY a.id;</code></pre>
+        ${DBT('LEFT JOIN + GROUP BY', ['nome', 'libri'], [['Calvino', '2'], ['Levi', '1'], { hl: true, v: ['Merini', '0'] }], { color: 'text-yellow-300', border: 'border-yellow-500/40' })}
+      </div></div>`;
+
+    const TIPI_HTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"><div class="lg:col-span-7">` + TABLE(['JavaScript', 'SQLite', 'Torna come'], [
+      [code('42') + ', ' + code('3.5'), 'INTEGER / REAL', 'number'],
+      [code("'Dune'"), 'TEXT', 'string'],
+      [code('null'), 'NULL', code('null')],
+      [code('true') + ' / ' + code('false'), 'INTEGER 1 / 0', '<strong>1 / 0</strong> (da riconvertire)'],
+      [code('new Date()'), '<span class="text-red-300">errore</span>', `salvare ${code('toISOString()')} → TEXT`],
+      [code('undefined'), '<span class="text-red-300">errore</span>', `${code('?? null')} per i campi facoltativi`],
+      [code('Buffer') + ' / ' + code('Uint8Array'), 'BLOB', 'Uint8Array'],
+    ]) + `</div><div class="lg:col-span-5">${NOTE([
+      '`run()` restituisce `changes` (righe toccate) e `lastInsertRowid` (l\'id appena creato).',
+      '`changes === 0` dopo un UPDATE o un DELETE? La riga non c\'era: **404**.',
+      'Le righe sono oggetti `[Object: null prototype]`: si usano come gli altri (`{ ...riga }` per copiarli).',
+      'Con better-sqlite3 i booleani danno errore: sempre `? 1 : 0`.',
+    ])}</div></div>`;
+
+    window.DECK = {
+      module: 'MODULO 9',
+      title: 'Database relazionali: SQL e SQLite',
+      prompt: 'modulo-9',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover', icon: 'database',
+          title: 'Database relazionali: SQL e SQLite',
+          subtitle: 'Tabelle e relazioni, il linguaggio **SQL**, `node:sqlite` in Express e le query parametrizzate contro la **SQL injection**.',
+          meta: ['7 ore', 'Modulo 9'],
+        },
+        {
+          type: 'agenda', part: 'PROGRAMMA', title: 'Agenda', icon: 'list-checks',
+          rows: [
+            ['Perché un database; tabelle, chiavi e relazioni', 'teoria'],
+            ['SQL: `CREATE`, `INSERT`, `SELECT`, `GROUP BY`', 'teoria'],
+            ['Simulazione: la console SQL', 'demo'],
+            ['`JOIN` e `LEFT JOIN`, `UPDATE`, `DELETE`, transazioni', 'teoria'],
+            ['Pausa', 'pausa'],
+            ['`node:sqlite` (e better-sqlite3) dentro Node', 'teoria'],
+            ['SQL injection e query parametrizzate + simulazione', 'demo'],
+            ['Repository, errori del database, migrazioni e seed, PostgreSQL', 'teoria'],
+            ['Biblioteca 6.0 + 5 laboratori', 'lab'],
+            ['Quiz', 'quiz'],
+          ],
+        },
+
+        /* ------------------------------------------------ PERCHÉ */
+        {
+          type: 'compare', part: 'PERCHÉ UN DATABASE', title: 'Dal file JSON al database', icon: 'git-compare',
+          columns: [
+            { title: 'File JSON (moduli 6–8)', color: 'red', icon: 'file-json', items: ['Per cercare un libro si legge e si riscrive **tutto** il file', 'Due richieste insieme possono perdere una scrittura', 'Nessuno controlla i dati: un `anno: "boh"` entra senza problemi', 'Collegare autori e libri? A mano, con `find` e `filter`'] },
+            { title: 'Database relazionale (oggi)', color: 'green', icon: 'database', items: ['Si chiede solo ciò che serve: `WHERE`, `ORDER BY`, `LIMIT`', 'Scritture sicure anche in contemporanea, **transazioni** "tutto o niente"', 'I **vincoli** rifiutano i dati sbagliati (`NOT NULL`, `UNIQUE`, chiavi esterne)', 'Le relazioni sono il suo mestiere: `JOIN`'] },
+          ],
+          footer: '**SQLite**: un database completo in **un solo file**, senza server da installare. È dentro telefoni, browser, aerei… e da Node 22 anche dentro Node (`node:sqlite`).',
+        },
+        {
+          type: 'custom', part: 'PERCHÉ UN DATABASE', title: 'Il modello relazionale', icon: 'table-2', iconColor: 'text-emerald-400',
+          html: MODELLO_HTML,
+        },
+        {
+          type: 'custom', part: 'PERCHÉ UN DATABASE', title: 'Le relazioni', icon: 'network', iconColor: 'text-emerald-400',
+          html: RELAZIONI_HTML,
+        },
+
+        /* ------------------------------------------------ SQL */
+        {
+          type: 'code', part: 'SQL', title: 'Creare le tabelle: `CREATE TABLE`', icon: 'table-properties', iconColor: 'text-blue-400',
+          items: [
+            'SQL è un linguaggio **dichiarativo**: si dice *che cosa* si vuole, il database decide *come*. Le parole chiave in maiuscolo sono solo un\'abitudine.',
+            'Tipi in SQLite: `INTEGER`, `REAL`, `TEXT`, `BLOB` (e `NULL`). Le date? Testo ISO: `\'2026-11-05\'`.',
+            'I **vincoli**: `PRIMARY KEY`, `NOT NULL`, `UNIQUE`, `DEFAULT`, `CHECK`, `REFERENCES` (chiave esterna).',
+            '`INTEGER PRIMARY KEY` = l\'id automatico (1, 2, 3…). `IF NOT EXISTS` evita l\'errore se la tabella c\'è già.',
+          ],
+          code: C('c-create'), lang: 'sql', file: 'schema.sql',
+        },
+        {
+          type: 'code', part: 'SQL', title: '`INSERT` e `SELECT`', icon: 'search', iconColor: 'text-blue-400',
+          items: [
+            'L\'ordine delle clausole è fisso: `SELECT` … `FROM` … `WHERE` … `ORDER BY` … `LIMIT`.',
+            'Nel `WHERE`: `=`, `<>`, `<`, `AND`, `OR`, `NOT`, `IN (…)`, `BETWEEN`, `LIKE`.',
+            'Le stringhe tra apici **singoli**: `\'Calvino\'`. Un apice dentro? Si raddoppia: `\'D\'\'Annunzio\'`.',
+            '`NULL` = "non si sa": si confronta solo con `IS NULL` / `IS NOT NULL`.',
+          ],
+          code: C('c-select'), lang: 'sql', output: C('c-select-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'La console SQL', icon: 'flask-conical', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Un vero SQLite, con autori, libri, utenti e prestiti. Prova gli esempi o scrivi le tue query: il database resta tra un\'esecuzione e l\'altra (<strong>Ripristina</strong> lo rimette com\'era).</p><div class="sq"></div>',
+          mount: (el) => NodeLab.sql(el.querySelector('.sq'), Object.assign({ height: '22rem' }, M9_SQL)),
+        },
+        {
+          type: 'code', part: 'SQL', title: 'Contare e raggruppare: `GROUP BY`', icon: 'sigma', iconColor: 'text-blue-400',
+          items: [
+            'Le funzioni di aggregazione: `COUNT(*)`, `SUM`, `AVG`, `MIN`, `MAX`. Da molte righe ne esce **una**.',
+            'Con `GROUP BY` una riga **per gruppo**: "quanti libri per genere".',
+            '`WHERE` filtra le righe **prima** di raggruppare, `HAVING` filtra i gruppi **dopo**.',
+            '`COUNT(*)` conta le righe, `COUNT(colonna)` solo quelle dove la colonna non è NULL.',
+          ],
+          code: C('c-group'), lang: 'sql', output: C('c-group-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'SQL', title: '`JOIN`: unire le tabelle', icon: 'merge', iconColor: 'text-blue-400',
+          html: JOIN_HTML,
+        },
+        {
+          type: 'code', part: 'SQL', title: '`UPDATE`, `DELETE` e transazioni', icon: 'pencil', iconColor: 'text-red-400',
+          items: [
+            '`UPDATE` e `DELETE` agiscono su **tutte** le righe che soddisfano il `WHERE`. Senza `WHERE`: su tutta la tabella, senza conferma.',
+            'Prima di un `DELETE` importante: la stessa condizione con un `SELECT`, per vedere che cosa sparirà.',
+            '**Transazione**: più istruzioni che riescono tutte o nessuna. Un prestito = una riga in `prestiti` **e** il libro non più disponibile.',
+            'Le chiavi esterne bloccano il `DELETE` di un autore che ha ancora dei libri: `FOREIGN KEY constraint failed`.',
+          ],
+          code: C('c-modifica'), lang: 'sql',
+        },
+
+        /* ------------------------------------------------ NODE */
+        {
+          type: 'code', part: 'SQLITE IN NODE', title: '`node:sqlite`', icon: 'hexagon', iconColor: 'text-green-400',
+          items: [
+            '`db.exec(sql)`: esegue una o più istruzioni, non restituisce niente (schema, migrazioni).',
+            '`db.prepare(sql)`: una **prepared statement**, compilata una volta e riusabile, con i segnaposto `?`.',
+            '`.run(…)` per modificare, `.get(…)` per una riga, `.all(…)` per tutte. I valori nell\'ordine dei `?`.',
+            'È **sincrono**: niente `await`. Per SQLite (un file locale, query di microsecondi) va benissimo.',
+          ],
+          code: C('c-node'), file: 'prova.js', output: C('c-node-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'SQLITE IN NODE', title: 'Da JavaScript a SQLite e ritorno', icon: 'arrow-left-right', iconColor: 'text-green-400',
+          html: TIPI_HTML,
+        },
+        {
+          type: 'compare', part: 'SQLITE IN NODE', title: '`node:sqlite` o better-sqlite3?', icon: 'git-compare',
+          columns: [
+            { title: 'node:sqlite', color: 'green', icon: 'hexagon', code: C('c-node-sqlite'), items: ['Già dentro Node (22.5+): nessuna installazione', 'Righe con prototipo `null`, `true` diventa 1', 'Recente: su alcune versioni stampa un `ExperimentalWarning`'] },
+            { title: 'better-sqlite3', color: 'blue', icon: 'package', code: C('c-better'), items: ['Il pacchetto npm più usato da anni, la stessa API', 'Comodo `db.transaction(fn)`, `pluck()`, `pragma()`', 'Modulo nativo: a volte da compilare (Windows, Node nuovissimo)'] },
+          ],
+          footer: 'Nel corso usiamo `node:sqlite`; nel simulatore ci sono entrambi. Si passa dall\'uno all\'altro cambiando poche righe, se gli accessi al database stanno in un **repository**.',
+        },
+
+        /* ------------------------------------------------ INJECTION */
+        {
+          type: 'compare', part: 'SICUREZZA', title: 'SQL injection', icon: 'syringe',
+          columns: [
+            { title: 'La query costruita con le stringhe', color: 'red', icon: 'skull', code: C('c-injection-no'), items: ['Il testo dell\'utente diventa **codice SQL**', 'Si leggono altre tabelle, si aggirano i login, si cancellano dati'] },
+            { title: 'La query parametrizzata', color: 'green', icon: 'shield-check', code: C('c-injection-si'), items: ['La query è compilata **prima**: il valore arriva dopo, e resta un valore', 'Funziona anche con `D\'Annunzio`, senza fare escape a mano'] },
+          ],
+          footer: 'Regola senza eccezioni: **mai** dati del client dentro una stringa SQL, né con `${…}` né con `+`. Da anni nella OWASP Top 10 (modulo 13).',
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Prova l\'attacco', icon: 'flask-conical', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">La stessa ricerca, scritta male (<code class="inline">/cerca</code>) e bene (<code class="inline">/sicuro/cerca</code>). Nel log del server compare la query <strong>davvero</strong> eseguita. Riesci a farti dare le email degli utenti?</p><div class="inj"></div>',
+          mount: (el) => NodeLab.inspector(el.querySelector('.inj'), {
+            id: 'm9-injection-slide', files: M9_INJECTION.files, entry: 'server.js', port: 3000,
+            packages: ['express'], height: '15rem', missions: M9_INJECTION.missions, presets: M9_INJECTION.presets,
+          }),
+        },
+        {
+          type: 'code', part: 'SICUREZZA', title: 'Quello che `?` non può fare', icon: 'list-filter', iconColor: 'text-red-400',
+          items: [
+            'I segnaposto sostituiscono solo **valori**: non nomi di tabelle o colonne, non `ASC`/`DESC`, non pezzi di `WHERE`.',
+            '`ORDER BY ?` non dà errore… ma ordina per una costante, cioè per niente.',
+            'Per le parti "di struttura": un **elenco chiuso** (whitelist) di frammenti scritti da noi, oppure `z.enum` (modulo 7).',
+            'Un `${…}` nella query va bene solo se il suo contenuto viene da **noi**, mai dal client.',
+          ],
+          code: C('c-whitelist'),
+        },
+
+        /* ------------------------------------------------ ARCHITETTURA */
+        {
+          type: 'code', part: 'ARCHITETTURA', title: 'Il repository parla SQL', icon: 'layers', iconColor: 'text-purple-400',
+          items: [
+            'Dal modulo 7: rotte → (controller, service) → **repository**. Solo il repository sa che i dati stanno in SQLite.',
+            'Dentro: query parametrizzate. Fuori: **oggetti JavaScript** (`disponibile: true`, non `1`).',
+            'Stessi nomi delle funzioni del repository su file JSON: il resto dell\'app **non cambia**.',
+            'Una connessione sola (`db.js`), aperta all\'avvio e condivisa da tutti i moduli con `require`.',
+          ],
+          code: C('c-repo'), file: 'repositories/libri.js',
+        },
+        {
+          type: 'code', part: 'ARCHITETTURA', title: 'Gli errori del database', icon: 'shield-alert', iconColor: 'text-purple-400',
+          items: [
+            'node:sqlite lancia errori con `code: \'ERR_SQLITE_ERROR\'`, il numero `errcode` e il messaggio di SQLite.',
+            'Un vincolo violato dai dati del client **non è un bug**: UNIQUE → 409, chiave esterna → 409 (o 400).',
+            'Meglio ancora controllare prima (zod, "l\'autore esiste?") e lasciare i vincoli come **ultima difesa**.',
+            'Al client mai il messaggio grezzo con i nomi delle tabelle: quello va nel log.',
+          ],
+          code: C('c-errori'), file: 'middleware/errori.js',
+        },
+        {
+          type: 'code', part: 'ARCHITETTURA', title: 'Migrazioni e seed', icon: 'git-branch', iconColor: 'text-purple-400',
+          items: [
+            'Lo schema cambia nel tempo, ma il database in produzione **ha già dei dati**: non si può ricrearlo.',
+            '**Migrazione**: un file numerato con una modifica. Si applicano in ordine, **una volta sola**, ognuna in una transazione.',
+            'SQLite ricorda la versione in `PRAGMA user_version`; altri strumenti usano una tabella `migrazioni`.',
+            '**Seed**: i dati di esempio per lo sviluppo e i test, inseriti solo se il database è vuoto.',
+            'Le migrazioni vanno su Git con il codice; il file `.db` **no** (in `.gitignore`).',
+          ],
+          code: C('c-migra'), file: 'db.js',
+        },
+        {
+          type: 'compare', part: 'OLTRE SQLITE', title: 'Cenni a PostgreSQL', icon: 'server',
+          columns: [
+            { title: 'SQLite', color: 'green', icon: 'file', items: ['Un file, dentro il processo Node', 'Zero configurazione: perfetto per imparare, prototipi, app piccole e medie, test', 'Uno scrittore alla volta'] },
+            { title: 'PostgreSQL (MySQL, SQL Server…)', color: 'blue', icon: 'server', code: C('c-pg'), items: ['Un **server** separato, con utenti e permessi', 'Tanti client e scritture in contemporanea, più tipi (date, JSON, array)', 'API **asincrona**: `await pool.query(…)`; segnaposto `$1, $2`'] },
+          ],
+          footer: 'Lo SQL di oggi vale quasi tutto anche lì. E con un repository, cambiare database significa riscrivere **un livello**, non l\'applicazione. Nel modulo 10: un ORM (TypeORM).',
+        },
+
+        /* ------------------------------------------------ CHIUSURA */
+        {
+          part: 'RIEPILOGO', title: 'Cosa portiamo a casa', icon: 'check-circle', iconColor: 'text-green-400',
+          items: [
+            'Tabelle, righe, colonne; chiave primaria e **chiave esterna**; 1-N con una colonna, N-N con una tabella ponte.',
+            'SQL: `CREATE TABLE` con i vincoli, `INSERT`, `SELECT … WHERE … ORDER BY … LIMIT`, `GROUP BY`, `JOIN` / `LEFT JOIN`, `UPDATE` e `DELETE` **con il WHERE**.',
+            '`node:sqlite`: `exec` per lo schema, `prepare` + `run` / `get` / `all`; `changes` e `lastInsertRowid`.',
+            '**Sempre** i segnaposto `?` per i valori; whitelist per le parti di struttura. Così niente SQL injection.',
+            'Repository che traduce righe ↔ oggetti, vincoli violati → 409, migrazioni numerate con `user_version` e seed.',
+          ],
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Biblioteca 6.0: mettiti alla prova', icon: 'library', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">La Biblioteca su SQLite: migrazioni e seed all\'avvio, repository con le JOIN, vincoli che diventano 409. Il riquadro a sinistra mostra le tabelle di <code class="inline">data/biblioteca.db</code> dopo ogni richiesta; ↻ riavvia il server <strong>mantenendo</strong> il file.</p><div class="biblio"></div>',
+          mount: (el) => NodeLab.inspector(el.querySelector('.biblio'), {
+            id: 'm9-biblioteca-slide', files: M9_BIBLIOTECA.files, fs: M9_BIBLIOTECA.fs, entry: 'server.js', port: 3000,
+            packages: M9_BIBLIOTECA.packages, height: '20rem', persist: true, watch: 'data/biblioteca.db',
+            missions: M9_BIBLIOTECA.missions, presets: M9_BIBLIOTECA.presets,
+          }),
+        },
+        {
+          type: 'custom', part: 'ORA TOCCA A VOI', title: 'Esercitazioni e laboratori', icon: 'flask-conical',
+          html: `<div class="grid md:grid-cols-2 gap-6 items-center">
+            <ul class="space-y-3 text-lg md:text-xl text-gray-300">
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Console SQL e "che cosa restituisce?"</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Biblioteca 6.0 e l'attacco di SQL injection</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>5 laboratori con verifica automatica (un boss)</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Missioni sul vostro PC + quiz</li>
+            </ul>
+            <div class="text-center">
+              <a href="modulo_9_ex.html" class="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold hover:bg-green-500 transition-colors">
+                <i data-lucide="flask-conical" class="w-6 h-6"></i> Apri le esercitazioni</a>
+              <p class="mt-6 text-gray-500 font-mono text-sm">Prossimo modulo: ORM con TypeORM</p>
+            </div></div>`,
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>
