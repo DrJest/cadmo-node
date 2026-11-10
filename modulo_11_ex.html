@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esercitazioni Modulo 11 — CADMO NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white prose-code">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <div class="flex items-center gap-5 text-sm">
+          <a href="modulo_11.html" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="presentation" class="w-4 h-4"></i><span class="hidden sm:inline">Slide</span></a>
+          <a href="./" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Home</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="bg-gray-950 border-b border-gray-800 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center animate-fade-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-lime-900/30 border border-lime-500/30 text-xs text-lime-300 font-mono mb-4 uppercase tracking-wider">
+        <i data-lucide="leaf" class="w-4 h-4"></i> mongosh · Schema · query · populate · aggregate
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4">Esercitazioni Modulo 11</h1>
+      <p class="text-gray-400 text-lg">Interroga MongoDB dalla shell, guarda che cosa manda Mongoose al database, prevedi i risultati, prova la Biblioteca 8.0 e completa cinque laboratori, fino al boss dell'API con Mongoose.</p>
+      <p class="mt-4 text-sm font-mono text-gray-500"><span data-lab-progress="m11-modello,m11-query,m11-aggiorna,m11-relazioni,m11-boss"></span> · i progressi restano salvati in questo browser</p>
+    </div>
+  </header>
+
+  <!-- Indice -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+    <div class="flex flex-wrap gap-2 justify-center text-sm">
+      <a href="#guida" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">1 · Guida rapida</a>
+      <a href="#shell" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">2 · Console e playground</a>
+      <a href="#biblioteca" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">3 · Biblioteca 8.0</a>
+      <a href="#lab" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">4 · Laboratori</a>
+      <a href="#pc" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">5 · Sul tuo PC</a>
+      <a href="#quiz" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">6 · Quiz</a>
+    </div>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-20">
+
+    <!-- 1. GUIDA RAPIDA -->
+    <section id="guida" class="scroll-mt-20 animate-fade-in delay-100">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="book-open" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">1. Guida rapida</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-green-400 mb-2">mongosh</h3>
+          <pre class="code small"><code class="language-javascript">use biblioteca
+show collections
+db.libri.insertOne({ titolo: 'Palomar', anno: 1983 })
+db.libri.find({ anno: { $gt: 1960 } }, { titolo: 1, _id: 0 })
+  .sort({ anno: -1 }).limit(3)
+db.libri.updateOne({ titolo: 'Palomar' }, { $set: { anno: 1984 } })
+db.libri.deleteOne({ titolo: 'Palomar' })</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-cyan-400 mb-2">Connessione e modello</h3>
+          <pre class="code small"><code class="language-javascript">// npm install mongoose
+const mongoose = require('mongoose');
+await mongoose.connect(process.env.MONGODB_URI);  // prima di listen
+mongoose.set('debug', true);          // vedi le operazioni
+
+const Libro = mongoose.model('Libro', libroSchema, 'libri');
+//                                                  ↑ la collezione
+await mongoose.disconnect();          // negli script</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-purple-400 mb-2">Schema</h3>
+          <pre class="code small"><code class="language-javascript">new mongoose.Schema({
+  titolo: { type: String, required: true, trim: true },
+  anno: { type: Number, min: 1450, max: 2026 },
+  isbn: { type: String, unique: true, sparse: true },
+  generi: [String],
+  autore: { type: Schema.Types.ObjectId, ref: 'Autore' },
+  prestiti: [{ lettore: String, dal: { type: Date, default: Date.now } }],
+}, { timestamps: true });</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-yellow-400 mb-2">Query</h3>
+          <pre class="code small"><code class="language-javascript">await Libro.create({ … });            // ValidationError?
+await Libro.find({ generi: 'romanzo', anno: { $gte: 1950 } })
+  .sort({ anno: -1 }).skip(10).limit(10).select('titolo').lean();
+await Libro.findById(id);             // o null (CastError se l'id è malformato)
+await Libro.countDocuments(filtro);
+// $eq $ne $gt $gte $lt $lte $in $nin $exists $or /regex/i</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-red-400 mb-2">Aggiornamenti</h3>
+          <pre class="code small"><code class="language-javascript">await Libro.findByIdAndUpdate(id, { anno },
+  { returnDocument: 'after', runValidators: true });
+await Libro.updateOne(filtro, { $inc: { copie: 1 }, $push: { generi: 'x' } });
+// $set $unset $inc $push $addToSet $pull · 'prestiti.$.al'
+await Libro.findOneAndUpdate({ _id, disponibile: true },  // atomico
+  { $set: { disponibile: false }, $push: { prestiti: { lettore } } });</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-emerald-400 mb-2">populate, aggregate, errori</h3>
+          <pre class="code small"><code class="language-javascript">await Libro.find().populate('autore', 'nome');
+await Libro.aggregate([{ $unwind: '$generi' },
+  { $group: { _id: '$generi', n: { $sum: 1 } } }, { $sort: { n: -1 } }]);
+// $lookup: { from, localField, foreignField, as }
+err instanceof mongoose.Error.ValidationError  // → 400
+err instanceof mongoose.Error.CastError        // → 400
+err.code === 11000                             // → 409</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. CONSOLE E PLAYGROUND -->
+    <section id="shell" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-round" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">2. Console mongosh, playground e "che cosa succede?"</h2>
+      </div>
+
+      <h3 class="text-xl font-bold text-white mt-6 mb-2">La console mongosh</h3>
+      <p class="text-gray-400 mb-4">Il database <code class="inline">biblioteca</code> con 7 libri: <code class="inline">generi</code> è un array, i prestiti stanno dentro il libro. Scrivi uno o più comandi (uno per riga, come nella shell vera); i dati restano tra un'esecuzione e l'altra, <kbd>Ripristina</kbd> li rimette come all'inizio. <kbd>Ctrl</kbd>+<kbd>Invio</kbd> esegue.</p>
+      <div id="console" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <details class="mt-4 bg-gray-800/40 border border-gray-700 rounded-xl p-5">
+        <summary class="cursor-pointer font-semibold text-gray-200">🎯 Cinque sfide per la console (con le soluzioni)</summary>
+        <ol class="list-decimal list-inside text-gray-300 space-y-2 mt-4 marker:text-lime-400">
+          <li>I titoli dei libri di Italo Calvino usciti dopo il 1960.</li>
+          <li>Quanti libri hanno <strong>più di un</strong> genere? (suggerimento: <code class="inline">$size</code> non accetta <code class="inline">$gt</code>…)</li>
+          <li>Aggiungi il genere <code class="inline">classici</code> a "Il barone rampante" senza creare doppioni, anche eseguendo il comando due volte.</li>
+          <li>I libri con un prestito di Giulia ancora aperto (<code class="inline">al</code> mancante o <code class="inline">null</code>).</li>
+          <li>Per ogni autore, quanti libri e l'anno del primo, dal più prolifico.</li>
+        </ol>
+        <button onclick="toggleSolution('sol-shell')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela le soluzioni</button>
+        <div id="sol-shell" class="solution-container mt-4">
+          <pre class="code small"><code class="language-javascript">// 1
+db.libri.find({ autore: 'Italo Calvino', anno: { $gt: 1960 } }, { titolo: 1, _id: 0 })
+// 2 — "almeno 2 elementi" = esiste l'elemento con indice 1
+db.libri.countDocuments({ 'generi.1': { $exists: true } })
+// 3 — $addToSet aggiunge solo se manca ($push aggiungerebbe ogni volta)
+db.libri.updateOne({ titolo: 'Il barone rampante' }, { $addToSet: { generi: 'classici' } })
+// 4 — lettore e al nello STESSO elemento dell'array: $elemMatch ({ al: null } trova anche "al" mancante)
+db.libri.find({ prestiti: { $elemMatch: { lettore: 'Giulia', al: null } } }, { titolo: 1 })
+// 5
+db.libri.aggregate([
+  { $group: { _id: '$autore', libri: { $sum: 1 }, primo: { $min: '$anno' } } },
+  { $sort: { libri: -1, _id: 1 } }
+])</code></pre>
+        </div>
+      </details>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Da Mongoose a MongoDB</h3>
+      <p class="text-gray-400 mb-4">Un database con 5 autori e 7 libri (i modelli sono quelli della Biblioteca 8.0). <code class="inline">input</code> è una funzione che riceve i modelli <code class="inline">Libro</code> e <code class="inline">Autore</code>: scegli un esempio o scrivi la tua chiamata, e guarda nel terminale che cosa Mongoose manda davvero a MongoDB (<code class="inline">mongoose.set('debug', true)</code>).</p>
+      <div id="playground" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Che cosa succede?</h3>
+      <p class="text-gray-400 mb-4">Clicca le righe nell'ordine giusto. Alcune possono comparire più di una volta, altre mai!</p>
+      <div id="order-game"></div>
+    </section>
+
+    <!-- 3. BIBLIOTECA 8.0 -->
+    <section id="biblioteca" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="library" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">3. Biblioteca 8.0</h2>
+      </div>
+      <p class="text-gray-400 mb-4">La Biblioteca passa a <strong>MongoDB</strong> con Mongoose: due modelli (libri con generi e prestiti incorporati, autori per riferimento), repository con <code class="inline">populate</code>, il prestito come aggiornamento atomico, le statistiche con una pipeline. Il log mostra ogni operazione mandata a MongoDB (e le righe di morgan); sotto ci sono le collezioni del database <code class="inline">biblioteca</code>, aggiornate dopo ogni richiesta. <kbd>↻</kbd> riavvia il server: i dati restano nel server MongoDB; il pulsante con il database lo svuota (e il seed riparte).</p>
+      <div id="inspector" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <button onclick="toggleSolution('codice-server')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="file-code-2" class="w-4 h-4"></i> Mostra il codice del progetto</button>
+      <div id="codice-server" class="solution-container mt-4">
+        <div id="codice-tabs" class="flex flex-wrap gap-1.5 mb-2"></div>
+        <pre class="code small"><code id="codice-src" class="language-javascript"></code></pre>
+      </div>
+    </section>
+
+    <!-- 4. LABORATORI -->
+    <section id="lab" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-conical" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">4. Laboratori nel browser</h2>
+      </div>
+      <div class="text-gray-400 mb-8 space-y-2">
+        <p>Nei laboratori <code class="inline">mongoose</code> è già installato (nel boss anche <code class="inline">express</code>) e c'è un server MongoDB su <code class="inline">mongodb://127.0.0.1:27017</code>, vuoto a ogni esecuzione. Premi <kbd>▶ Esegui</kbd>, guarda l'output (o usa il <strong>Client HTTP</strong>) e poi <kbd>Verifica</kbd>.</p>
+        <p class="text-sm">💡 Vuoi vedere le operazioni? Aggiungi <code class="inline">mongoose.set('debug', true)</code>: le righe <code class="inline">Mongoose: …</code> non contano nelle verifiche. Uno script che non chiude la connessione non termina: è normale, succede anche sul PC.</p>
+      </div>
+      <div class="space-y-10" id="labs"></div>
+    </section>
+
+    <!-- 5. MISSIONI SUL PC -->
+    <section id="pc" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="laptop" class="w-6 h-6 text-emerald-400"></i>
+        <h2 class="text-2xl font-bold text-white">5. Missioni sul tuo PC</h2>
+      </div>
+      <div class="space-y-8">
+        <!-- Missione A -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-lime-900/50 flex items-center justify-center border border-lime-500/30"><i data-lucide="cloud" class="w-5 h-5 text-lime-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione A: La Biblioteca 8.0 su MongoDB Atlas</h3>
+              <p class="text-sm text-lime-400 font-mono">Focus: cluster gratuito, stringa di connessione in .env, Compass</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-lime-500">
+            <li>Su <strong>cloud.mongodb.com</strong> crea un cluster <strong>M0</strong> (gratuito), un utente del database con password e, in <em>Network Access</em>, abilita il tuo indirizzo IP. Copia la stringa di connessione per i "Drivers".</li>
+            <li>Crea <code class="inline">corso-node/lezione11</code>, installa <code class="inline">express</code>, <code class="inline">morgan</code>, <code class="inline">zod</code> e <code class="inline">mongoose</code>, ricopia i file della Biblioteca 8.0 (sezione 3) e metti la stringa in <code class="inline">.env</code> come <code class="inline">MONGODB_URI</code> (con <code class="inline">/biblioteca</code> prima del <code class="inline">?</code>). Avvia con <code class="inline">node --env-file=.env --watch server.js</code>.</li>
+            <li>Installa <strong>MongoDB Compass</strong> e collegati con la stessa stringa: trova il database <code class="inline">biblioteca</code>, le collezioni, gli indici (<code class="inline">isbn_1</code>, <code class="inline">nome_1</code>) e un libro con i suoi prestiti.</li>
+            <li>Sbaglia apposta la password nella stringa e riavvia: che errore compare, e dopo quanto? E con l'IP non abilitato?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-a')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-a" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-bash">mkdir -p corso-node/lezione11 && cd corso-node/lezione11
+npm init -y
+npm install express morgan zod mongoose
+mkdir -p models repositories routes middleware
+# ricopia i file della sezione 3, poi il file .env (e .env in .gitignore!):
+echo 'MONGODB_URI=mongodb+srv://utente:PASSWORD@cluster0.abcde.mongodb.net/biblioteca?retryWrites=true&amp;w=majority' > .env
+echo '.env' >> .gitignore
+node --env-file=.env --watch server.js
+# 🍃 MongoDB: biblioteca su ac-xxxxx-shard-00-01.abcde.mongodb.net
+# … le righe "Mongoose: …" del seed …
+# 📚 Biblioteca 8.0 su http://localhost:3000/api</code></pre>
+            <pre class="code small"><code class="language-javascript">// 4. password sbagliata: il server risponde subito
+// 💥 Avvio fallito: bad auth : authentication failed
+//
+// IP non abilitato: nessun server risponde → dopo serverSelectionTimeoutMS (30 secondi)
+// 💥 Avvio fallito: Could not connect to any servers in your MongoDB Atlas cluster.
+//    One common reason is that you're trying to access the database from an IP that isn't whitelisted. …
+//
+// Per non aspettare 30 secondi mentre si sviluppa:
+await mongoose.connect(URI, { serverSelectionTimeoutMS: 5000 });</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione B -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-orange-900/50 flex items-center justify-center border border-orange-500/30"><i data-lucide="gauge" class="w-5 h-5 text-orange-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione B: Indici ed explain con mongosh</h3>
+              <p class="text-sm text-orange-400 font-mono">Focus: COLLSCAN vs IXSCAN, createIndex, indici composti, l'aggregation builder di Compass</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-orange-500">
+            <li>Apri <strong>mongosh</strong> (in Compass, in basso) sul database della missione A e crea 10000 libri finti con un ciclo <code class="inline">for</code> e <code class="inline">insertMany</code> (titolo, anno casuale tra 1900 e 2025, un genere a caso).</li>
+            <li>Esegui <code class="inline">db.libri.find({ anno: 1987 }).explain('executionStats')</code>: guarda <code class="inline">winningPlan.stage</code>, <code class="inline">totalDocsExamined</code> e <code class="inline">executionTimeMillis</code>.</li>
+            <li>Crea un indice su <code class="inline">anno</code> e ripeti. Poi prova <code class="inline">{ genere: 'giallo', anno: { $gte: 2000 } }</code> con un indice composto <code class="inline">{ genere: 1, anno: 1 }</code>: e con <code class="inline">{ anno: 1, genere: 1 }</code>?</li>
+            <li>In Compass, scheda <strong>Aggregations</strong>: ricostruisci con i blocchi la pipeline di <code class="inline">/api/statistiche</code> e esportala in JavaScript ("Export to language").</li>
+          </ol>
+          <button onclick="toggleSolution('sol-b')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-b" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-javascript">// 1. diecimila libri in una volta
+const generi = ['romanzo', 'giallo', 'racconti', 'memorie', 'poesia'];
+const finti = [];
+for (let i = 0; i < 10000; i++) {
+  finti.push({ titolo: `Libro ${i}`, anno: 1900 + Math.floor(Math.random() * 126), genere: generi[i % 5] });
+}
+db.libri.insertMany(finti)
+
+// 2. senza indice: COLLSCAN, totalDocsExamined ≈ 10000 (li legge tutti)
+db.libri.find({ anno: 1987 }).explain('executionStats').executionStats
+
+// 3. con l'indice: IXSCAN, totalDocsExamined = quanti ne restituisce (≈ 80)
+db.libri.createIndex({ anno: 1 })
+db.libri.find({ anno: 1987 }).explain('executionStats').executionStats
+
+// indice composto: prima il campo con l'uguaglianza, poi quello con l'intervallo
+db.libri.createIndex({ genere: 1, anno: 1 })
+db.libri.find({ genere: 'giallo', anno: { $gte: 2000 } }).explain('executionStats')
+// con { anno: 1, genere: 1 } l'indice si usa lo stesso, ma deve scorrere tutti gli anni ≥ 2000
+// (anche degli altri generi): totalKeysExamined più alto. Regola "ESR": Equality, Sort, Range.
+
+// 4. dalla scheda Aggregations: $unwind → $group → $sort → $project, poi "Export to language" → Node</code></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 6. QUIZ -->
+    <section id="quiz" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="check-square" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">6. Quiz di verifica</h2>
+      </div>
+      <div id="quiz-box"></div>
+    </section>
+  </main>
+
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm font-mono">studente@nodelab:~$ await Libro.find({ generi: 'romanzo' }).populate('autore')</div>
+  </footer>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m11-biblioteca.js"></script>
+  <script src="assets/labs-m11.js"></script>
+  <script>
+    // ---------------------------------------------------------------- 2. console, playground e indovina
+    NodeLab.mongo(document.getElementById('console'), M11_MONGOSH);
+    NodeLab.playground(document.getElementById('playground'), Object.assign({ packages: ['mongoose'] }, M11_ODM));
+
+    OrderGame.mount(document.getElementById('order-game'), [
+      {
+        title: 'Un campo array nel filtro',
+        cmd: "-- generi: barone ['romanzo','fantastico'] · uomo ['memorie'] (in prestito) · periodico ['racconti','memorie'] · lessico ['romanzo','memorie']",
+        code: `db.libri.find(
+  { generi: 'memorie', disponibile: true },
+  { titolo: 1, _id: 0 }
+)`,
+        chips: ["{ titolo: 'Il barone rampante' }", "{ titolo: 'Se questo è un uomo' }", "{ titolo: 'Il sistema periodico' }", "{ titolo: 'Lessico famigliare' }"],
+        answer: ["{ titolo: 'Il sistema periodico' }", "{ titolo: 'Lessico famigliare' }"],
+        explain: 'Su un array, `{ generi: \'memorie\' }` vuol dire "contiene memorie". Le due condizioni nello stesso oggetto sono in AND: "Se questo è un uomo" è in prestito. Senza `sort` l\'ordine è quello di inserimento.',
+      },
+      {
+        title: 'Il documento prima o dopo?',
+        cmd: '$ node prova.js      # "Il barone rampante" ha anno 1957',
+        code: `const prima = await Libro.findByIdAndUpdate(id, { anno: 1958 });
+const dopo = await Libro.findByIdAndUpdate(id, { anno: 1959 }, { returnDocument: 'after' });
+console.log(prima.anno, dopo.anno);
+console.log((await Libro.findById(id)).anno);`,
+        chips: ['1957', '1958', '1959', '1957 1958', '1957 1959', '1958 1959', 'null'],
+        answer: ['1957 1959', '1959'],
+        explain: 'Senza opzioni `findByIdAndUpdate` restituisce il documento **prima** della modifica (1957), anche se nel database ora c\'è 1958. Con `returnDocument: \'after\'` torna quello aggiornato. Nel database resta l\'ultimo valore scritto.',
+      },
+      {
+        title: 'La validazione negli aggiornamenti',
+        cmd: '$ node prova.js      # nello schema: anno: { type: Number, min: 1450, max: 2026 }',
+        code: `await Libro.updateOne({ _id: id }, { anno: 3000 });
+console.log((await Libro.findById(id)).anno);
+try {
+  await Libro.updateOne({ _id: id }, { anno: 4000 }, { runValidators: true });
+} catch (err) { console.log(err.name); }
+console.log((await Libro.findById(id)).anno);`,
+        chips: ['1957', '3000', '4000', 'ValidationError', 'CastError', 'MongoServerError'],
+        answer: ['3000', 'ValidationError', '3000'],
+        explain: 'Gli aggiornamenti (`updateOne`, `findByIdAndUpdate`…) **non** validano, a meno di `runValidators: true`: il primo scrive 3000 senza problemi. Il secondo viene fermato da Mongoose prima di arrivare al database.',
+      },
+      {
+        title: 'Due prestiti nello stesso istante',
+        cmd: '$ node prova.js      # "Lessico famigliare" è disponibile, senza prestiti',
+        prompt: 'Che cosa stampa console.log?',
+        code: `const presta = (id, lettore) => Libro.findOneAndUpdate(
+  { _id: id, disponibile: true },
+  { $set: { disponibile: false }, $push: { prestiti: { lettore } } },
+  { returnDocument: 'after' });
+
+const [a, b] = await Promise.all([presta(id, 'Giulia'), presta(id, 'Marco')]);
+console.log(a?.prestiti.length, b);`,
+        chips: ['0', '1', '2', 'null', 'undefined', 'un documento'],
+        answer: ['1', 'null'],
+        explain: 'Filtro e modifica sono **una** operazione atomica sul documento: la prima rende il libro non disponibile, la seconda non trova più niente che soddisfi `disponibile: true` e restituisce `null` (→ 409). Con "leggi, controlla, `save()`" potrebbero riuscire tutte e due.',
+      },
+      {
+        title: 'Quante query? (populate)',
+        cmd: '$ node prova.js      # 7 libri, 4 autori diversi',
+        prompt: 'Quante righe "Mongoose:" stampa A? E B?',
+        code: `// A
+const libri = await Libro.find();
+for (const l of libri) l.nomeAutore = (await Autore.findById(l.autore)).nome;
+
+// B
+const libriB = await Libro.find().populate('autore', 'nome');`,
+        chips: ['1', '2', '4', '5', '7', '8'],
+        answer: ['8', '2'],
+        explain: 'A: una query per i libri **più una per ogni libro** (7): il problema N+1 anche con MongoDB. B: `populate` raccoglie gli id e fa **una** sola query in più, `autori.find({ _id: { $in: [ … ] } })`.',
+      },
+      {
+        title: 'BOSS: la pipeline',
+        cmd: "-- generi: barone ['romanzo','fantastico'] · uomo ['memorie'] · lessico ['romanzo','memorie'] · rosa ['romanzo','giallo']",
+        code: `const r = await Libro.aggregate([
+  { $unwind: '$generi' },
+  { $group: { _id: '$generi', n: { $sum: 1 } } },
+  { $sort: { n: -1, _id: 1 } },
+  { $limit: 2 },
+]);
+r.forEach((g) => console.log(g));`,
+        chips: ["{ _id: 'romanzo', n: 3 }", "{ _id: 'memorie', n: 2 }", "{ _id: 'fantastico', n: 1 }", "{ _id: 'giallo', n: 1 }", "{ _id: 'romanzo', n: 1 }", "{ _id: null, n: 4 }"],
+        answer: ["{ _id: 'romanzo', n: 3 }", "{ _id: 'memorie', n: 2 }"],
+        explain: '`$unwind` crea un documento per ogni genere (7), `$group` li conta per genere, `$sort` mette prima i più numerosi (a parità, in ordine di `_id`) e `$limit: 2` tiene i primi due.',
+      },
+    ], { id: 'm11-order' });
+
+    // ---------------------------------------------------------------- 3. biblioteca
+    NodeLab.inspector(document.getElementById('inspector'), {
+      id: 'm11-biblioteca-ex',
+      files: M11_BIBLIOTECA.files, fs: M11_BIBLIOTECA.fs, entry: 'server.js', port: 3000,
+      packages: M11_BIBLIOTECA.packages, persist: true, watch: M11_BIBLIOTECA.watch,
+      missions: M11_BIBLIOTECA.missions, presets: M11_BIBLIOTECA.presets,
+    });
+    (function codiceProgetto() {
+      const tabs = document.getElementById('codice-tabs');
+      const src = document.getElementById('codice-src');
+      const nomi = Object.keys(M11_BIBLIOTECA.files);
+      function mostra(n) {
+        tabs.querySelectorAll('button').forEach((b) => {
+          b.className = `text-xs font-mono px-2 py-1 rounded border ${b.dataset.f === n ? 'border-green-500 bg-green-500/15 text-white' : 'border-gray-700 bg-gray-900 text-gray-400 hover:text-white'}`;
+        });
+        const testo = M11_BIBLIOTECA.files[n];
+        if (window.hljs) { src.innerHTML = hljs.highlight(testo, { language: 'javascript' }).value; src.classList.add('hljs'); }
+        else src.textContent = testo;
+      }
+      tabs.innerHTML = nomi.map((n) => `<button data-f="${n}">${n}</button>`).join('');
+      tabs.onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) mostra(b.dataset.f); };
+      mostra('models/libro.js');
+    })();
+
+    // ---------------------------------------------------------------- 4. laboratori
+    const labsBox = document.getElementById('labs');
+    for (const cfg of window.M11_LABS) {
+      const el = document.createElement('article');
+      el.id = cfg.id;
+      labsBox.appendChild(el);
+      NodeLab.mount(el, cfg);
+    }
+
+    // ---------------------------------------------------------------- 6. quiz
+    Quiz.mount(document.getElementById('quiz-box'), [
+      {
+        question: 'In MongoDB, che cosa corrisponde a una riga di una tabella SQL?',
+        options: ['Una collezione', 'Un documento', 'Un campo', 'Un indice'],
+        correct: 1,
+        explanation: 'Database → database, tabella → collezione, riga → documento (BSON), colonna → campo. Un documento può contenere array e altri documenti.',
+      },
+      {
+        question: 'Che cosa trova `db.libri.find({ generi: \'giallo\' })` se `generi` è un array?',
+        options: ['Solo i libri con generi esattamente uguale a "giallo"', 'I libri il cui array generi contiene "giallo"', 'Errore: serve $in', 'Niente: un array non si può confrontare con una stringa'],
+        correct: 1,
+        explanation: 'Su un campo array, il confronto con un valore vuol dire "contiene". Per l\'array intero si scrive l\'array: `{ generi: [\'giallo\'] }`.',
+      },
+      {
+        question: '`mongoose.model(\'Libro\', libroSchema)` senza terzo argomento: in quale collezione finiscono i documenti?',
+        options: ['libro', 'libri', 'libros', 'Libro'],
+        correct: 2,
+        explanation: 'Mongoose mette il nome al plurale con le regole dell\'inglese: Libro → libros, Autore → autores. Con il terzo argomento (o l\'opzione `collection` dello schema) la scegli tu.',
+      },
+      {
+        question: 'Perché uno script con `await mongoose.connect(…)` alla fine non termina?',
+        options: ['Perché MongoDB è lento', 'Perché la connessione aperta tiene vivo il processo: serve `await mongoose.disconnect()`', 'Perché manca process.exit()', 'Perché i modelli restano in memoria'],
+        correct: 1,
+        explanation: 'Come un server in ascolto, una connessione aperta impedisce a Node di uscire. In un server va lasciata aperta; in uno script si chiude alla fine.',
+      },
+      {
+        question: 'Lo schema dice `anno: { type: Number, max: 2026 }`. Che cosa fa `Libro.findByIdAndUpdate(id, { anno: 3000 })`?',
+        options: ['Lancia ValidationError', 'Scrive 3000 e restituisce il documento com\'era prima', 'Scrive 3000 e restituisce il documento aggiornato', 'Non fa niente'],
+        correct: 1,
+        explanation: 'Negli aggiornamenti la validazione è spenta (serve `runValidators: true`) e di default torna il documento **prima** della modifica (serve `returnDocument: \'after\'`).',
+      },
+      {
+        question: '`Libro.findById(\'42\')` con `_id` di tipo ObjectId:',
+        options: ['Restituisce null', 'Lancia CastError: "42" non è un ObjectId', 'Restituisce il 42° libro', 'Lancia ValidationError'],
+        correct: 1,
+        explanation: 'Mongoose converte il valore nel tipo dello schema prima di mandare la query: "42" non si può convertire. Nelle API: `mongoose.isValidObjectId` → 400 (o 404) prima della query, oppure il gestore degli errori.',
+      },
+      {
+        question: 'I prestiti di un libro: incorporarli nel documento del libro o tenerli in una collezione a parte?',
+        options: ['Sempre a parte: è più "normale"', 'Incorporati, se si leggono con il libro e non crescono senza limite; a parte se diventano tantissimi o si cercano da soli', 'Sempre incorporati: MongoDB non ha JOIN', 'Non importa'],
+        correct: 1,
+        explanation: 'Si modella su come si leggono i dati. Incorporare dà letture semplici e aggiornamenti atomici; un array che cresce all\'infinito (o dati condivisi tra molti documenti) va invece in una collezione a parte, con un riferimento.',
+      },
+      {
+        question: 'Che cosa fa `Libro.find().populate(\'autore\')`?',
+        options: ['Una JOIN nel database', 'Una query per i libri e una sola query in più per gli autori ($in degli id), poi sostituisce gli id con i documenti', 'Una query per ogni libro', 'Copia gli autori dentro i libri nel database'],
+        correct: 1,
+        explanation: 'populate è fatto da Mongoose, non da MongoDB: raccoglie gli ObjectId e li cerca tutti insieme. Nel database resta solo l\'id.',
+      },
+      {
+        question: 'Perché il prestito si fa con `findOneAndUpdate({ _id, disponibile: true }, { $set: { disponibile: false }, $push: … })` e non con `findById` + modifica + `save()`?',
+        options: ['Perché save() è deprecato', 'Perché filtro e modifica avvengono insieme, in modo atomico: due richieste contemporanee non possono prestare lo stesso libro', 'Perché è più corto', 'Perché save() non salva gli array'],
+        correct: 1,
+        explanation: 'Tra la lettura e il save un\'altra richiesta potrebbe leggere lo stesso libro ancora disponibile. Un\'operazione su un singolo documento è atomica: niente transazioni.',
+      },
+      {
+        question: 'Nella pipeline `{ $group: { _id: \'$genere\', n: { $sum: 1 } } }`, che cosa vuol dire `\'$genere\'`?',
+        options: ['La stringa "$genere"', 'Il valore del campo genere di ogni documento', 'Un operatore', 'Una variabile JavaScript'],
+        correct: 1,
+        explanation: 'Nelle espressioni di aggregazione, una stringa che inizia con $ è il valore di quel campo. `$sum: 1` aggiunge 1 per ogni documento del gruppo, cioè conta.',
+      },
+      {
+        question: 'Un secondo libro con lo stesso ISBN, con `isbn: { type: String, unique: true }`. Che errore arriva?',
+        options: ['ValidationError', 'CastError', 'MongoServerError con code 11000 (E11000 duplicate key)', 'Nessuno: unique è solo un suggerimento'],
+        correct: 2,
+        explanation: '`unique` non è un validatore di Mongoose: crea un indice unico nel database, ed è MongoDB a rifiutare il doppione. Nell\'API: `err.code === 11000` → 409.',
+      },
+      {
+        question: 'Il login fa `Utente.findOne({ email: req.body.email, password: req.body.password })`. Che cosa succede con il body `{ "email": { "$ne": null }, "password": { "$ne": null } }`?',
+        options: ['Errore di sintassi', 'Nessun utente trovato', 'Trova il primo utente del database: il client ha messo un operatore al posto del valore', 'Mongoose blocca sempre gli operatori'],
+        correct: 2,
+        explanation: 'È la NoSQL injection. Si evita validando il body (le email e le password devono essere stringhe, zod) e con `mongoose.set(\'sanitizeFilter\', true)`. E le password non si confrontano così: modulo 12.',
+      },
+    ], { id: 'm11-quiz' });
+
+    if (window.hljs) document.querySelectorAll('pre.code code').forEach((el) => { if (!el.dataset.highlighted && el.id !== 'codice-src') hljs.highlightElement(el); });
+    NodeLab.refreshProgress();
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

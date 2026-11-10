@@ -14,7 +14,7 @@
  *   hints: ['...'], solution: { 'app.js': '...' },
  * })
  *
- * NodeLab.httpClient(el, { send, port, presets, onExchange })
+ * NodeLab.httpClient(el, { send, port, presets, onExchange, jar })                // jar: NodeLab.cookieJar() condiviso
  * NodeLab.inspector(el, { id, files, entry, port, missions, presets, intro, fs, packages, persist, watch, node, env })
  * NodeLab.playground(el, { code, inputs: [{ label, value }], packages, file })   // "prova lo schema" con input JSON
  * NodeLab.sql(el, { setup, presets: [{ label, sql }], height })                  // console SQL su SQLite
@@ -96,7 +96,8 @@
 
   /* --------------------------------------------------------- File tree */
   function renderTree(el, snap, onOpen) {
-    const paths = Object.keys(snap).filter((p) => p !== '/progetto').sort();
+    // solo il progetto: i database di MongoDB (/data/db) stanno fuori, come sul PC
+    const paths = Object.keys(snap).filter((p) => p !== '/progetto' && p.startsWith('/progetto/')).sort();
     if (!paths.length) { el.innerHTML = '<div class="text-gray-600 italic">(cartella vuota)</div>'; return; }
     el.innerHTML = paths.map((p) => {
       const rel = p.replace('/progetto/', '');
@@ -129,8 +130,87 @@
     return snap;
   }
 
+  /* ------------------------------------------------------- Cookie jar
+   * I cookie di localhost, come li conserva un browser: Set-Cookie delle risposte → header Cookie delle richieste.
+   * In un webPanel/inspector il client HTTP e il browser condividono lo stesso jar (come Postman e Chrome se fossero
+   * uno solo); il jar sopravvive ai riavvii del server, come quello vero (utile per vedere sparire una sessione in memoria).
+   * Regole (RFC 6265 come Chrome): Path (di default la "cartella" della richiesta) e path-match, Max-Age che vince su
+   * Expires, Max-Age<=0 o Expires passato = cancellazione, nome+path come chiave, prima i path più lunghi.
+   * Secure: Chrome considera http://localhost un contesto sicuro e quindi accetta e rimanda i cookie Secure anche
+   * senza HTTPS; qui facciamo lo stesso (su un dominio vero, in http, il cookie verrebbe scartato).
+   * Domain diverso da localhost: scartato. Porte diverse condividono i cookie (come nei browser).
+   */
+  function cookieJar() {
+    const map = new Map();
+    const subs = new Set();
+    let seq = 0;
+    const changed = () => subs.forEach((f) => f());
+    const prune = () => { const now = Date.now(); for (const [k, c] of map) if (c.expires !== null && c.expires <= now) map.delete(k); };
+    const defaultPath = (p) => { const i = p.lastIndexOf('/'); return i <= 0 ? '/' : p.slice(0, i); };
+    const pathMatch = (reqPath, cp) => reqPath === cp || (reqPath.startsWith(cp) && (cp.endsWith('/') || reqPath[cp.length] === '/'));
+    return {
+      store(headers, reqPath) {
+        let touched = false;
+        for (const [k, v] of headers) {
+          if (k.toLowerCase() !== 'set-cookie') continue;
+          const [pair, ...attrs] = String(v).split(';');
+          const eq = pair.indexOf('=');
+          if (eq < 0) continue;
+          const c = { name: pair.slice(0, eq).trim(), value: pair.slice(eq + 1).trim(), path: defaultPath(reqPath || '/'), expires: null, httpOnly: false, secure: false, sameSite: '', seq: seq++ };
+          if (!c.name) continue;
+          let maxAge = null; let expires = null; let ok = true;
+          for (const a of attrs) {
+            const i = a.indexOf('=');
+            const key = (i < 0 ? a : a.slice(0, i)).trim().toLowerCase();
+            const val = i < 0 ? '' : a.slice(i + 1).trim();
+            if (key === 'path') { if (val.startsWith('/')) c.path = val; }
+            else if (key === 'max-age') { if (/^-?\d+$/.test(val)) maxAge = Number(val); }
+            else if (key === 'expires') { const t = Date.parse(val); if (!isNaN(t)) expires = t; }
+            else if (key === 'domain') { if (val.replace(/^\./, '').toLowerCase() !== 'localhost') ok = false; }
+            else if (key === 'httponly') c.httpOnly = true;
+            else if (key === 'secure') c.secure = true;
+            else if (key === 'samesite') c.sameSite = val;
+          }
+          if (!ok) continue;
+          c.expires = maxAge !== null ? Date.now() + maxAge * 1000 : expires;
+          const key = c.name + '|' + c.path;
+          const old = map.get(key);
+          if (old) c.seq = old.seq;   // la data di creazione resta quella del primo
+          if (c.expires !== null && c.expires <= Date.now()) map.delete(key); else map.set(key, c);
+          touched = true;
+        }
+        if (touched) changed();
+      },
+      header(reqPath) {
+        prune();
+        const list = Array.from(map.values()).filter((c) => pathMatch(reqPath || '/', c.path)).sort((a, b) => b.path.length - a.path.length || a.seq - b.seq);
+        return list.map((c) => `${c.name}=${c.value}`).join('; ');
+      },
+      all() { prune(); return Array.from(map.values()).sort((a, b) => a.seq - b.seq); },
+      remove(name, path) { map.delete(name + '|' + path); changed(); },
+      clear() { map.clear(); changed(); },
+      onChange(f) { subs.add(f); },
+    };
+  }
+  // l'elenco dei cookie (nome=valore e attributi), con × per cancellarne uno e un pulsante per cancellarli tutti
+  function drawCookies(el, jar, countEl) {
+    const list = jar.all();
+    if (countEl) countEl.textContent = `(${list.length})`;
+    const flag = (t, cls) => `<span class="px-1 rounded border ${cls || 'border-gray-700 text-gray-400'}">${t}</span>`;
+    const scade = (c) => (c.expires === null ? flag('di sessione') : flag(`scade ${new Date(c.expires).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`));
+    el.innerHTML = list.length ? `<div class="space-y-1">${list.map((c, i) => `<div class="flex flex-wrap items-center gap-1.5">
+        <span class="font-mono"><span class="text-yellow-300">${esc(c.name)}</span>=<span class="text-gray-300 break-all">${esc(c.value.length > 70 ? c.value.slice(0, 70) + '…' : c.value)}</span></span>
+        ${c.path !== '/' ? flag('Path=' + esc(c.path)) : ''}${c.httpOnly ? flag('HttpOnly', 'border-green-500/40 text-green-300') : ''}${c.secure ? flag('Secure', 'border-cyan-500/40 text-cyan-300') : ''}${c.sameSite ? flag('SameSite=' + esc(c.sameSite)) : ''}${scade(c)}
+        <button data-ck="${i}" class="ml-auto text-gray-500 hover:text-red-300" title="Elimina questo cookie">✕</button></div>`).join('')}
+      <button class="ck-clear mt-1 px-2 py-0.5 rounded border border-gray-700 text-gray-300 hover:text-white hover:border-red-500/60">Elimina tutti i cookie</button></div>`
+      : '<div class="text-gray-600 italic">Nessun cookie per localhost.</div>';
+    el.querySelectorAll('[data-ck]').forEach((b) => { b.onclick = () => { const c = list[Number(b.dataset.ck)]; jar.remove(c.name, c.path); }; });
+    const all = el.querySelector('.ck-clear');
+    if (all) all.onclick = () => jar.clear();
+  }
+
   /* ------------------------------------------------------- HTTP client */
-  const STATUS_COLOR = (s) => (s >= 500 ? 'bg-red-500/20 text-red-300 border-red-500/40' : s >= 400 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' : s >= 300 ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' : 'bg-green-500/20 text-green-300 border-green-500/40');
+  const STATUS_COLOR =(s) => (s >= 500 ? 'bg-red-500/20 text-red-300 border-red-500/40' : s >= 400 ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' : s >= 300 ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' : 'bg-green-500/20 text-green-300 border-green-500/40');
   function httpClient(el, opts) {
     const port = opts.port || 3000;
     const presets = opts.presets || [];
@@ -158,10 +238,16 @@
           </div>
           <details class="text-xs text-gray-500"><summary class="cursor-pointer hover:text-gray-300">Header aggiuntivi</summary>
             <textarea class="hc-headers mt-1 w-full h-16 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-100 focus:outline-none" spellcheck="false" placeholder="Authorization: Bearer abc123"></textarea></details>
+          <details class="text-xs text-gray-500"><summary class="cursor-pointer hover:text-gray-300">Cookie <span class="hc-ccount">(0)</span> <span class="text-gray-600">· inviati da soli, come fa un browser</span></summary>
+            <div class="hc-cookies mt-1 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2"></div></details>
           <div class="hc-resp"></div>
         </div>
       </div>`;
     const $ = (s) => el.querySelector(s);
+    const jar = opts.jar || cookieJar();
+    const redrawCookies = () => drawCookies($('.hc-cookies'), jar, $('.hc-ccount'));
+    jar.onChange(redrawCookies);
+    redrawCookies();
     const method = $('.hc-method');
     const url = $('.hc-url');
     const body = $('.hc-body');
@@ -196,6 +282,8 @@
       const m = method.value;
       const b = !bodyWrap.classList.contains('hidden') && body.value ? body.value : undefined;
       if (b !== undefined && !Object.keys(headers).some((k) => k.toLowerCase() === 'content-type')) headers['Content-Type'] = $('.hc-ctype').value;
+      // i cookie salvati partono da soli; un header Cookie scritto a mano li sostituisce
+      if (!Object.keys(headers).some((k) => k.toLowerCase() === 'cookie')) { const ck = jar.header(u.pathname); if (ck) headers.Cookie = ck; }
       const req = { method: m, path: u.pathname + u.search, port: Number(u.port || 80), headers, body: b };
       resp.innerHTML = '<div class="text-gray-500 text-sm font-mono">… in attesa di risposta</div>';
       const t0 = performance.now();
@@ -206,6 +294,7 @@
         if (opts.onExchange) opts.onExchange(req, r);
         return;
       }
+      jar.store(r.headers, u.pathname);
       const hObj = {};
       for (const [k, v] of r.headers) hObj[k.toLowerCase()] = v;
       const ctype = hObj['content-type'] || '';
@@ -273,13 +362,20 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
         <div class="relative">
           <iframe class="br-frame block w-full bg-white" style="height:${opts.height || '22rem'}" sandbox="allow-scripts allow-forms" title="Pagina"></iframe>
           <pre class="br-src hidden absolute inset-0 overflow-auto m-0 p-3 text-xs bg-gray-950 text-gray-200 whitespace-pre-wrap"></pre>
+          <div class="br-cookiebox hidden absolute inset-x-0 bottom-0 max-h-[70%] overflow-auto p-3 text-xs bg-gray-900/95 border-t border-gray-700 text-gray-400">
+            <div class="mb-1.5 text-gray-300 font-semibold">Cookie di localhost <span class="font-normal text-gray-500">(come in DevTools → Application → Cookies)</span></div><div class="br-cookies"></div></div>
         </div>
         <div class="flex items-start gap-2 px-3 py-1.5 bg-gray-800 border-t border-gray-700 text-xs">
           <span class="text-gray-500 mt-0.5">Richieste:</span><div class="br-log flex-1 flex flex-wrap gap-1 font-mono min-w-0"></div>
+          <button class="br-ck text-gray-400 hover:text-white px-2 py-0.5 rounded border border-gray-700 whitespace-nowrap" title="I cookie salvati dal browser">Cookie <span class="br-ccount">(0)</span></button>
           <button class="br-view text-gray-400 hover:text-white px-2 py-0.5 rounded border border-gray-700 whitespace-nowrap">Sorgente</button>
         </div>
       </div>`;
     const $ = (s) => el.querySelector(s);
+    const jar = opts.jar || cookieJar();
+    const redrawCookies = () => drawCookies($('.br-cookies'), jar, $('.br-ccount'));
+    jar.onChange(redrawCookies);
+    redrawCookies();
     const frame = $('.br-frame');
     const log = $('.br-log');
     const warnBox = $('.br-warn');
@@ -298,7 +394,10 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
       icons();
     }
     async function fetchOne(req, sub) {
+      const ck = jar.header(req.path.split('?')[0]);
+      if (ck) req = Object.assign({}, req, { headers: Object.assign({}, req.headers, { Cookie: ck }) });
       const r = await opts.send(req);
+      if (r.ok) jar.store(r.headers, req.path.split('?')[0]);
       const res = r.ok ? Object.assign({}, r, { headersObj: Object.fromEntries(r.headers.map(([k, v]) => [k.toLowerCase(), v])), json() { return JSON.parse(r.body); } }) : r;
       const chip = document.createElement('span');
       chip.className = `px-1.5 py-0.5 rounded border ${r.ok ? STATUS_COLOR(r.status) : 'bg-red-500/20 text-red-300 border-red-500/40'} ${sub ? 'opacity-60' : ''}`;
@@ -386,6 +485,7 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
     $('.br-reload').onclick = () => (current ? repeat(current) : go(toReq(resolve(here())), true));
     $('.br-back').onclick = () => { if (stack.length > 1) { stack.pop(); repeat(stack[stack.length - 1]); } };
     $('.br-view').onclick = () => { const s = $('.br-src'); s.classList.toggle('hidden'); $('.br-view').textContent = s.classList.contains('hidden') ? 'Sorgente' : 'Pagina'; };
+    $('.br-ck').onclick = () => { redrawCookies(); $('.br-cookiebox').classList.toggle('hidden'); };
     frame.srcdoc = '<p style="font-family:system-ui,sans-serif;color:#888;padding:24px">Premi ▶ Esegui: la pagina comparirà qui.</p>';
     icons();
     return {
@@ -397,6 +497,7 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
   }
   // Browser e client HTTP nello stesso riquadro, con due schede
   function webPanel(el, opts) {
+    opts = Object.assign({ jar: cookieJar() }, opts);   // un solo "browser": client HTTP e pagina vedono gli stessi cookie
     if (!opts.browser) return httpClient(el, opts);
     el.innerHTML = `<div class="flex gap-1 mb-2 text-sm">
         <button data-v="br" class="wp-tab px-3 py-1 rounded-lg flex items-center gap-1.5"><i data-lucide="globe" class="w-4 h-4"></i>Browser</button>
@@ -704,6 +805,9 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
    */
   function inspector(el, cfg) {
     const id = cfg.id;
+    // watch: 'mongodb://127.0.0.1:27017/biblioteca' → le collezioni di quel database del MongoDB simulato
+    const isMongoWatch = /^mongodb:\/\//.test(cfg.watch || '');
+    const watchKey = isMongoWatch ? `/data/db/${cfg.watch.replace(/^mongodb:\/\/[^/]*\/?/, '').replace(/[?].*$/, '') || 'test'}.json` : '/progetto/' + cfg.watch;
     const done = new Set(store.get('insp:' + id) || []);
     el.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
       <div class="lg:col-span-2 flex flex-col gap-3">
@@ -718,8 +822,8 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
           <div class="h-40 overflow-auto p-2 insp-scroll"><div class="term-out insp-out text-xs text-gray-300"></div></div>
         </div>
         ${cfg.watch ? `<div class="term flex flex-col overflow-hidden insp-watchbox transition-shadow">
-          <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700 flex items-center gap-2"><i data-lucide="${/\.(db|sqlite3?)$/.test(cfg.watch) ? 'database' : 'file-json'}" class="w-3.5 h-3.5 text-yellow-400"></i><span class="font-mono">${esc(cfg.watch)}</span><span class="insp-watchstate ml-auto text-gray-600">sul disco</span></div>
-          <pre class="insp-watch h-48 overflow-auto p-2 text-xs text-gray-300 ${/\.(db|sqlite3?)$/.test(cfg.watch) ? 'whitespace-pre' : 'whitespace-pre-wrap'}"></pre>
+          <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-400 border-b border-gray-700 flex items-center gap-2"><i data-lucide="${/\.(db|sqlite3?)$/.test(cfg.watch) || isMongoWatch ? 'database' : 'file-json'}" class="w-3.5 h-3.5 ${isMongoWatch ? 'text-lime-400' : 'text-yellow-400'}"></i><span class="font-mono truncate">${esc(cfg.watch)}</span><span class="insp-watchstate ml-auto text-gray-600 whitespace-nowrap">${isMongoWatch ? 'nel server' : 'sul disco'}</span></div>
+          <pre class="insp-watch h-48 overflow-auto p-2 text-xs text-gray-300 ${/\.(db|sqlite3?)$/.test(cfg.watch) || isMongoWatch ? 'whitespace-pre' : 'whitespace-pre-wrap'}"></pre>
         </div>` : ''}
       </div>
       <div class="lg:col-span-3 insp-client"></div></div>`;
@@ -731,16 +835,16 @@ p({type:'submit',method:(s&&s.getAttribute('formmethod'))||f.getAttribute('metho
     let watched = null;
     function drawWatch(snap) {
       if (!cfg.watch) return;
-      const f = snap ? snap['/progetto/' + cfg.watch] : null;
-      const text = f ? (f.preview != null ? f.preview : f.content) : snap ? null : (cfg.fs || {})[cfg.watch];
+      const f = snap ? snap[watchKey] : null;
+      const text = f ? (f.preview != null ? f.preview : f.content) : snap ? null : isMongoWatch ? null : (cfg.fs || {})[cfg.watch];
       const changed = snap && text !== watched;
       watched = text;
-      $('.insp-watch').textContent = text === null ? '(il file non esiste)' : text;
+      $('.insp-watch').textContent = text === null ? (isMongoWatch ? '(database vuoto)' : '(il file non esiste)') : text;
       if (changed) {
         const box = $('.insp-watchbox');
         box.classList.add('ring-2', 'ring-yellow-400/60');
         $('.insp-watchstate').textContent = '✎ modificato';
-        setTimeout(() => { box.classList.remove('ring-2', 'ring-yellow-400/60'); $('.insp-watchstate').textContent = 'sul disco'; }, 1500);
+        setTimeout(() => { box.classList.remove('ring-2', 'ring-yellow-400/60'); $('.insp-watchstate').textContent = isMongoWatch ? 'nel server' : 'sul disco'; }, 1500);
       }
     }
     // dallo snapshot del file system ai file iniziali del prossimo avvio (il codice resta quello di cfg.files)
@@ -1011,6 +1115,113 @@ console.log('\\u0001' + JSON.stringify({ out, tabelle }));
     return { run };
   }
 
+  /* ------------------------------------------------------- Console mongosh
+   * Comandi di mongosh (db.libri.find(…), insertOne, updateOne, aggregate, show collections, use, it…) sul MongoDB
+   * del simulatore; le risposte sono stampate come nella shell vera.
+   * NodeLab.mongo(el, { db: 'biblioteca', setup: 'db.libri.insertMany([…])', presets: [{ label, code }], height })
+   * Il database resta tra un'esecuzione e l'altra; "Ripristina" lo ricrea da setup.
+   */
+  function mongoConsole(el, cfg) {
+    const presets = cfg.presets || [];
+    const dbName = cfg.db || 'test';
+    el.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-5 flex flex-col gap-3 min-w-0">
+        ${presets.length ? `<div class="flex flex-wrap items-center gap-1.5">${presets.map((p, i) => `<button data-i="${i}" class="mg-preset text-xs font-mono px-2 py-1 rounded border border-gray-700 bg-gray-950 text-gray-300 hover:border-lime-500 hover:text-white">${esc(p.label)}</button>`).join('')}</div>` : ''}
+        <textarea class="mg-input w-full h-44 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 font-mono text-sm text-gray-100 focus:outline-none focus:border-lime-500" spellcheck="false" placeholder="db.libri.find({ anno: { $gt: 1960 } })"></textarea>
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="mg-run px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium flex items-center gap-2" title="Ctrl+Invio"><i data-lucide="play" class="w-4 h-4"></i>Esegui</button>
+          <button class="mg-reset px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm flex items-center gap-2" title="Ricrea il database con i dati iniziali"><i data-lucide="database" class="w-4 h-4"></i>Ripristina</button>
+          <span class="mg-state text-xs text-gray-500 font-mono"></span>
+        </div>
+        <div class="bg-gray-900 border border-gray-700 rounded-lg p-3">
+          <div class="text-xs text-gray-400 mb-2 flex items-center gap-1.5"><i data-lucide="layers" class="w-3.5 h-3.5 text-lime-400"></i>Collezioni di <span class="font-mono text-gray-300 mg-dbname">${esc(dbName)}</span></div>
+          <div class="mg-schema text-xs font-mono text-gray-300 space-y-1"></div>
+        </div>
+      </div>
+      <div class="lg:col-span-7 min-w-0">
+        <div class="term mg-out overflow-auto p-3 text-xs space-y-2" style="max-height:${cfg.height || '28rem'};min-height:12rem"><p class="text-gray-500 italic font-sans text-sm">Scrivi uno o più comandi (uno per riga, come nella shell) e premi Esegui.</p></div>
+      </div></div>`;
+    const $ = (s) => el.querySelector(s);
+    let proc = null;
+    let file = null;   // il database (Extended JSON) dopo l'ultima esecuzione
+    let current = -1;
+    let curDb = dbName;
+    let seeded = false;
+    const drawPresets = () => el.querySelectorAll('.mg-preset').forEach((b) => {
+      const on = Number(b.dataset.i) === current;
+      b.className = `mg-preset text-xs font-mono px-2 py-1 rounded border ${on ? 'border-lime-400 bg-lime-500/15 text-white' : 'border-gray-700 bg-gray-950 text-gray-300 hover:border-lime-500 hover:text-white'}`;
+    });
+    function draw(data, stderr, onlySchema) {
+      if (data && !onlySchema) {
+        $('.mg-out').innerHTML = data.out.map((r) => `<div><div class="font-mono text-gray-400 whitespace-pre-wrap break-words"><span class="text-lime-400">${esc(r.db)}&gt;</span> ${esc(r.cmd)}</div>${r.out ? `<pre class="m-0 mt-0.5 font-mono whitespace-pre-wrap break-words ${r.ok ? 'text-gray-200' : 'text-red-300'}">${esc(r.out)}</pre>` : ''}</div>`).join('') || '<p class="text-gray-500 italic font-sans text-sm">Nessun comando da eseguire.</p>';
+        $('.mg-out').scrollTop = 0;
+      }
+      if (stderr && !data) $('.mg-out').innerHTML = `<pre class="text-xs text-red-300 whitespace-pre-wrap">${esc(stderr)}</pre>`;
+      if (data) {
+        curDb = data.db;
+        $('.mg-dbname').textContent = data.db;
+        $('.mg-schema').innerHTML = data.colls.length ? data.colls.map((c) => `<div><span class="text-lime-300 font-semibold">${esc(c.name)}</span> <span class="text-gray-500">(${c.n} ${c.n === 1 ? 'documento' : 'documenti'}${c.idx.length ? ` · indici: ${esc(c.idx.join(', '))}` : ''})</span></div>`).join('') : '<span class="text-gray-600 italic">nessuna collezione</span>';
+      }
+    }
+    function run(onlySchema) {
+      if (proc) proc.kill(true);
+      const text = onlySchema ? '' : $('.mg-input').value;
+      const script = `const shell = require('nodelab-mongosh')(${JSON.stringify(curDb)});
+if (${seeded ? 'false' : 'true'}) {
+  const s = require('nodelab-mongosh')(${JSON.stringify(dbName)});
+  for (const c of s.split(${JSON.stringify(cfg.setup || '')})) s.run(c);
+}
+const out = [];
+for (const cmd of shell.split(${JSON.stringify(text)})) {
+  const db = shell.db;
+  const r = shell.run(cmd);
+  out.push({ db, cmd: cmd.trim(), ok: r.ok, out: r.out });
+}
+console.log('\\u0001' + JSON.stringify({ out, db: shell.db }));
+`;
+      let stdout = '';
+      let stderr = '';
+      $('.mg-state').textContent = '⏳ esecuzione…';
+      const p = new NodeProcess({
+        files: { 'console.js': script }, entry: 'console.js', packages: ['nodelab-mongosh'], fs: file ? { ['/data/db/' + dbName + '.json']: file } : {},
+        onOutput: (s, t) => { if (s === 'stdout') stdout += t; else if (s === 'stderr') stderr += t; },
+        onExit: (info) => {
+          if (p !== proc) return;
+          const snap = info.fs || {};
+          const f = snap['/data/db/' + dbName + '.json'];
+          if (!info.crashed) { file = f ? f.content : null; seeded = true; }
+          const line = stdout.split('\n').find((l) => l.startsWith('\u0001'));
+          let data = null;
+          try { data = line ? JSON.parse(line.slice(1)) : null; } catch (e) { /* ignora */ }
+          if (data) {
+            const shown = snap['/data/db/' + data.db + '.json'];
+            data.colls = [];
+            try {
+              const j = shown ? JSON.parse(shown.content) : { collections: {} };
+              data.colls = Object.entries(j.collections || {}).map(([name, c]) => ({ name, n: (c.docs || []).length, idx: (c.indexes || []).filter((x) => x.name !== '_id_').map((x) => x.name + (x.unique ? ' unique' : '')) }));
+            } catch (e) { /* ignora */ }
+          }
+          $('.mg-state').textContent = '';
+          draw(data, data ? '' : stderr || 'Nessun risultato.', onlySchema);
+          if (onlySchema && data) $('.mg-out').innerHTML = '<p class="text-gray-500 italic font-sans text-sm">Database pronto. Scrivi uno o più comandi (uno per riga, come nella shell) e premi Esegui.</p>';
+        },
+      });
+      proc = p;
+      p.start();
+    }
+    el.querySelectorAll('.mg-preset').forEach((b) => {
+      b.onclick = () => { current = Number(b.dataset.i); $('.mg-input').value = presets[current].code; drawPresets(); run(); };
+    });
+    $('.mg-input').addEventListener('input', () => { current = -1; drawPresets(); });
+    $('.mg-input').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); } });
+    $('.mg-run').onclick = () => run();
+    $('.mg-reset').onclick = () => { file = null; seeded = false; curDb = dbName; run(true); };
+    if (presets.length) { current = 0; $('.mg-input').value = presets[0].code; drawPresets(); }
+    run(true);
+    icons();
+    return { run };
+  }
+
   /* ------------------------------------------- progresso nella pagina */
   function refreshProgress() {
     document.querySelectorAll('[data-lab-progress]').forEach((badge) => {
@@ -1023,5 +1234,5 @@ console.log('\\u0001' + JSON.stringify({ out, tabelle }));
   document.addEventListener('nodelab:progress', refreshProgress);
   document.addEventListener('DOMContentLoaded', refreshProgress);
 
-  window.NodeLab = { mount, httpClient, browser, inspector, playground, sql: sqlConsole, ansiToHtml, fnSource, refreshProgress, store };
+  window.NodeLab = { mount, httpClient, browser, inspector, playground, sql: sqlConsole, mongo: mongoConsole, cookieJar, ansiToHtml, fnSource, refreshProgress, store };
 })();

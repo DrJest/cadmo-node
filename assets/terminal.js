@@ -35,6 +35,13 @@
     ejs: { v: '7.0.2', majors: { 3: '3.1.10', 7: '7.0.2' }, n: 1, deps: [], desc: 'Embedded JavaScript templates', bin: 'ejs' },
     'better-sqlite3': { v: '12.4.1', majors: { 11: '11.10.0', 12: '12.4.1' }, n: 37, deps: ['bindings', 'prebuild-install'], desc: 'The fastest and simplest library for SQLite in Node.js.' },
     typeorm: { v: '1.1.2', majors: { 0: '0.3.31', 1: '1.1.2' }, n: 52, deps: ['@sqltools/formatter', 'ansis', 'dayjs', 'debug', 'dedent', 'reflect-metadata', 'sql-highlight', 'tinyglobby', 'tslib', 'yargs'], desc: 'Data-Mapper ORM for TypeScript and ES2023+. Supports MySQL/MariaDB, PostgreSQL, MS SQL Server, Oracle, SAP HANA, SQLite, MongoDB databases.' },
+    mongodb: { v: '7.8.0', majors: { 6: '6.22.0', 7: '7.8.0' }, n: 12, deps: ['@mongodb-js/saslprep', 'bson', 'mongodb-connection-string-url'], desc: 'The official MongoDB driver for Node.js' },
+    mongoose: { v: '9.12.1', majors: { 7: '7.8.13', 8: '8.24.8', 9: '9.12.1' }, n: 20, deps: ['@standard-schema/spec', 'kareem', 'mongodb', 'mpath', 'mquery', 'ms', 'sift'], desc: 'Mongoose MongoDB ODM' },
+    bcrypt: { v: '6.0.0', majors: { 5: '5.1.1', 6: '6.0.0' }, n: 3, deps: ['node-addon-api', 'node-gyp-build'], desc: 'A bcrypt library for NodeJS.' },
+    bcryptjs: { v: '3.0.3', majors: { 2: '2.4.3', 3: '3.0.3' }, n: 1, deps: [], desc: "Optimized bcrypt in plain JavaScript with zero dependencies, with TypeScript support. Compatible to 'bcrypt'.", bin: 'bcrypt' },
+    jsonwebtoken: { v: '9.0.3', majors: { 8: '8.5.1', 9: '9.0.3' }, n: 15, deps: ['jws', 'lodash.includes', 'lodash.isboolean', 'lodash.isinteger', 'lodash.isnumber', 'lodash.isplainobject', 'lodash.isstring', 'lodash.once', 'ms', 'semver'], desc: 'JSON Web Token implementation (symmetric and asymmetric)' },
+    'cookie-parser': { v: '1.4.7', n: 3, deps: ['cookie', 'cookie-signature'], desc: 'Parse HTTP request cookies' },
+    'express-session': { v: '1.19.0', n: 11, deps: ['cookie', 'cookie-signature', 'debug', 'depd', 'on-headers', 'parseurl', 'safe-buffer', 'uid-safe'], desc: 'Simple session middleware for Express' },
     axios: { v: '1.12.2', n: 23, deps: ['follow-redirects', 'form-data', 'proxy-from-env'], desc: 'Promise based HTTP client for the browser and node.js' },
     uuid: { v: '13.0.0', n: 1, deps: [], desc: 'RFC9562 UUIDs', bin: 'uuid' },
     prettier: { v: '3.6.2', n: 1, deps: [], desc: 'Prettier is an opinionated code formatter', bin: 'prettier' },
@@ -418,7 +425,7 @@ module.exports = chalk;
 module.exports.default = chalk;`,
       cowsay: `exports.say = ({ text }) => { const t = ' ' + text + ' '; return ' ' + '_'.repeat(t.length) + '\\n<' + t + '>\\n ' + '-'.repeat(t.length) + '\\n        \\\\   ^__^\\n         \\\\  (oo)\\\\_______\\n            (__)\\\\       )\\\\/\\\\\\n                ||----w |\\n                ||     ||'; };`,
     };
-    const BUILTIN = ['express', 'morgan', 'cors', 'zod', 'dotenv', 'ejs', 'better-sqlite3', 'typeorm'];   // implementati dentro runtime.js
+    const BUILTIN = ['express', 'morgan', 'cors', 'zod', 'dotenv', 'ejs', 'better-sqlite3', 'typeorm', 'mongodb', 'mongoose', 'bcrypt', 'bcryptjs', 'jsonwebtoken', 'cookie-parser', 'express-session'];   // implementati dentro runtime.js
     const BUILTIN_SUB = { zod: { 'v4.js': 'zod' }, dotenv: { 'config.js': 'dotenv/config' } };   // require('zod/v4'), require('dotenv/config')
     const stubFor = (n) => (BUILTIN.includes(n) ? `/* nodelab:builtin ${n} */` : STUBS[n]) || `throw new Error('[NodeLab] Il pacchetto "${n}" è installato nel simulatore, ma il suo codice non è disponibile qui. Provalo sul tuo PC!');`;
     function collectProjectFiles(baseDir) {

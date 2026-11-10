@@ -25,6 +25,8 @@ assets/
   m8-biblioteca.js    "Biblioteca 5.0" (pagine EJS, partials, form, PRG), la bacheca del doppio invio e il playground di EJS (modulo 8)
   m9-biblioteca.js    "Biblioteca 6.0" (Express + node:sqlite: migrazioni, seed, repository, JOIN), la demo di SQL injection e il database della console SQL (modulo 9)
   m10-biblioteca.js   "Biblioteca 7.0" (Express + TypeORM: entità, migrazioni, relazioni, QueryBuilder, transazioni) e il playground "Dall'ORM all'SQL" (modulo 10)
+  m11-biblioteca.js   "Biblioteca 8.0" (Express + Mongoose: modelli, populate, aggiornamenti atomici, aggregazioni), la console mongosh e il playground "Da Mongoose a MongoDB" (modulo 11)
+  m12-biblioteca.js   "Biblioteca 9.0" (la 8.0 + utenti con bcrypt, JWT access/refresh, autentica/autorizza), il playground degli hash e JwtLab, l'anatomia di un JWT (modulo 12)
 tools/
   harness.js          esegue il runtime simulato dentro Node (senza browser)
   check-labs.js       verifica soluzioni e codice iniziale dei laboratori
@@ -85,8 +87,12 @@ NodeLab.mount(document.getElementById('lab1'), {
 **autocontenute** (niente variabili esterne). Ogni test avvia un processo pulito. API di `ctx`:
 `stdout`, `stderr`, `lines`, `exitCode`, `crashed`, `fatal`, `exports`, `ports`, `source['app.js']`,
 `read(p)`, `exists(p)`, `isDir(p)`, `list(p)`, `require(p)`, `fs`, `path`,
-`request(method, url, { body, headers })` → `{ status, headers, body, json() }`,
+`request(method, url, { body, headers })` → `{ status, headers, body, setCookie, json() }`,
+`agent()` → `{ request(…), cookies, clearCookies() }`, `mongo(db)` → `{ collezione: [documenti] }` (il MongoDB simulato),
 `assert(cond, msg)`, `equal(a, b, msg)`, `sleep(ms)`, `inspect(v)`.
+`setCookie` è l'elenco degli header `Set-Cookie` uno per uno (in `headers['set-cookie']` sono uniti con `, `).
+`ctx.agent()` è come l'agent di supertest: un "browser" che conserva i cookie (Path, Max-Age/Expires, cancellazioni)
+e li rimanda nelle richieste successive; due agent sono due utenti diversi (es. login con l'uno, 401 con l'altro).
 
 ### Altri widget
 
@@ -95,7 +101,13 @@ NodeLab.mount(document.getElementById('lab1'), {
 - `NodeLab.inspector(el, { id, files, entry, port, fs, packages, node, env, missions: [{ text, check: (req, res, { restarts }) => bool }], presets, persist, watch, browser, start, height })` — server pronto + missioni HTTP.
   Con `persist: true` il pulsante ↻ riavvia il server mantenendo i file scritti (un secondo pulsante rimette i dati iniziali);
   con `watch: 'data/libri.json'` il contenuto di quel file compare sotto il log e si aggiorna dopo ogni richiesta.
-- `NodeLab.httpClient(el, { send, port, presets, onExchange })`.
+- `NodeLab.httpClient(el, { send, port, presets, onExchange, jar })`.
+- **Cookie**: client HTTP e browser hanno un cookie jar come un browser vero (`NodeLab.cookieJar()`; in un lab o
+  nell'inspector è uno solo, condiviso dalle due schede): salvano i `Set-Cookie` di localhost e li rimandano nell'header
+  `Cookie` (che arriva anche a `onExchange`, quindi alle missioni). Path e path-match, Max-Age/Expires, cancellazioni;
+  i cookie `Secure` sono accettati anche in http come fa Chrome su `localhost`; un `Domain` diverso da localhost è scartato.
+  Il riquadro "Cookie (n)" li elenca (nome=valore, HttpOnly, Secure, SameSite, scadenza) e li cancella (uno o tutti:
+  "logout" lato client, o un altro browser). Il jar sopravvive al riavvio del server; un header `Cookie` scritto a mano lo sostituisce.
 - `NodeLab.browser(el, { send, port, start, height, onExchange })` — un piccolo browser per i server simulati: mostra le pagine
   in un iframe sandbox, segue link e redirect (301/302/303 → GET, 307/308 ripetono la richiesta), invia i form (GET o POST
   urlencoded), carica CSS e JS collegati, ha ◀, ↻ (che chiede conferma prima di reinviare un POST) e la vista "Sorgente".
@@ -106,6 +118,11 @@ NodeLab.mount(document.getElementById('lab1'), {
 - `NodeLab.sql(el, { setup, presets: [{ label, sql }], height })` — console SQL: le istruzioni girano su SQLite nel simulatore
   e i risultati diventano tabelle; il database resta tra un'esecuzione e l'altra ("Ripristina" lo ricrea da `setup`).
 - Nell'inspector `watch` può essere anche un database (`watch: 'data/biblioteca.db'`): compaiono le sue tabelle, aggiornate dopo ogni richiesta.
+  Con `watch: 'mongodb://127.0.0.1:27017/biblioteca'` compaiono le collezioni (documenti e indici) di quel database MongoDB.
+- `NodeLab.mongo(el, { db, setup, presets: [{ label, code }], height })` — console mongosh: comandi uno per riga (`db.libri.find(…)`,
+  `insertOne`, `updateMany`, `aggregate`, `createIndex`, `show collections`, `use`, `it`, variabili con `const`), risposte stampate come mongosh;
+  il database resta tra un'esecuzione e l'altra ("Ripristina" lo ricrea da `setup`, che è anch'esso codice mongosh).
+- `JwtLab.mount(el)` (in `m12-biblioteca.js`) — un JWT HS256 decodificato, verificato e rifirmato nel browser (WebCrypto).
 - `Quiz.mount(el, [{ question, code?, options, correct, explanation }], { id })`.
 - `OrderGame.mount(el, [{ title, code, chips, answer, explain, cmd?, prompt? }], { id })` — "indovina l'output"
   (`cmd` cambia la riga sopra il terminale, es. `$ curl localhost:3000/api/libri`).
@@ -132,6 +149,8 @@ node tools/check-labs.js assets/labs-m7.js M7_LABS
 node tools/check-labs.js assets/labs-m8.js M8_LABS
 node tools/check-labs.js assets/labs-m9.js M9_LABS
 node tools/check-labs.js assets/labs-m10.js M10_LABS
+node tools/check-labs.js assets/labs-m11.js M11_LABS
+node tools/check-labs.js assets/labs-m12.js M12_LABS
 ```
 
 ## Note sul simulatore
@@ -174,8 +193,51 @@ node tools/check-labs.js assets/labs-m10.js M10_LABS
   per un `undefined` nel `where`…) sono gli stessi di TypeORM 1.1.2, confrontati con il pacchetto vero. Migrazioni: classi con `up`/`down`
   e `queryRunner.query(…)`, da `migrations: [glob]`. Non disponibili: i decoratori (servono TypeScript), la CLI, i metodi di schema del
   `queryRunner` (`createTable`, `addColumn`…: si usa l'SQL) e gli altri database.
+- **MongoDB** (`packages: ['mongoose']` o `['mongodb']`): c'è un server simulato su `mongodb://127.0.0.1:27017` (anche `localhost`), condiviso da
+  tutte le connessioni del processo. I database stanno nel file system virtuale in `/data/db/<nome>.json` (fuori dal progetto: non compaiono tra i file);
+  con l'inspector e `persist: true` sopravvivono al riavvio del server, come con un mongod vero. Query con dot notation e array (`$eq $ne $gt $gte $lt $lte
+  $in $nin $exists $type $regex $not $and $or $nor $all $elemMatch $size $mod $expr`), aggiornamenti (`$set $unset $inc $mul $min $max $rename $push`
+  con `$each`/`$position`/`$slice`/`$sort`, `$addToSet $pull $pullAll $pop $currentDate $setOnInsert`, l'operatore posizionale `$` e `$[]`, upsert),
+  ordinamento e proiezioni come MongoDB, indici unici e `sparse` (errore E11000 con `keyPattern`/`keyValue`), aggregazioni (`$match $project $addFields/$set
+  $unset $group $sort $limit $skip $count $sortByCount $unwind $lookup $replaceRoot $facet $sample` e le espressioni più comuni). Senza `$sort` l'ordine dei
+  gruppi di `$group` non è quello di MongoDB (che non lo garantisce). Non disponibili: indici di testo e geospaziali, `$lookup` con pipeline, transazioni
+  su più documenti, change stream. Connessioni: `mongodb+srv://` (Atlas) e altri host non si raggiungono, con gli stessi errori del driver.
+  **mongodb 7** (il driver): `MongoClient` (`connect`, `db`, `close`), `Db` e `Collection` con i metodi CRUD, cursori (`sort`, `skip`, `limit`, `project`,
+  `toArray`, `for await`), `findOneAndUpdate` (restituisce il documento), `MongoServerError` e gli altri errori del driver.
+  **Mongoose 9.12** (porting confrontato con il pacchetto vero, MongoDB compreso): `connect`/`disconnect`/`createConnection`, buffering prima della
+  connessione (`buffering timed out after 10000ms`), `Schema` (String, Number, Boolean, Date, ObjectId, Mixed, array, sottodocumenti e array di
+  sottodocumenti, percorsi annidati; `required`, `default`, `min`/`max`, `minLength`/`maxLength`, `enum`, `match`, `validate`, `trim`, `lowercase`,
+  `uppercase`, `select`, `unique`/`index`/`sparse`, `immutable`, `timestamps`, `toJSON`/`toObject` con `transform` e `virtuals`), virtual e virtual
+  populate, `methods`, `statics`, `pre`/`post` (senza `next()`, come nella 9), modelli con il nome della collezione al plurale inglese, documenti
+  (`save` con `$set`/`$push`/`$inc` di `__v` come l'originale, `validate`, `toObject`, `populate`, l'ordine delle chiavi), Query (`sort`, `skip`, `limit`,
+  `select`, `lean`, `populate`, `orFail`, `where`…), conversione dei filtri e degli aggiornamenti secondo lo schema (`CastError`), `runValidators`,
+  `returnDocument`, `Aggregate`, `sanitizeFilter`, gli stessi messaggi di `ValidationError`/`ValidatorError`/`CastError`/`DocumentNotFoundError` e
+  `mongoose.set('debug', true)` con lo stesso formato (colori compresi). Non disponibili: i tipi Map, Buffer, Decimal128, UUID; discriminatori; sessioni e
+  transazioni (`startSession` è un segnaposto); i "callback" (rimossi anche nella 9: stesso errore).
+  Uno script con la connessione aperta non termina (come in Node): dopo qualche secondo il terminale lo ricorda.
+- **Cookie in Express**: `res.cookie(nome, valore, opzioni)` e `res.clearCookie` come Express 5 (`maxAge` in ms → `Max-Age` e `Expires`,
+  `Path=/` di default, `httpOnly`, `secure`, `sameSite`, `domain`, `priority`, `partitioned`, `signed` con il segreto di cookie-parser,
+  stesso ordine degli attributi e stessi errori del pacchetto `cookie`). Senza cookie-parser `req.cookies` è `undefined`.
+  **cookie-parser 1.4** (`packages: ['cookie-parser']`): `req.cookies`, `req.signedCookies` (`false` se la firma è sbagliata), `req.secret`,
+  cookie JSON (`j:`), `signedCookie`/`JSONCookie`.
+- **express-session 1.19** (`packages: ['express-session']`): porting con il MemoryStore (`resave`, `saveUninitialized`, `rolling`, `name`,
+  `cookie: { maxAge, httpOnly, secure, sameSite, path }`, `req.session.regenerate/destroy/save/reload/touch`, `req.sessionID`, `req.sessionStore`).
+  Stesso cookie `connect.sid=s%3A<id>.<firma>`, stessi avvisi di depd (opzioni mancanti) e del MemoryStore con `NODE_ENV=production`.
+  Le sessioni stanno nella memoria del processo: un riavvio del server le cancella (il cookie resta nel browser, ma non vale più).
+  Con `cookie: { secure: true }` su http il cookie non parte, come nell'originale. Non disponibili: store esterni (connect-mongo…).
+- **bcrypt 6** e **bcryptjs 3** (`packages: ['bcrypt']` o `['bcryptjs']`): `genSalt(Sync)`, `hash(Sync)`, `compare(Sync)`, `getRounds`
+  (bcryptjs anche `getSalt`, `truncates`), Promise e callback, stessi messaggi d'errore di ciascuno. Hash `$2b$` identici a quelli veri
+  (Blowfish con le costanti di bcryptjs, password tagliata a 72 byte); il costo si sente davvero, con tempi simili al nativo (10 ≈ 50 ms, 12 ≈ 200 ms in Chrome).
+- **jsonwebtoken 9** (`packages: ['jsonwebtoken']`): `sign` (con `expiresIn`/`notBefore` in secondi o come `'15m'`, `'7d'`; `audience`, `issuer`,
+  `subject`, `jwtid`, `keyid`, `header`, `noTimestamp`), `verify` (`algorithms`, `audience`, `issuer`, `maxAge`, `clockTolerance`, `ignoreExpiration`,
+  `complete`), `decode`, callback; `JsonWebTokenError`, `TokenExpiredError` (`expiredAt`), `NotBeforeError` con gli stessi messaggi. Solo HMAC
+  (`HS256`, `HS384`, `HS512`, e `none`): le chiavi asimmetriche (RS256, ES256, PEM, KeyObject) non sono disponibili.
+- **node:crypto**: `createHash` e `createHmac` (md5, sha1, sha256, sha384, sha512; `update` con encoding, `digest` in hex/base64/base64url/latin1
+  o Buffer, `copy`), `hash()`, `pbkdf2(Sync)`, `scrypt(Sync)` (N, r, p, maxmem), `timingSafeEqual`, `randomBytes`, `randomUUID`, `randomInt`,
+  `getRandomValues`/`webcrypto`: JavaScript puro, risultati identici a OpenSSL. Non disponibili: cifrature (`createCipheriv`), firme e chiavi
+  asimmetriche (`createSign`, `generateKeyPair`, `KeyObject`).
 - Moduli disponibili: `fs`, `fs/promises`, `path`, `events`, `os`, `util`, `http`, `url`, `querystring`,
-  `crypto` (parziale), `assert`, `buffer`, `timers`, `timers/promises`, `stream` (minimo), `string_decoder`.
+  `crypto` (hash, HMAC, pbkdf2, scrypt, casuali), `assert`, `buffer`, `timers`, `timers/promises`, `stream` (minimo), `string_decoder`.
 - Il file system è virtuale (radice `/progetto`) e si azzera a ogni esecuzione.
 - `fetch` verso `http://localhost:PORTA` raggiunge i server simulati; verso Internet usa il fetch reale del browser.
 - Non disponibili: `readline` (usa `process.argv`), `child_process`, `net`, `https`, `zlib`, `worker_threads`, `node:test`; in SQLite `db.function()`.

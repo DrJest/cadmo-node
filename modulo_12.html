@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 12 · Autenticazione e autorizzazione — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="bg-gray-900">
+
+  <!-- ===================== Esempi di codice (testo puro, niente escape) ===================== -->
+  <script type="text/plain" id="c-hash">
+const crypto = require('crypto');
+const bcrypt = require('bcrypt');                       // npm install bcrypt
+
+crypto.createHash('sha256').update('segreta123').digest('hex');
+crypto.createHash('sha256').update('segreta123').digest('hex');   // identico
+
+await bcrypt.hash('segreta123', 10);                    // 10 = il costo
+await bcrypt.hash('segreta123', 10);                    // diverso: il sale è casuale
+
+const h = await bcrypt.hash('segreta123', 10);
+await bcrypt.compare('segreta123', h);                  // true
+await bcrypt.compare('Segreta123', h);                  // false
+</script>
+  <script type="text/plain" id="c-hash-out">
+ecbbaf26675c9b9447dc58be1bb5b20ef7f88e357111d59db7c6e8ad0598f264
+ecbbaf26675c9b9447dc58be1bb5b20ef7f88e357111d59db7c6e8ad0598f264
+$2b$10$LftqW/O8KFwOZfNp3fAV1.OcmWbeDDJ47MMiCo0ezdE42KvZ7J9m.
+$2b$10$4wlesdWxfJcd375iwbS8DuLe.AcR42JXPk/BnBPi9LRMDW8RK.ktm
+true
+false
+</script>
+  <script type="text/plain" id="c-modello">
+// models/utente.js
+const utenteSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  nome: { type: String, required: true },
+  password: { type: String, required: true, minLength: 8, select: false },   // mai nelle query
+  ruolo: { type: String, enum: ['lettore', 'bibliotecario'], default: 'lettore' },
+}, { toJSON: { transform(doc, ret) { delete ret.password; return ret; } } });
+
+// prima la validazione (minLength sulla password in chiaro), poi l'hash
+utenteSchema.pre('save', async function () {          // Mongoose 9: niente next()
+  if (!this.isModified('password')) return;
+  this.password = await bcrypt.hash(this.password, 10);
+});
+
+utenteSchema.methods.verificaPassword = function (password) {
+  return bcrypt.compare(password, this.password);
+};
+</script>
+  <script type="text/plain" id="c-login">
+// POST /api/auth/login
+const { email, password } = login.parse(req.body);           // zod: due stringhe
+const utente = await Utente.findOne({ email }).select('+password');
+
+// lo STESSO messaggio se l'email non c'è o la password è sbagliata
+if (!utente || !(await utente.verificaPassword(password))) {
+  throw new NonAutenticato('Email o password non validi');   // → 401
+}
+// … crea la sessione o il token …
+
+// POST /api/auth/registrazione: si prendono SOLO email, nome e password
+const { email, nome, password } = registrazione.parse(req.body);   // strictObject
+await Utente.create({ email, nome, password });              // il ruolo resta "lettore"
+</script>
+  <script type="text/plain" id="c-cookie">
+res.cookie('tema', 'scuro', { maxAge: 30 * 24 * 3600 * 1000 });        // maxAge in ms
+res.cookie('refresh', token, {
+  httpOnly: true,          // JavaScript nella pagina non lo legge (document.cookie)
+  secure: true,            // solo su HTTPS
+  sameSite: 'strict',      // non parte dalle richieste di altri siti (CSRF)
+  path: '/api/auth',       // solo verso queste rotte
+  maxAge: 7 * 24 * 3600 * 1000,
+});
+res.clearCookie('vecchio');
+
+// e per leggerli: app.use(cookieParser()) → req.cookies.tema
+</script>
+  <script type="text/plain" id="c-cookie-out">
+Set-Cookie: tema=scuro; Max-Age=2592000; Path=/; Expires=Thu, 10 Dec 2026 20:49:13 GMT
+Set-Cookie: refresh=eyJ…; Max-Age=604800; Path=/api/auth; Expires=Tue, 17 Nov 2026 20:49:13 GMT; HttpOnly; Secure; SameSite=Strict
+Set-Cookie: vecchio=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT
+
+(la richiesta dopo)  Cookie: tema=scuro; refresh=eyJ…
+</script>
+  <script type="text/plain" id="c-session">
+const session = require('express-session');         // npm install express-session
+
+app.use(session({
+  secret: process.env.SESSION_SECRET,               // firma il cookie
+  resave: false,
+  saveUninitialized: false,                         // niente sessione (e cookie) prima del login
+  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 60 * 60 * 1000 },
+}));
+
+app.post('/login', async (req, res, next) => {
+  // … utente e password controllati come prima …
+  req.session.regenerate((err) => {                 // un id NUOVO dopo il login
+    if (err) return next(err);
+    req.session.utente = { id: utente.id, ruolo: utente.ruolo };
+    res.json({ nome: utente.nome });
+  });
+});
+
+const richiediLogin = (req, res, next) => (req.session.utente ? next() : res.sendStatus(401));
+app.post('/logout', (req, res) => req.session.destroy(() => res.clearCookie('connect.sid').sendStatus(204)));
+</script>
+  <script type="text/plain" id="c-session-out">
+Set-Cookie: connect.sid=s%3AQE-7rbitN-Rqrat88yDjVfTr-3pWVU8F.SH62pl14Z1HWnue3%2FqLMeBd7LpomYXQ2px8PGV45XXs; Path=/; Expires=Tue, 10 Nov 2026 21:49:13 GMT; HttpOnly; SameSite=Lax
+            └── s: + l'id della sessione + "." + la firma HMAC con il secret
+</script>
+  <script type="text/plain" id="c-jwt">
+const jwt = require('jsonwebtoken');                 // npm install jsonwebtoken
+
+const token = jwt.sign(
+  { sub: String(utente._id), ruolo: utente.ruolo },  // i "claim": niente dati segreti!
+  process.env.JWT_SECRET,
+  { expiresIn: '15m' },                              // aggiunge iat ed exp
+);
+
+jwt.decode(token, { complete: true });             // leggere: lo può fare chiunque
+jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });   // verificare: solo chi ha il segreto
+</script>
+  <script type="text/plain" id="c-jwt-out">
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NzMwYTFjMGU0YjBjMWEyYjNjNGQ1MzIiLCJydW9sbyI6ImxldHRvcmUiLCJpYXQiOjE3OTQzNDM3NTMsImV4cCI6MTc5NDM0NDY1M30.SlGEQ2lsgbQCy5JsGy8LwsDsss5Hto5Xn8i3i6A4atM
+{
+  header: { alg: 'HS256', typ: 'JWT' },
+  payload: { sub: '6730a1c0e4b0c1a2b3c4d532', ruolo: 'lettore', iat: 1794343753, exp: 1794344653 },
+  signature: 'SlGEQ2lsgbQCy5JsGy8LwsDsss5Hto5Xn8i3i6A4atM'
+}
+JsonWebTokenError: invalid signature          ← un carattere cambiato, o un altro segreto
+TokenExpiredError: jwt expired                ← dopo exp (err.expiredAt)
+JsonWebTokenError: jwt malformed              ← non è un JWT
+</script>
+  <script type="text/plain" id="c-auth">
+// middleware/auth.js
+function autentica(req, res, next) {
+  const [schema, token] = (req.get('Authorization') ?? '').split(' ');
+  if (schema !== 'Bearer' || !token) throw new NonAutenticato('Serve il login');
+  try {
+    const p = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] });
+    req.utente = { id: p.sub, ruolo: p.ruolo };       // per le rotte successive
+  } catch (err) {
+    throw new NonAutenticato(err.name === 'TokenExpiredError' ? 'Token scaduto' : 'Token non valido');
+  }
+  next();
+}
+
+// una "fabbrica" di middleware: autorizza('bibliotecario')
+const autorizza = (...ruoli) => (req, res, next) => {
+  if (!ruoli.includes(req.utente.ruolo)) throw new Vietato('Permesso negato');   // → 403
+  next();
+};
+
+router.get('/', elenco);                                          // pubblica
+router.post('/:id/prestito', autentica, presta);                  // con il login
+router.delete('/:id', autentica, autorizza('bibliotecario'), elimina);
+</script>
+  <script type="text/plain" id="c-refresh">
+// login: l'access token nel body, il refresh token in un cookie HttpOnly
+res.cookie('refresh', jwt.sign({ sub, v: utente.versioneToken }, REFRESH_SECRET, { expiresIn: '7d' }),
+  { httpOnly: true, sameSite: 'strict', path: '/api/auth', maxAge: 7 * 24 * 3600 * 1000 });
+res.json({ accessToken: jwt.sign({ sub, ruolo }, JWT_SECRET, { expiresIn: '15m' }) });
+
+// POST /api/auth/refresh: il browser manda il cookie da solo
+const p = jwt.verify(req.cookies.refresh, REFRESH_SECRET);
+const utente = await Utente.findById(p.sub).select('+versioneToken');
+if (utente.versioneToken !== p.v) throw new NonAutenticato('Sessione chiusa');
+// → un access token nuovo (e un refresh token nuovo: "rotazione")
+
+// POST /api/auth/logout: $inc versioneToken → i refresh token vecchi non valgono più
+</script>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/m11-biblioteca.js"></script>
+  <script src="assets/m12-biblioteca.js"></script>
+  <script>
+    // nei blocchi text/plain il tag di chiusura degli script è scritto con la barra "escapata"
+    const C = (id) => document.getElementById(id).textContent.replace(/^\n/, '').replace(/<\\\/script>/g, '<\/script>');
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const code = (s) => `<code class="inline">${esc(s)}</code>`;
+    const md = (t) => esc(t).replace(/`([^`]+)`/g, '<code class="inline">$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    const TABLE = (head, rows) => `<div class="overflow-x-auto rounded-xl border border-gray-700"><table class="w-full text-left text-sm md:text-base">
+      <thead class="bg-gray-800 text-gray-300"><tr>${head.map((h) => `<th class="px-4 py-2 font-semibold">${h}</th>`).join('')}</tr></thead>
+      <tbody class="divide-y divide-gray-800 text-gray-200">${rows.map((r) => `<tr class="bg-gray-900/60">${r.map((c) => `<td class="px-4 py-2">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    const NOTE = (items) => `<ul class="slide-items space-y-3 text-base md:text-xl text-gray-300 mt-6">${items.map((t) => `<li class="flex"><span class="text-green-500 mr-4 font-mono">$</span><span>${md(t)}</span></li>`).join('')}</ul>`;
+
+    const BCRYPT_HTML = `<div class="font-mono text-lg md:text-2xl text-center my-6 break-all"><span class="text-pink-400">$2b$</span><span class="text-yellow-300">10$</span><span class="text-cyan-300">LftqW/O8KFwOZfNp3fAV1.</span><span class="text-green-300">OcmWbeDDJ47MMiCo0ezdE42KvZ7J9m.</span></div>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"><div class="lg:col-span-6">` + TABLE(['Pezzo', 'Che cos\'è'], [
+        ['<span class="text-pink-400 font-mono">$2b$</span>', 'l\'algoritmo (bcrypt, versione 2b)'],
+        ['<span class="text-yellow-300 font-mono">10$</span>', 'il <strong>costo</strong>: 2¹⁰ giri; +1 = il doppio del tempo'],
+        ['<span class="text-cyan-300 font-mono">22 caratteri</span>', 'il <strong>sale</strong>, casuale, diverso per ogni hash'],
+        ['<span class="text-green-300 font-mono">31 caratteri</span>', 'il risultato'],
+      ]) + `</div><div class="lg:col-span-6">` + TABLE(['Costo', 'Tempo (un hash)'], [['8', '13 ms'], ['<strong>10</strong>', '<strong>50 ms</strong>'], ['12', '199 ms'], ['14', '794 ms']]) + NOTE([
+        'Per il login 50 ms non si notano; per chi prova miliardi di password sì.',
+        '`compare` legge sale e costo dall\'hash: non vanno salvati a parte.',
+      ]) + `</div></div>`;
+
+    const DOVE_HTML = TABLE(['', 'Header Authorization (token in memoria / localStorage)', 'Cookie HttpOnly'], [
+      ['<strong>Chi lo manda</strong>', 'Il codice JavaScript, a ogni richiesta (`fetch`)', 'Il browser, da solo, verso quel sito'],
+      ['<strong>XSS</strong> (script iniettato)', '⚠️ In localStorage lo script lo legge e lo porta via', '✓ `document.cookie` non lo vede'],
+      ['<strong>CSRF</strong> (un altro sito fa partire la richiesta)', '✓ Un altro sito non conosce il token', '⚠️ Il cookie parte da solo: serve `SameSite` (e per i form un token CSRF)'],
+      ['<strong>App e servizi</strong>', '✓ Comodo per app mobili e API tra server', 'Pensato per i browser'],
+    ]) + NOTE([
+      'Uno schema diffuso: access token **breve** in memoria (header), refresh token in un cookie **HttpOnly + SameSite=Strict** con un path stretto.',
+      'Qualunque scelta: **HTTPS** sempre, altrimenti cookie e token viaggiano in chiaro.',
+    ]);
+
+    const CHECK_HTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-base md:text-lg">${[
+      ['shield-check', 'Password', 'bcrypt o argon2 (costo ≥ 10), mai in chiaro, mai nei log; `select: false`; limite 72 byte di bcrypt'],
+      ['message-square-warning', 'Messaggi', '"Email o password non validi" sempre uguale; niente "questa email non esiste"'],
+      ['key-round', 'Segreti', '`JWT_SECRET` lungo e casuale in `.env` (modulo 7), diverso per access e refresh; ruotarli invalida tutti i token'],
+      ['timer', 'Scadenze', 'Access token di minuti (`15m`), refresh di giorni; un JWT non si "spegne": vale fino a `exp`'],
+      ['user-x', 'Ruoli', 'Il ruolo lo decide il server (mai dal body: `strictObject`); `autorizza` su ogni rotta che modifica'],
+      ['gauge', 'Abusi', 'Tentativi di login limitati (rate limiting, modulo 13); un account bloccato dopo troppi errori'],
+    ].map(([i, t, d]) => `<div class="bg-gray-800/70 border border-gray-700 rounded-xl p-4 flex gap-3"><i data-lucide="${i}" class="w-6 h-6 text-green-400 shrink-0 mt-1"></i><div><div class="font-bold text-white">${t}</div><div class="text-gray-300 text-sm md:text-base">${md(d)}</div></div></div>`).join('')}</div>`;
+
+    window.DECK = {
+      module: 'MODULO 12',
+      title: 'Autenticazione e autorizzazione',
+      prompt: 'modulo-12',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover', icon: 'key-round',
+          title: 'Autenticazione e autorizzazione',
+          subtitle: 'Password con **bcrypt**, cookie e **sessioni**, **JWT** con access e refresh token, middleware che proteggono le rotte in base al **ruolo**.',
+          meta: ['7 ore', 'Modulo 12'],
+        },
+        {
+          type: 'agenda', part: 'PROGRAMMA', title: 'Agenda', icon: 'list-checks',
+          rows: [
+            ['Chi sei, che cosa puoi fare: 401 e 403', 'teoria'],
+            ['Le password: hash lenti, sale, bcrypt + playground', 'demo'],
+            ['Registrazione e login con Mongoose', 'teoria'],
+            ['Cookie e sessioni', 'teoria'],
+            ['Pausa', 'pausa'],
+            ['JWT: anatomia, firma, verifica + simulazione', 'demo'],
+            ['autentica e autorizza; access e refresh token', 'teoria'],
+            ['Biblioteca 9.0 + 5 laboratori', 'lab'],
+            ['Quiz', 'quiz'],
+          ],
+        },
+
+        /* ------------------------------------------------ CONCETTI */
+        {
+          type: 'compare', part: 'CONCETTI', title: 'Autenticazione e autorizzazione', icon: 'git-compare',
+          columns: [
+            { title: 'Autenticazione: chi sei?', color: 'blue', icon: 'fingerprint', items: ['Login con email e password (o un token, un\'impronta, un\'altra app)', 'Dopo: la **sessione** o il **token** ricordano chi sei', 'Manca o non è valida → **401** Unauthorized (+ `WWW-Authenticate`)'] },
+            { title: 'Autorizzazione: puoi farlo?', color: 'purple', icon: 'shield', items: ['Dipende da chi sei: il **ruolo** (lettore, bibliotecario) o la proprietà ("è il tuo prestito?")', 'Si controlla sul server, rotta per rotta', 'Autenticato ma senza permesso → **403** Forbidden'] },
+          ],
+          footer: 'Nascondere un pulsante nel frontend non è autorizzazione: chiunque può mandare la richiesta con il Client HTTP. Il controllo vero è sempre nel server.',
+        },
+
+        /* ------------------------------------------------ PASSWORD */
+        {
+          type: 'compare', part: 'PASSWORD', title: 'Come (non) salvare una password', icon: 'lock',
+          columns: [
+            { title: 'In chiaro o con un hash veloce', color: 'red', icon: 'skull', items: ['In chiaro: un backup rubato e tutte le password sono pubbliche (e riusate altrove)', '**sha256/md5**: veloci, miliardi di tentativi al secondo con una GPU', 'Senza sale, password uguali → hash uguali: le "rainbow table" le trovano subito'] },
+            { title: 'Un hash lento con il sale', color: 'green', icon: 'shield-check', items: ['**bcrypt** (o **argon2**, **scrypt**): lenti apposta, con un **costo** regolabile', 'Un **sale** casuale per ogni password, salvato dentro l\'hash', 'Non si "decifra": al login si rifà l\'hash e si confronta (`compare`)'] },
+          ],
+          footer: 'Un hash è a senso unico: nemmeno chi gestisce il server può leggere le password. "Ho dimenticato la password" vuol dire **reimpostarla**, non riceverla per email.',
+        },
+        {
+          type: 'code', part: 'PASSWORD', title: 'bcrypt: hash e compare', icon: 'hash', iconColor: 'text-green-400',
+          items: [
+            '`bcrypt.hash(password, costo)` → una stringa che contiene algoritmo, costo, sale e risultato.',
+            'Due hash della stessa password sono **diversi**: non si confrontano con `===`.',
+            '`bcrypt.compare(password, hash)` → `true`/`false`, sempre `await` (è lento apposta).',
+            'Alternative: `bcryptjs` (JavaScript puro, stessa API), `argon2`, oppure `crypto.scrypt` di Node.',
+          ],
+          code: C('c-hash'), output: C('c-hash-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'PASSWORD', title: 'Dentro un hash bcrypt', icon: 'search', iconColor: 'text-green-400',
+          html: BCRYPT_HTML,
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Hash veloci e hash lenti', icon: 'flask-conical', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">sha256, bcrypt, scrypt: scegli un esempio (o scrivine uno) e guarda risultati e tempi. Il costo di bcrypt si sente davvero.</p><div class="pg"></div>',
+          mount: (el) => NodeLab.playground(el.querySelector('.pg'), Object.assign({ packages: ['bcrypt'], height: '17rem' }, M12_HASH)),
+        },
+        {
+          type: 'code', part: 'PASSWORD', title: 'Il modello Utente', icon: 'user', iconColor: 'text-blue-400',
+          items: [
+            'L\'hook `pre(\'save\')` trasforma la password **dopo** la validazione: `minLength` controlla quella in chiaro.',
+            '`isModified(\'password\')`: cambiare il nome non deve rifare l\'hash (sarebbe l\'hash di un hash).',
+            '`select: false`: la password non esce dalle query, se non la chiedi (`.select(\'+password\')`).',
+            '`toJSON` la toglie comunque dalle risposte. Attenzione: `insertMany` e `updateOne` **non** passano da `pre(\'save\')`.',
+          ],
+          code: C('c-modello'), file: 'models/utente.js',
+        },
+        {
+          type: 'code', part: 'PASSWORD', title: 'Registrazione e login', icon: 'log-in', iconColor: 'text-blue-400',
+          items: [
+            'Login: cerca per email, `select(\'+password\')`, poi `compare`. Niente → **401**.',
+            'Un messaggio solo per i due errori: dire "l\'email non esiste" aiuta chi prova le email una per una.',
+            'Registrazione: si prendono **solo** i campi previsti. Un `"ruolo": "bibliotecario"` nel body è un 400 (o viene ignorato), mai salvato.',
+            'Email già registrata: E11000 → **409** (modulo 11).',
+          ],
+          code: C('c-login'), file: 'routes/auth.js',
+        },
+
+        /* ------------------------------------------------ SESSIONI */
+        {
+          type: 'compare', part: 'RICORDARSI DI TE', title: 'Dopo il login: sessione o token?', icon: 'git-fork',
+          columns: [
+            { title: 'Sessione (stato nel server)', color: 'yellow', icon: 'server', items: ['Il server tiene `{ utente }` in uno store (memoria, Redis, MongoDB) sotto un id casuale', 'Il browser ha solo l\'id, in un **cookie** firmato', 'Logout = cancelli la sessione: vale subito', 'Più server? Serve uno store condiviso'] },
+            { title: 'Token (stato nel client)', color: 'cyan', icon: 'ticket', items: ['Il server firma un **JWT** con chi sei e il ruolo', 'Il client lo manda a ogni richiesta (`Authorization: Bearer …`)', 'Il server verifica la firma: niente da cercare nel database', 'Logout? Il token vale fino alla scadenza: per questo è breve'] },
+          ],
+          footer: 'Sessioni: tipiche dei siti con le pagine (modulo 8). Token: tipici delle API usate da app e frontend separati. Tutte e due usano spesso i cookie.',
+        },
+        {
+          type: 'code', part: 'COOKIE', title: 'I cookie e i loro attributi', icon: 'cookie', iconColor: 'text-yellow-400',
+          items: [
+            'Il server manda `Set-Cookie`, il browser lo conserva e lo rimanda nell\'header `Cookie`, verso lo stesso sito.',
+            '`HttpOnly`: invisibile a JavaScript (contro il furto con XSS). `Secure`: solo HTTPS.',
+            '`SameSite`: `Strict` (mai da altri siti), `Lax` (sì per i link), `None` (sempre, con `Secure`): la difesa dal **CSRF**.',
+            '`Max-Age`/`Expires` lo fanno durare; senza, sparisce chiudendo il browser. Cancellare = una data nel passato.',
+          ],
+          code: C('c-cookie'), output: C('c-cookie-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'SESSIONI', title: 'Le sessioni con express-session', icon: 'cookie', iconColor: 'text-yellow-400',
+          items: [
+            '`req.session` è un oggetto che resta tra le richieste dello stesso browser (cookie `connect.sid`).',
+            '`regenerate` al login: un id **nuovo**, così un id "piazzato" prima del login non vale (session fixation).',
+            '`destroy` al logout cancella la sessione nel server: il vecchio cookie non serve più a niente.',
+            'Lo store di default (MemoryStore) perde tutto a ogni riavvio e non va bene in produzione: si usa Redis o MongoDB (`connect-mongo`).',
+          ],
+          code: C('c-session'), file: 'server.js', output: C('c-session-out'), reveal: true,
+        },
+
+        /* ------------------------------------------------ JWT */
+        {
+          type: 'code', part: 'JWT', title: 'JSON Web Token', icon: 'ticket', iconColor: 'text-cyan-400',
+          items: [
+            'Tre parti in **base64url** separate da punti: header, payload (i "claim"), firma.',
+            'Il payload è **leggibile** da chiunque: id e ruolo sì, password ed email meglio di no.',
+            'La firma (HMAC-SHA256 con il segreto) garantisce che nessuno l\'abbia modificato.',
+            '`sub` = di chi è, `iat` = quando è stato creato, `exp` = quando scade (secondi dal 1970).',
+          ],
+          code: C('c-jwt'), output: C('c-jwt-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Dentro un JWT', icon: 'flask-conical', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Il token di Giulia, firmato con il segreto del server. Prova a cambiare il ruolo nel payload: il server se ne accorge? E se conosci il segreto?</p><div class="jw"></div>',
+          mount: (el) => JwtLab.mount(el.querySelector('.jw')),
+        },
+        {
+          type: 'code', part: 'JWT', title: 'I middleware autentica e autorizza', icon: 'shield', iconColor: 'text-cyan-400',
+          items: [
+            '`autentica`: dall\'header `Authorization: Bearer <token>` a `req.utente`, oppure **401**.',
+            '`algorithms: [\'HS256\']`: l\'algoritmo lo decide il server, non il token (niente `alg: none`).',
+            '`autorizza(...ruoli)` è una funzione che **restituisce** un middleware: si usa dopo `autentica`.',
+            'Si mettono sulle rotte, in ordine: pubblica, con il login, con il ruolo.',
+          ],
+          code: C('c-auth'), file: 'middleware/auth.js',
+        },
+        {
+          type: 'code', part: 'JWT', title: 'Access token e refresh token', icon: 'refresh-cw', iconColor: 'text-cyan-400',
+          items: [
+            '**Access token**: breve (15 minuti), va in ogni richiesta. Se lo rubano, dura poco.',
+            '**Refresh token**: lungo (giorni), serve solo a chiederne uno nuovo; sta in un cookie HttpOnly con il path di `/api/auth`.',
+            '**Rotazione**: a ogni refresh un refresh token nuovo. **Logout**: `versioneToken + 1` invalida quelli vecchi.',
+            'Il refresh si controlla nel database (la versione): è il punto in cui un JWT si può "spegnere".',
+          ],
+          code: C('c-refresh'), file: 'routes/auth.js',
+        },
+        {
+          type: 'custom', part: 'SICUREZZA', title: 'Dove tenere il token?', icon: 'shield-alert', iconColor: 'text-red-400',
+          html: DOVE_HTML,
+        },
+        {
+          type: 'custom', part: 'SICUREZZA', title: 'Prima di andare in produzione', icon: 'list-checks', iconColor: 'text-red-400',
+          html: CHECK_HTML,
+        },
+        {
+          part: 'ARCHITETTURA', title: 'La Biblioteca 9.0', icon: 'layers', iconColor: 'text-purple-400',
+          items: [
+            'La 8.0 + `models/utente.js`, `auth/token.js`, `middleware/auth.js`, `routes/auth.js`; i segreti in `.env` e `config.js`.',
+            'Leggere il catalogo è pubblico; il **prestito** richiede il login (l\'utente viene dal token, non dal body).',
+            'Creare, modificare ed eliminare libri e autori: solo `autorizza(\'bibliotecario\')`.',
+            '`/api/auth`: `registrazione`, `login`, `refresh`, `logout`, `io`. Due utenti di prova nel seed.',
+          ],
+        },
+
+        /* ------------------------------------------------ CHIUSURA */
+        {
+          part: 'RIEPILOGO', title: 'Cosa portiamo a casa', icon: 'check-circle', iconColor: 'text-green-400',
+          items: [
+            '401 = non so chi sei, 403 = so chi sei ma non puoi. Il controllo è sempre nel server.',
+            'Password: `bcrypt.hash(p, 10)` in un hook `pre(\'save\')`, `compare` al login, `select: false`, messaggi generici.',
+            'Cookie: `HttpOnly`, `Secure`, `SameSite`, `Max-Age`. Sessioni: `regenerate` al login, `destroy` al logout.',
+            'JWT: firmato, non cifrato; `expiresIn` breve; `verify` con `algorithms`; access + refresh token con rotazione.',
+            '`autentica` → `req.utente`; `autorizza(...ruoli)` → 403. Il ruolo non arriva mai dal client.',
+          ],
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Biblioteca 9.0: mettiti alla prova', icon: 'library', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Login come Giulia (<code class="inline">giulia@example.com</code> / <code class="inline">giulia-2026</code>) o come la bibliotecaria (<code class="inline">bibliotecaria@biblioteca.it</code> / <code class="inline">scaffale-2026</code>), poi copia l\'<code class="inline">accessToken</code> negli header. Il cookie del refresh lo gestisce il client, come un browser.</p><div class="biblio"></div>',
+          mount: (el) => NodeLab.inspector(el.querySelector('.biblio'), {
+            id: 'm12-biblioteca-slide', files: M12_BIBLIOTECA.files, fs: M12_BIBLIOTECA.fs, entry: 'server.js', port: 3000, node: M12_BIBLIOTECA.node,
+            packages: M12_BIBLIOTECA.packages, height: '20rem', persist: true, watch: M12_BIBLIOTECA.watch,
+            missions: M12_BIBLIOTECA.missions, presets: M12_BIBLIOTECA.presets,
+          }),
+        },
+        {
+          type: 'custom', part: 'ORA TOCCA A VOI', title: 'Esercitazioni e laboratori', icon: 'flask-conical',
+          html: `<div class="grid md:grid-cols-2 gap-6 items-center">
+            <ul class="space-y-3 text-lg md:text-xl text-gray-300">
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Hash e JWT nelle simulazioni, "che cosa succede?"</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Biblioteca 9.0 con le missioni</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>5 laboratori con verifica automatica (un boss)</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Missioni sul vostro PC + quiz</li>
+            </ul>
+            <div class="text-center">
+              <a href="modulo_12_ex.html" class="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold hover:bg-green-500 transition-colors">
+                <i data-lucide="flask-conical" class="w-6 h-6"></i> Apri le esercitazioni</a>
+              <p class="mt-6 text-gray-500 font-mono text-sm">Prossimo modulo: Sicurezza delle API</p>
+            </div></div>`,
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>

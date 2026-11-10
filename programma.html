@@ -180,6 +180,8 @@
             <tr><td class="px-4 py-2 font-mono">8</td><td class="px-4 py-2">3</td><td class="px-4 py-2">Modulo 8 — Template engine e form</td></tr>
             <tr><td class="px-4 py-2 font-mono">9</td><td class="px-4 py-2">7</td><td class="px-4 py-2">Modulo 9 — Database relazionali: SQL e SQLite</td></tr>
             <tr><td class="px-4 py-2 font-mono">10</td><td class="px-4 py-2">3</td><td class="px-4 py-2">Modulo 10 — ORM con TypeORM</td></tr>
+            <tr><td class="px-4 py-2 font-mono">11</td><td class="px-4 py-2">6</td><td class="px-4 py-2">Modulo 11 — MongoDB e Mongoose</td></tr>
+            <tr><td class="px-4 py-2 font-mono">12</td><td class="px-4 py-2">7</td><td class="px-4 py-2">Modulo 12 — Autenticazione e autorizzazione</td></tr>
             <tr><td class="px-4 py-2 font-mono text-gray-500">…</td><td class="px-4 py-2 text-gray-500" colspan="2">Le lezioni successive sono da definire.</td></tr>
           </tbody>
         </table>
@@ -216,9 +218,9 @@
         o: ['progettare tabelle e relazioni', 'scrivere query SQL, anche con JOIN', 'collegare Express a un database in sicurezza', 'gestire migrazioni e dati di esempio'] },
       { n: 10, t: 'ORM con TypeORM', h: 3, c: 'Il pattern Data Mapper, DataSource e connessione a SQLite (better-sqlite3), entità definite in JavaScript con EntitySchema (senza decoratori né TypeScript), Repository e find options, relazioni N-1, 1-N e N-N e il problema N+1, QueryBuilder e SQL injection, transazioni, synchronize e migrazioni con la CLI.',
         o: ['descrivere il modello dati con le entità di un ORM', 'eseguire query con Repository e QueryBuilder', 'gestire relazioni, migrazioni e transazioni'] },
-      { n: 11, t: 'MongoDB e Mongoose', h: 6, c: 'Database NoSQL documentali, MongoDB Atlas e Compass, CRUD, schemi e validazione con Mongoose, relazioni e populate, aggregazioni di base.',
+      { n: 11, t: 'MongoDB e Mongoose', h: 6, c: 'Database NoSQL documentali, MongoDB Atlas, Compass e mongosh, CRUD e operatori di query, schemi e validazione con Mongoose, embedding o riferimenti con populate, aggiornamenti atomici, aggregazioni di base, indici e NoSQL injection.',
         o: ['confrontare modello relazionale e documentale', 'modellare dati con Mongoose', 'eseguire query e aggregazioni di base'] },
-      { n: 12, t: 'Autenticazione e autorizzazione', h: 7, c: 'Hashing delle password (bcrypt/argon2), sessioni e cookie, JWT (access e refresh token), middleware di protezione, ruoli e permessi, registrazione, login e logout.',
+      { n: 12, t: 'Autenticazione e autorizzazione', h: 7, c: 'Hashing delle password (bcrypt/argon2), cookie e sessioni con express-session, JWT (access e refresh token con rotazione), middleware di protezione, ruoli e permessi (401 e 403), registrazione, login, refresh e logout.',
         o: ['salvare le password in modo sicuro', 'implementare login con sessioni o JWT', 'proteggere le rotte in base al ruolo'] },
       { n: 13, t: 'Sicurezza delle API', h: 3, c: 'OWASP API Security Top 10, helmet, CORS, rate limiting, sanitizzazione dell\'input, gestione dei segreti, npm audit e sicurezza della supply chain.',
         o: ['riconoscere le vulnerabilità più comuni', 'applicare le principali contromisure', 'verificare le dipendenze del progetto'] },

@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modulo 11 · MongoDB e Mongoose — NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="bg-gray-900">
+
+  <!-- ===================== Esempi di codice (testo puro, niente escape) ===================== -->
+  <script type="text/plain" id="c-doc">
+// un documento della collezione "libri"
+{
+  _id: ObjectId('6730a1c0e4b0c1a2b3c4d513'),   // chiave primaria
+  titolo: 'Se questo è un uomo',
+  anno: 1947,
+  autore: ObjectId('6730a1c0e4b0c1a2b3c4d502'),// riferimento
+  generi: ['memorie'],                    // array: niente ponte
+  disponibile: false,
+  prestiti: [                             // documenti annidati
+    { lettore: 'Giulia', dal: ISODate('2026-11-02'), al: null }
+  ]
+}
+</script>
+  <script type="text/plain" id="c-shell">
+// mongosh — la shell di MongoDB (anche dentro Compass, in basso)
+use biblioteca
+db.libri.insertOne({ titolo: 'Palomar', anno: 1983, generi: ['romanzo'] })
+db.libri.find({ anno: { $gt: 1960 } }, { titolo: 1, _id: 0 }).sort({ anno: -1 })
+db.libri.updateOne({ titolo: 'Palomar' }, { $set: { disponibile: false } })
+db.libri.countDocuments({ generi: 'romanzo' })
+db.libri.deleteOne({ titolo: 'Palomar' })
+</script>
+  <script type="text/plain" id="c-shell-out">
+switched to db biblioteca
+{
+  acknowledged: true,
+  insertedId: ObjectId('6af38014119b04bc927deda5')
+}
+[
+  { titolo: 'Palomar' },
+  { titolo: 'Il nome della rosa' },
+  { titolo: 'Il sistema periodico' },
+  { titolo: 'Le città invisibili' },
+  { titolo: 'Lessico famigliare' }
+]
+{
+  acknowledged: true,
+  insertedId: null,
+  matchedCount: 1,
+  modifiedCount: 1,
+  upsertedCount: 0
+}
+5
+{ acknowledged: true, deletedCount: 1 }
+</script>
+  <script type="text/plain" id="c-connect">
+// npm install mongoose
+const mongoose = require('mongoose');
+
+mongoose.set('debug', true);                 // stampa ogni operazione mandata a MongoDB
+
+const libroSchema = new mongoose.Schema({
+  titolo: String,
+  anno: Number,
+  generi: [String],
+});
+// 'Libro' → collezione "libros" (Mongoose fa il plurale in inglese): meglio dirlo noi
+const Libro = mongoose.model('Libro', libroSchema, 'libri');
+
+async function main() {
+  await mongoose.connect(process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017/biblioteca');
+  console.log(await Libro.create({ titolo: 'Palomar', anno: 1983 }));
+  await mongoose.disconnect();               // senza, il processo resta acceso
+}
+main();
+</script>
+  <script type="text/plain" id="c-connect-out">
+Mongoose: libri.insertOne({ titolo: 'Palomar', anno: 1983, generi: [], _id: ObjectId("6af380149c3e18a1482de8d0"), __v: 0}, {})
+{
+  titolo: 'Palomar',
+  anno: 1983,
+  generi: [],
+  _id: new ObjectId('6af380149c3e18a1482de8d0'),
+  __v: 0
+}
+</script>
+  <script type="text/plain" id="c-schema">
+const libroSchema = new mongoose.Schema({
+  titolo: { type: String, required: [true, 'Il titolo è obbligatorio'], trim: true, maxLength: 200 },
+  autore: { type: mongoose.Schema.Types.ObjectId, ref: 'Autore' },
+  anno: { type: Number, min: 1450, max: 2026 },
+  isbn: { type: String, match: [/^\d{13}$/, "L'ISBN ha 13 cifre"], unique: true, sparse: true },
+  genere: { type: String, enum: ['romanzo', 'racconti', 'memorie'] },
+  disponibile: { type: Boolean, default: true },
+  prestiti: [{ lettore: String, dal: { type: Date, default: Date.now } }],
+}, { timestamps: true });                    // createdAt e updatedAt automatici
+
+try {
+  await Libro.create({ titolo: '  ', anno: 1200, isbn: '123' });
+} catch (err) {
+  console.log(err.name, '·', err.message);
+  console.log(Object.keys(err.errors));      // un errore per campo
+}
+</script>
+  <script type="text/plain" id="c-schema-out">
+ValidationError · Libro validation failed: titolo: Il titolo è obbligatorio, anno: Path `anno` (1200) is less than minimum allowed value (1450)., isbn: L'ISBN ha 13 cifre
+[ 'titolo', 'anno', 'isbn' ]
+</script>
+  <script type="text/plain" id="c-crud">
+const l = await Libro.create({ titolo: ' Palomar ', anno: '1983', autore });   // '1983' → 1983
+
+await Libro.find({ anno: { $gt: 1960 } }).sort({ anno: -1 }).limit(5).select('titolo anno');
+await Libro.findById(l._id);                          // un documento, oppure null
+
+// senza le opzioni: restituisce il documento PRIMA della modifica, e NON valida
+await Libro.findByIdAndUpdate(l._id, { anno: 1984 }, { returnDocument: 'after', runValidators: true });
+
+await Libro.deleteOne({ _id: l._id });                // { acknowledged: true, deletedCount: 1 }
+</script>
+  <script type="text/plain" id="c-crud-out">
+Mongoose: libri.insertOne({ titolo: 'Palomar', autore: ObjectId("6af38020235f6a26b00dd845"), anno: 1983, generi: [], disponibile: true, _id: ObjectId("6af38020235f6a26b00dd851"), prestiti: [], createdAt: new Date("Tue, 10 Nov 2026 20:35:44 GMT"), updatedAt: new Date("Tue, 10 Nov 2026 20:35:44 GMT"), __v: 0}, {})
+Mongoose: libri.find({ anno: { '$gt': 1960 } }, { sort: { anno: -1 }, limit: 5, projection: { titolo: 1, anno: 1 } })
+Mongoose: libri.findOne({ _id: ObjectId("6af38020235f6a26b00dd851") }, {})
+Mongoose: libri.findOneAndUpdate({ _id: ObjectId("6af38020235f6a26b00dd851") }, { '$set': { updatedAt: new Date("Tue, 10 Nov 2026 20:35:44 GMT"), anno: 1984 }}, { returnDocument: 'after', runValidators: true, returnOriginal: false })
+Mongoose: libri.deleteOne({ _id: ObjectId("6af38020235f6a26b00dd851") }, {})
+</script>
+  <script type="text/plain" id="c-query">
+// la query si costruisce a pezzi e parte con await (o .exec())
+const pagina = await Libro.find({ generi: 'romanzo', disponibile: true })
+  .sort({ anno: -1, titolo: 1 })
+  .skip(10).limit(10)
+  .select('titolo anno -_id')      // proiezione: solo questi campi
+  .lean();                          // oggetti semplici invece di documenti Mongoose (più leggeri)
+
+await Libro.countDocuments({ disponibile: true });
+await Libro.exists({ isbn: '9788800000017' });       // { _id } oppure null
+
+await Libro.findById('42');         // non è un ObjectId: errore, non null
+</script>
+  <script type="text/plain" id="c-query-out">
+CastError: Cast to ObjectId failed for value "42" (type string) at path "_id" for model "Libro"
+</script>
+  <script type="text/plain" id="c-pop">
+// il libro tiene l'ObjectId dell'autore: populate lo sostituisce con il documento
+await Libro.find({ anno: { $gt: 1960 } }).populate('autore', 'nome').select('titolo autore').lean();
+
+// dall'altra parte: un "virtual" (niente array nell'autore), cercato al contrario
+autoreSchema.virtual('libri', { ref: 'Libro', localField: '_id', foreignField: 'autore' });
+await Autore.findOne({ nome: 'Italo Calvino' }).populate('libri', 'titolo -autore').lean();
+</script>
+  <script type="text/plain" id="c-pop-out">
+Mongoose: libri.find({ anno: { '$gt': 1960 } }, { projection: { titolo: 1, autore: 1 } })
+Mongoose: autori.find({ _id: { '$in': [ ObjectId("6af3…43c9") ] } }, { projection: { nome: 1 } })
+[ { _id: …, titolo: 'Le città invisibili', autore: { _id: …, nome: 'Italo Calvino' } } ]
+Mongoose: autori.findOne({ nome: 'Italo Calvino' }, {})
+Mongoose: libri.find({ autore: { '$in': [ ObjectId("6af3…43c9") ] } }, { projection: { titolo: 1, autore: 1 } })
+{ _id: …, nome: 'Italo Calvino', __v: 0,
+  libri: [ { _id: …, titolo: 'Il barone rampante' }, { _id: …, titolo: 'Le città invisibili' } ] }
+</script>
+  <script type="text/plain" id="c-atomico">
+// il prestito: filtro e modifica in UNA operazione sullo stesso documento → atomica
+const presta = (id, lettore) => Libro.findOneAndUpdate(
+  { _id: id, disponibile: true },                                   // solo se è disponibile
+  { $set: { disponibile: false }, $push: { prestiti: { lettore } } },
+  { returnDocument: 'after' },
+);
+await presta(id, 'Giulia');     // il libro aggiornato
+await presta(id, 'Marco');      // null: nessun documento soddisfa il filtro (→ 409)
+
+// la restituzione: $ = l'elemento dell'array trovato dal filtro
+await Libro.findOneAndUpdate(
+  { _id: id, 'prestiti.al': null },
+  { $set: { disponibile: true, 'prestiti.$.al': new Date() } },
+);
+</script>
+  <script type="text/plain" id="c-atomico-out">
+Mongoose: libri.findOneAndUpdate({ _id: ObjectId("6730…d511"), disponibile: true }, { '$push': { prestiti: { lettore: 'Giulia', al: null, _id: ObjectId("6af3…43ce"), dal: new Date("Tue, 10 Nov 2026 20:32:38 GMT") } }, '$set': { disponibile: false, updatedAt: new Date("…") }}, { returnDocument: 'after', returnOriginal: false })
+</script>
+  <script type="text/plain" id="c-agg">
+// una catena di stadi: ogni stadio riceve i documenti del precedente
+await Libro.aggregate([
+  { $match: { anno: { $gte: 1950 } } },                     // WHERE
+  { $unwind: '$generi' },                                   // un documento per ogni genere
+  { $group: {                                               // GROUP BY
+    _id: '$generi',
+    libri: { $sum: 1 },
+    dal: { $min: '$anno' },
+  } },
+  { $sort: { libri: -1, _id: 1 } },                         // ORDER BY
+  { $project: { _id: 0, genere: '$_id', libri: 1, dal: 1 } },
+]);
+// $lookup: { from: 'autori', localField: 'autore', foreignField: '_id', as: 'autore' } ≈ LEFT JOIN
+</script>
+  <script type="text/plain" id="c-agg-out">
+[
+  { libri: 5, dal: 1952, genere: 'romanzo' },
+  { libri: 2, dal: 1957, genere: 'fantastico' },
+  { libri: 2, dal: 1963, genere: 'memorie' },
+  { libri: 1, dal: 1980, genere: 'giallo' },
+  { libri: 1, dal: 1975, genere: 'racconti' }
+]
+</script>
+  <script type="text/plain" id="c-indici">
+// nello schema: unique crea un indice unico (NON è un validatore)
+isbn: { type: String, unique: true, sparse: true },     // sparse: i libri senza isbn non contano
+// oppure più campi insieme
+libroSchema.index({ autore: 1, titolo: 1 }, { unique: true });
+libroSchema.index({ generi: 1, anno: -1 });              // per le ricerche frequenti
+
+try {
+  await Libro.create({ titolo: 'Doppio', isbn: '9788800000017' });
+} catch (err) {
+  console.log(err.name, err.code, err.keyValue);
+}
+</script>
+  <script type="text/plain" id="c-indici-out">
+Mongoose: libri.createIndex({ isbn: 1 }, { unique: true, sparse: true })      (all'avvio)
+…
+Mongoose: libri.insertOne({ titolo: 'Doppio', …, isbn: '9788800000017', … }, {})
+MongoServerError 11000 { isbn: '9788800000017' }
+</script>
+  <script type="text/plain" id="c-inj-no">
+// POST /login  con il body JSON:
+// { "email": { "$ne": null }, "password": { "$ne": null } }
+const u = await Utente.findOne({
+  email: req.body.email,           // un OGGETTO con un operatore…
+  password: req.body.password,     // …"diverso da null": vero per tutti
+});
+// → il primo utente del database: login riuscito!
+</script>
+  <script type="text/plain" id="c-inj-si">
+// 1. validare: email e password devono essere stringhe (zod)
+const { email, password } = z.object({ email: z.email(), password: z.string() }).parse(req.body);
+
+// 2. e comunque: gli oggetti con "$" diventano { $eq: … }
+mongoose.set('sanitizeFilter', true);
+</script>
+  <script type="text/plain" id="c-errori">
+// middleware/errori.js — gli errori di Mongoose diventano status HTTP
+const mongoose = require('mongoose');
+
+function gestoreErrori(err, req, res, next) {
+  // … ErroreApi, JSON non valido (moduli 7, 9, 10) …
+  if (err instanceof mongoose.Error.ValidationError) {          // lo schema rifiuta i dati
+    const dettagli = Object.values(err.errors).map((e) => ({ campo: e.path, messaggio: e.message }));
+    return res.status(400).json({ errore: 'Dati non validi', dettagli });
+  }
+  if (err instanceof mongoose.Error.CastError) {                // "42" come ObjectId, "abc" come numero
+    return res.status(400).json({ errore: `Valore non valido per ${err.path}` });
+  }
+  if (err.code === 11000) {                                     // E11000 duplicate key
+    return res.status(409).json({ errore: `Esiste già un elemento con questo ${Object.keys(err.keyValue)[0]}` });
+  }
+  console.error(err);
+  res.status(500).json({ errore: 'Errore interno del server' });
+}
+</script>
+  <script type="text/plain" id="c-repo">
+// repositories/libri.js — stessi nomi dei moduli 9 e 10: le rotte non cambiano
+const Libro = require('../models/libro');
+
+async function cerca({ genere, disponibile, ordina, limite, pagina }) {
+  const filtro = {};
+  if (genere) filtro.generi = genere;                    // un array "contiene"
+  if (disponibile !== undefined) filtro.disponibile = disponibile;
+  const [libri, totale] = await Promise.all([
+    Libro.find(filtro).sort(ORDINI[ordina]).skip((pagina - 1) * limite).limit(limite)
+      .populate('autore', 'nome'),
+    Libro.countDocuments(filtro),
+  ]);
+  return { totale, pagina, libri };
+}
+
+const trova = (id) => Libro.findById(id).populate('autore', 'nome');   // o null
+const modifica = (id, dati) => Libro.findByIdAndUpdate(id, dati, { returnDocument: 'after', runValidators: true });
+const elimina = async (id) => (await Libro.findByIdAndDelete(id)) !== null;
+</script>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/m11-biblioteca.js"></script>
+  <script>
+    // nei blocchi text/plain il tag di chiusura degli script è scritto con la barra "escapata"
+    const C = (id) => document.getElementById(id).textContent.replace(/^\n/, '').replace(/<\\\/script>/g, '<\/script>');
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const code = (s) => `<code class="inline">${esc(s)}</code>`;
+    const md = (t) => esc(t).replace(/`([^`]+)`/g, '<code class="inline">$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    const TABLE = (head, rows) => `<div class="overflow-x-auto rounded-xl border border-gray-700"><table class="w-full text-left text-sm md:text-base">
+      <thead class="bg-gray-800 text-gray-300"><tr>${head.map((h) => `<th class="px-4 py-2 font-semibold">${h}</th>`).join('')}</tr></thead>
+      <tbody class="divide-y divide-gray-800 text-gray-200">${rows.map((r) => `<tr class="bg-gray-900/60">${r.map((c) => `<td class="px-4 py-2">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    const NOTE = (items) => `<ul class="slide-items space-y-3 text-base md:text-xl text-gray-300 mt-6">${items.map((t) => `<li class="flex"><span class="text-green-500 mr-4 font-mono">$</span><span>${md(t)}</span></li>`).join('')}</ul>`;
+    const PRE = (txt, lang) => `<pre class="code small"><code class="language-${lang || 'javascript'}">${esc(txt)}</code></pre>`;
+
+    const CONCETTI_HTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div class="lg:col-span-5">` + TABLE(['SQL', 'MongoDB'], [
+        ['database', 'database'],
+        ['tabella', '<strong>collezione</strong>'],
+        ['riga', '<strong>documento</strong> (BSON)'],
+        ['colonna', 'campo (anche annidato: ' + code('indirizzo.citta') + ')'],
+        [code('PRIMARY KEY'), code('_id') + ' (di solito un ' + code('ObjectId') + ')'],
+        ['tabella ponte N-N', 'un <strong>array</strong> nel documento'],
+        [code('JOIN'), 'documenti annidati, ' + code('$lookup') + ', ' + code('populate')],
+        ['schema fisso', 'schema <strong>flessibile</strong> (lo rimette Mongoose)'],
+      ]) + `</div><div class="lg:col-span-7">${PRE(C('c-doc'))}</div></div>`;
+
+    const OPERATORI_HTML = `<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"><div class="lg:col-span-7">` + TABLE(['Filtro', 'Significa'], [
+      [code("{ anno: 1957 }"), 'uguale'],
+      [code('{ anno: { $gt: 1960 } }') + ' · ' + code('$gte $lt $lte $ne'), '> 1960 · ≥ < ≤ ≠'],
+      [code("{ autore: { $in: ['a', 'b'] } }") + ' · ' + code('$nin'), 'uno dei valori'],
+      [code("{ generi: 'giallo' }"), 'l\'<strong>array</strong> contiene "giallo"'],
+      [code('{ titolo: /rosa/i }'), 'espressione regolare (LIKE)'],
+      [code('{ anno: { $exists: false } }'), 'il campo non c\'è'],
+      [code("{ 'prestiti.lettore': 'Giulia' }"), 'un campo <strong>dentro</strong> un sottodocumento'],
+      [code('{ $or: [{ … }, { … }] }'), 'OR (nello stesso oggetto: AND)'],
+    ]) + `</div><div class="lg:col-span-5">${NOTE([
+      'Il filtro è un **oggetto** con la forma dei documenti: niente stringhe SQL da comporre.',
+      'Proiezione (secondo argomento): `{ titolo: 1, _id: 0 }` = solo il titolo.',
+      'Aggiornamenti: `$set`, `$unset`, `$inc`, `$push`, `$addToSet`, `$pull`. Senza operatore, `updateOne` dà errore.',
+    ])}</div></div>`;
+
+    const CONFRONTO_HTML = TABLE(['', 'Relazionale (SQL)', 'Documentale (MongoDB)'], [
+      ['<strong>I dati</strong>', 'Tabelle normalizzate, ogni cosa in un posto', 'Documenti come li usa l\'applicazione (anche annidati)'],
+      ['<strong>Lo schema</strong>', 'Nel database: ALTER TABLE e migrazioni', 'Nel codice (Mongoose); i documenti vecchi restano come sono'],
+      ['<strong>Le relazioni</strong>', 'Chiavi esterne e JOIN, integrità garantita', 'Embedding o riferimenti; l\'integrità la controlla l\'app'],
+      ['<strong>Più modifiche insieme</strong>', 'Transazioni (sempre)', 'Atomico sul <strong>singolo documento</strong>; transazioni solo con un replica set'],
+      ['<strong>Quando</strong>', 'Dati molto collegati, report, vincoli forti (ordini, pagamenti)', 'Dati a forma di documento, schema che cambia, cataloghi, contenuti, log'],
+    ]) + NOTE([
+      'Non è una gara: molte applicazioni usano entrambi. Conta come leggi e scrivi i dati.',
+      'Con un **repository** davanti (moduli 9 e 10), cambiare database tocca un livello solo: lo rifacciamo oggi.',
+    ]);
+
+    window.DECK = {
+      module: 'MODULO 11',
+      title: 'MongoDB e Mongoose',
+      prompt: 'modulo-11',
+      home: './index.html',
+      slides: [
+        {
+          type: 'cover', icon: 'leaf',
+          title: 'MongoDB e Mongoose',
+          subtitle: 'Dalle tabelle ai **documenti**: collezioni, query con gli operatori, schemi e validazione con Mongoose, riferimenti, aggiornamenti atomici e aggregazioni.',
+          meta: ['6 ore', 'Modulo 11'],
+        },
+        {
+          type: 'agenda', part: 'PROGRAMMA', title: 'Agenda', icon: 'list-checks',
+          rows: [
+            ['Database documentali, Atlas, Compass e mongosh', 'teoria'],
+            ['CRUD e operatori in mongosh + console', 'demo'],
+            ['Mongoose: schema, validazione, modello, query', 'teoria'],
+            ['Pausa', 'pausa'],
+            ['Incorporare o riferire? populate, aggiornamenti atomici', 'teoria'],
+            ['Aggregazioni, indici, NoSQL injection, errori → HTTP', 'teoria'],
+            ['Biblioteca 8.0 + 5 laboratori', 'lab'],
+            ['Quiz', 'quiz'],
+          ],
+        },
+
+        /* ------------------------------------------------ DOCUMENTI */
+        {
+          type: 'compare', part: 'NOSQL', title: 'Tabelle o documenti?', icon: 'git-compare',
+          columns: [
+            { title: 'Relazionale (moduli 9-10)', color: 'blue', icon: 'table-2', items: ['Un libro con 3 generi e 2 prestiti: righe in **4 tabelle**', 'Per rileggerlo: JOIN', 'Ogni riga ha le stesse colonne'] },
+            { title: 'Documentale (oggi)', color: 'green', icon: 'file-json', items: ['Lo stesso libro è **un documento**: generi e prestiti dentro', 'Si legge con una query, senza JOIN', 'Documenti della stessa collezione possono avere campi diversi'] },
+          ],
+          footer: 'MongoDB salva **BSON** (JSON binario con date, ObjectId, numeri interi e decimali). "NoSQL" non vuol dire "senza regole": le regole le mette lo schema di Mongoose.',
+        },
+        {
+          type: 'custom', part: 'NOSQL', title: 'Da SQL a MongoDB', icon: 'arrow-left-right', iconColor: 'text-blue-400',
+          html: CONCETTI_HTML,
+        },
+        {
+          part: 'STRUMENTI', title: 'Dove gira MongoDB', icon: 'server', iconColor: 'text-blue-400',
+          items: [
+            '**MongoDB Atlas**: il cloud ufficiale, con un cluster **M0 gratuito**. Si crea un utente, si abilita il proprio IP e si copia la stringa `mongodb+srv://…`.',
+            'In locale: **Docker** (`docker run -d -p 27017:27017 mongo:8`) oppure il Community Server. Stringa: `mongodb://127.0.0.1:27017/biblioteca`.',
+            '**Compass**: l\'interfaccia grafica per vedere documenti, indici, aggregazioni (e la shell in basso).',
+            '**mongosh**: la shell a riga di comando; `use biblioteca`, `show collections`, `db.libri.find()`.',
+            'La stringa di connessione contiene la password: va in `.env` (modulo 7), **mai** su Git.',
+          ],
+        },
+        {
+          type: 'code', part: 'MONGOSH', title: 'CRUD nella shell', icon: 'terminal', iconColor: 'text-green-400',
+          items: [
+            '`db.<collezione>` esiste appena la usi: il primo `insertOne` crea collezione (e database).',
+            '`find(filtro, proiezione)` restituisce un **cursore**: la shell mostra i primi 20 (`it` per gli altri).',
+            'Ogni scrittura risponde con un resoconto: `insertedId`, `matchedCount`, `modifiedCount`, `deletedCount`.',
+            '`_id` lo genera il driver: un **ObjectId** (12 byte: data di creazione + casuale + contatore).',
+          ],
+          code: C('c-shell'), file: 'mongosh', output: C('c-shell-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'MONGOSH', title: 'Gli operatori di query', icon: 'filter', iconColor: 'text-green-400',
+          html: OPERATORI_HTML,
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'La console mongosh', icon: 'flask-conical', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Un database <code class="inline">biblioteca</code> con 7 libri (generi e prestiti dentro i documenti). Scegli un esempio o scrivi i tuoi comandi, uno per riga: le risposte sono quelle di mongosh.</p><div class="mg"></div>',
+          mount: (el) => NodeLab.mongo(el.querySelector('.mg'), Object.assign({ height: '19rem' }, M11_MONGOSH)),
+        },
+
+        /* ------------------------------------------------ MONGOOSE */
+        {
+          type: 'code', part: 'MONGOOSE', title: 'Mongoose: connessione e modello', icon: 'plug', iconColor: 'text-blue-400',
+          items: [
+            '**Mongoose** (ODM: Object-Document Mapping) rimette uno **schema** sopra MongoDB: tipi, default, validazione.',
+            '`mongoose.connect(uri)` **una volta**, prima del server: la stessa connessione serve tutti i modelli.',
+            'Il modello `Libro` usa la collezione **`libros`** (plurale inglese!): con il 3° argomento la scegli tu.',
+            '`mongoose.set(\'debug\', true)`: ogni operazione mandata a MongoDB, come il `logging` di TypeORM.',
+          ],
+          code: C('c-connect'), file: 'prova.js', output: C('c-connect-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'MONGOOSE', title: 'Lo schema: tipi e validazione', icon: 'shield-check', iconColor: 'text-blue-400',
+          items: [
+            'Per ogni campo: `type`, e le regole: `required`, `min`/`max`, `minLength`/`maxLength`, `enum`, `match`, `validate`.',
+            'Le trasformazioni: `trim`, `lowercase`, `default`. Il messaggio si sceglie: `[true, \'Il titolo è obbligatorio\']`.',
+            'I dati sbagliati non arrivano al database: `ValidationError`, con `err.errors` per campo (→ **400**).',
+            '`timestamps: true` aggiunge `createdAt` e `updatedAt`; `__v` è la versione del documento.',
+          ],
+          code: C('c-schema'), file: 'models/libro.js', output: C('c-schema-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'MONGOOSE', title: 'Il CRUD con il modello', icon: 'database', iconColor: 'text-green-400',
+          items: [
+            '`create` (o `new Libro(…)` + `save()`), `find`, `findById`, `findOne`, `updateOne`, `deleteOne`…',
+            'Mongoose **converte** i valori secondo lo schema: `\'1983\'` → `1983`, anche nei filtri (comodo con `req.query`).',
+            '`findByIdAndUpdate`: senza `returnDocument: \'after\'` torna il documento **vecchio**, senza `runValidators` le regole dello schema **non** valgono.',
+            'Un documento letto e poi `save()`: Mongoose manda solo i campi cambiati (`$set`).',
+          ],
+          code: C('c-crud'), output: C('c-crud-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'MONGOOSE', title: 'Le query: catena e CastError', icon: 'search', iconColor: 'text-green-400',
+          items: [
+            '`find` restituisce una **Query**: `sort`, `skip`, `limit`, `select`, `populate`… e parte con `await`.',
+            '`lean()`: oggetti JavaScript semplici, più veloci (senza `save()` e virtual): ideale per le risposte JSON.',
+            '`countDocuments(filtro)` per i totali; `exists` per un sì/no.',
+            'Un id che non è un ObjectId dà **CastError**: lo si controlla prima (`mongoose.isValidObjectId`) → 400 o 404.',
+          ],
+          code: C('c-query'), output: C('c-query-out'), reveal: true,
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Da Mongoose a MongoDB', icon: 'flask-conical', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">Un database con autori e libri. Scegli una chiamata (o scrivine una): nel terminale le operazioni che Mongoose manda davvero a MongoDB, e poi il risultato.</p><div class="pg"></div>',
+          mount: (el) => NodeLab.playground(el.querySelector('.pg'), Object.assign({ packages: ['mongoose'], height: '19rem' }, M11_ODM)),
+        },
+
+        /* ------------------------------------------------ MODELLARE */
+        {
+          type: 'compare', part: 'MODELLARE', title: 'Incorporare o riferire?', icon: 'git-fork',
+          columns: [
+            { title: 'Incorporare (embedding)', color: 'green', icon: 'package', items: ['Dati che si leggono **sempre insieme** al documento: i generi, i prestiti di un libro', 'Una lettura, una scrittura atomica', 'Attenzione agli array **senza limite** (un documento sta sotto i 16 MB)'] },
+            { title: 'Riferire (reference)', color: 'blue', icon: 'link', items: ['Entità con vita propria, condivise: l\'autore di molti libri', 'Si salva l\'`ObjectId` (`ref: \'Autore\'`) e si carica con `populate`', 'Niente chiavi esterne: se cancelli l\'autore, i libri restano orfani (lo controlla l\'app)'] },
+          ],
+          footer: 'La domanda giusta è: **come li leggo?** Si modella sulle query dell\'applicazione, non sulla "normalizzazione".',
+        },
+        {
+          type: 'code', part: 'MODELLARE', title: 'Riferimenti e populate', icon: 'network', iconColor: 'text-purple-400',
+          items: [
+            '`autore: { type: Schema.Types.ObjectId, ref: \'Autore\' }`: nel database c\'è solo l\'id.',
+            '`populate(\'autore\', \'nome\')` fa **una** query in più con `$in` (non una per libro) e mette l\'oggetto al posto dell\'id.',
+            'Al contrario (gli autori con i loro libri) un **virtual**: niente array da tenere aggiornato nell\'autore.',
+            'Non è una JOIN: sono due query. Per raggruppare e contare c\'è `$lookup` nell\'aggregazione.',
+          ],
+          code: C('c-pop'), output: C('c-pop-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'MODELLARE', title: 'Aggiornamenti atomici (senza transazioni)', icon: 'lock', iconColor: 'text-purple-400',
+          items: [
+            'Ogni operazione su **un** documento è atomica: il filtro e la modifica avvengono insieme.',
+            'Il controllo "è disponibile?" va **nel filtro**: due prestiti nello stesso istante, ne riesce uno solo.',
+            '"Leggi, modifica in JavaScript, `save()`" lascia uno spazio in cui un altro utente può arrivare prima.',
+            'Le transazioni su più documenti esistono, ma servono un replica set (Atlas sì, un mongod da solo no): se i dati da cambiare insieme stanno nello stesso documento, non servono.',
+          ],
+          code: C('c-atomico'), output: C('c-atomico-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'AGGREGAZIONI', title: 'La pipeline di aggregazione', icon: 'workflow', iconColor: 'text-cyan-400',
+          items: [
+            'Statistiche e report: una lista di **stadi** (`$match`, `$group`, `$sort`, `$project`, `$unwind`, `$lookup`…).',
+            '`\'$anno\'` (con il dollaro) è il **valore** del campo; `$sum: 1` conta, `$avg`, `$min`, `$max`, `$push` raccolgono.',
+            'Il risultato sono oggetti semplici, non documenti Mongoose. E Mongoose **non converte** la pipeline: un id stringa in `$match` non trova niente.',
+            'L\'ordine dei gruppi non è garantito: alla fine serve sempre un `$sort`.',
+          ],
+          code: C('c-agg'), output: C('c-agg-out'), reveal: true,
+        },
+        {
+          type: 'code', part: 'INDICI', title: 'Indici e valori unici', icon: 'zap', iconColor: 'text-cyan-400',
+          items: [
+            'Senza indici MongoDB legge **tutta** la collezione (COLLSCAN). In Compass, la scheda "Explain" lo mostra.',
+            '`unique: true` crea un indice unico all\'avvio (`createIndex`): un doppione dà **E11000**, `code: 11000` → **409**.',
+            '`unique` non è un validatore: l\'errore arriva dal database, dopo la validazione dello schema.',
+            'Con `sparse` (o un indice parziale) i documenti senza quel campo non contano come doppioni.',
+          ],
+          code: C('c-indici'), output: C('c-indici-out'), reveal: true,
+        },
+        {
+          type: 'compare', part: 'SICUREZZA', title: 'NoSQL injection', icon: 'syringe',
+          columns: [
+            { title: 'Il body finisce nel filtro', color: 'red', icon: 'skull', code: C('c-inj-no'), items: ['Niente SQL, ma il filtro è un oggetto: il client può mandare un **operatore** al posto del valore'] },
+            { title: 'Validare (e sanificare)', color: 'green', icon: 'shield-check', code: C('c-inj-si'), items: ['Con zod (modulo 7) un oggetto al posto di una stringa è un 400', '`sanitizeFilter` come rete di sicurezza'] },
+          ],
+          footer: 'Lo stesso vale per `$where` e per le espressioni regolari costruite con il testo dell\'utente (vanno "escapate"). Ne riparliamo nel modulo 13.',
+        },
+        {
+          type: 'code', part: 'ARCHITETTURA', title: 'Gli errori di Mongoose → HTTP', icon: 'shield-alert', iconColor: 'text-purple-400',
+          items: [
+            '`ValidationError` → **400** con un messaggio per campo (`err.errors`).',
+            '`CastError` (un id malformato, un numero che non è un numero) → **400**.',
+            '`code: 11000` (`MongoServerError`, indice unico) → **409**; `err.keyValue` dice quale campo.',
+            'Tutto il resto è un bug → **500** e `console.error`.',
+          ],
+          code: C('c-errori'), file: 'middleware/errori.js',
+        },
+        {
+          type: 'code', part: 'ARCHITETTURA', title: 'La Biblioteca 8.0: il repository con Mongoose', icon: 'layers', iconColor: 'text-purple-400',
+          items: [
+            'Stessi nomi dei moduli 9 e 10: rotte, validazione con zod ed errori restano quelli. Gli id ora sono ObjectId.',
+            'Generi e prestiti **dentro** il libro; l\'autore per riferimento (`populate`).',
+            'Il prestito è un `findOneAndUpdate` atomico; le statistiche una pipeline di aggregazione.',
+            'Niente chiavi esterne: "non cancellare un autore con dei libri" lo controlla il repository (→ 409).',
+          ],
+          code: C('c-repo'), file: 'repositories/libri.js',
+        },
+        {
+          type: 'custom', part: 'OLTRE MONGOOSE', title: 'SQL o MongoDB?', icon: 'scale', iconColor: 'text-purple-400',
+          html: CONFRONTO_HTML,
+        },
+
+        /* ------------------------------------------------ CHIUSURA */
+        {
+          part: 'RIEPILOGO', title: 'Cosa portiamo a casa', icon: 'check-circle', iconColor: 'text-green-400',
+          items: [
+            'Collezioni di documenti BSON con `_id` ObjectId; query con gli operatori (`$gt`, `$in`, `$or`…) e aggiornamenti con `$set`, `$push`, `$inc`.',
+            '`mongoose.connect` una volta; schema con tipi, default e validazione; modello con la collezione scelta da noi.',
+            '`findByIdAndUpdate` con `returnDocument: \'after\'` e `runValidators: true`; `lean()` per le risposte.',
+            'Incorporare ciò che si legge insieme, riferire le entità condivise (`populate`); un documento = un\'operazione atomica.',
+            'Aggregazioni per i report; indici unici → E11000 → 409; validare il body contro la NoSQL injection.',
+          ],
+        },
+        {
+          type: 'custom', part: 'SIMULAZIONE', title: 'Biblioteca 8.0: mettiti alla prova', icon: 'library', iconColor: 'text-yellow-400',
+          html: '<p class="text-gray-400 mb-4">La Biblioteca con Mongoose: nel log ogni operazione mandata a MongoDB, a sinistra le collezioni del database <code class="inline">biblioteca</code>. ↻ riavvia il server: i dati restano nel server MongoDB.</p><div class="biblio"></div>',
+          mount: (el) => NodeLab.inspector(el.querySelector('.biblio'), {
+            id: 'm11-biblioteca-slide', files: M11_BIBLIOTECA.files, fs: M11_BIBLIOTECA.fs, entry: 'server.js', port: 3000,
+            packages: M11_BIBLIOTECA.packages, height: '20rem', persist: true, watch: M11_BIBLIOTECA.watch,
+            missions: M11_BIBLIOTECA.missions, presets: M11_BIBLIOTECA.presets,
+          }),
+        },
+        {
+          type: 'custom', part: 'ORA TOCCA A VOI', title: 'Esercitazioni e laboratori', icon: 'flask-conical',
+          html: `<div class="grid md:grid-cols-2 gap-6 items-center">
+            <ul class="space-y-3 text-lg md:text-xl text-gray-300">
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Console mongosh e "Da Mongoose a MongoDB"</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Biblioteca 8.0 con le missioni</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>5 laboratori con verifica automatica (un boss)</li>
+              <li class="flex gap-3"><span class="text-green-500 font-mono">$</span>Atlas e Compass sul vostro PC + quiz</li>
+            </ul>
+            <div class="text-center">
+              <a href="modulo_11_ex.html" class="inline-flex items-center gap-2 px-8 py-4 rounded-xl bg-green-600 text-white text-xl font-bold hover:bg-green-500 transition-colors">
+                <i data-lucide="flask-conical" class="w-6 h-6"></i> Apri le esercitazioni</a>
+              <p class="mt-6 text-gray-500 font-mono text-sm">Prossimo modulo: Autenticazione e autorizzazione</p>
+            </div></div>`,
+        },
+      ],
+    };
+  </script>
+  <script src="assets/slides.js"></script>
+</body>
+
+</html>

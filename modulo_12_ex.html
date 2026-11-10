@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Esercitazioni Modulo 12 — CADMO NodeLab</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <link rel="stylesheet" href="assets/nodelab.css">
+</head>
+
+<body class="min-h-screen bg-gray-900 text-gray-100 font-sans selection:bg-green-500 selection:text-white prose-code">
+
+  <!-- Navbar -->
+  <nav class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <i data-lucide="hexagon" class="w-8 h-8 text-green-500"></i>
+          <span class="font-bold text-xl tracking-tight">CADMO <span class="text-green-500">NodeLab</span></span>
+        </div>
+        <div class="flex items-center gap-5 text-sm">
+          <a href="modulo_12.html" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="presentation" class="w-4 h-4"></i><span class="hidden sm:inline">Slide</span></a>
+          <a href="./" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2"><i data-lucide="arrow-left" class="w-4 h-4"></i> Torna alla Home</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="bg-gray-950 border-b border-gray-800 py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center animate-fade-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-900/30 border border-amber-500/30 text-xs text-amber-300 font-mono mb-4 uppercase tracking-wider">
+        <i data-lucide="key-round" class="w-4 h-4"></i> bcrypt · cookie · sessioni · JWT · ruoli
+      </div>
+      <h1 class="text-3xl md:text-5xl font-extrabold text-white mb-4">Esercitazioni Modulo 12</h1>
+      <p class="text-gray-400 text-lg">Guarda dentro gli hash e i token, prevedi le risposte del server, entra nella Biblioteca 9.0 con due utenti diversi e completa cinque laboratori, fino al boss dell'autenticazione completa.</p>
+      <p class="mt-4 text-sm font-mono text-gray-500"><span data-lab-progress="m12-password,m12-jwt,m12-sessioni,m12-middleware,m12-boss"></span> · i progressi restano salvati in questo browser</p>
+    </div>
+  </header>
+
+  <!-- Indice -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+    <div class="flex flex-wrap gap-2 justify-center text-sm">
+      <a href="#guida" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">1 · Guida rapida</a>
+      <a href="#prova" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">2 · Hash, JWT e "che cosa succede?"</a>
+      <a href="#biblioteca" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">3 · Biblioteca 9.0</a>
+      <a href="#lab" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">4 · Laboratori</a>
+      <a href="#pc" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">5 · Sul tuo PC</a>
+      <a href="#quiz" class="px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-green-500 text-gray-300">6 · Quiz</a>
+    </div>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-20">
+
+    <!-- 1. GUIDA RAPIDA -->
+    <section id="guida" class="scroll-mt-20 animate-fade-in delay-100">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="book-open" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">1. Guida rapida</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-green-400 mb-2">Password (bcrypt)</h3>
+          <pre class="code small"><code class="language-javascript">// npm install bcrypt
+const hash = await bcrypt.hash(password, 10);   // costo 10
+await bcrypt.compare(password, hash);           // true / false
+// nel modello: pre('save') + isModified('password'),
+// password: { …, select: false } → .select('+password')
+// "Email o password non validi" → 401</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-cyan-400 mb-2">Cookie</h3>
+          <pre class="code small"><code class="language-javascript">res.cookie('nome', valore, {
+  httpOnly: true, secure: true,     // niente JS, solo HTTPS
+  sameSite: 'strict',               // 'lax' | 'none'
+  path: '/api/auth', maxAge: 7 * 24 * 3600 * 1000,  // ms
+});
+res.clearCookie('nome', { path: '/api/auth' });
+app.use(cookieParser()); req.cookies.nome</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-yellow-400 mb-2">Sessioni</h3>
+          <pre class="code small"><code class="language-javascript">app.use(session({ secret: process.env.SESSION_SECRET,
+  resave: false, saveUninitialized: false,
+  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 3600000 } }));
+req.session.regenerate((err) => { req.session.utente = u; … });
+req.session.utente                  // nelle rotte
+req.session.destroy(() => res.clearCookie('connect.sid'));</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-purple-400 mb-2">JWT</h3>
+          <pre class="code small"><code class="language-javascript">// npm install jsonwebtoken
+jwt.sign({ sub: id, ruolo }, process.env.JWT_SECRET, { expiresIn: '15m' });
+jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+jwt.decode(token);                  // senza verificare!
+// TokenExpiredError · JsonWebTokenError ('invalid signature'…)
+// client: Authorization: Bearer &lt;token&gt;</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-red-400 mb-2">Middleware</h3>
+          <pre class="code small"><code class="language-javascript">function autentica(req, res, next) { /* Bearer → req.utente o 401 */ }
+const autorizza = (...ruoli) => (req, res, next) =>
+  ruoli.includes(req.utente.ruolo) ? next() : res.sendStatus(403);
+
+router.get('/', elenco);                                   // pubblica
+router.post('/:id/prestito', autentica, presta);           // login
+router.delete('/:id', autentica, autorizza('bibliotecario'), elimina);</code></pre>
+        </div>
+        <div class="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <h3 class="text-lg font-bold text-emerald-400 mb-2">Access e refresh</h3>
+          <pre class="code small"><code class="language-javascript">// login → { accessToken } (15m, nel body)
+//       + cookie refresh (7d, HttpOnly, path /api/auth)
+// POST /api/auth/refresh → nuovo accessToken (+ nuovo refresh)
+// POST /api/auth/logout  → versioneToken + 1, clearCookie
+// 401 = chi sei?   403 = non puoi
+// il ruolo lo decide il server, mai il body</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. HASH, JWT E INDOVINA -->
+    <section id="prova" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-round" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">2. Hash, JWT e "che cosa succede?"</h2>
+      </div>
+
+      <h3 class="text-xl font-bold text-white mt-6 mb-2">Hash veloci e hash lenti</h3>
+      <p class="text-gray-400 mb-4"><code class="inline">input</code> è una funzione <code class="inline">async</code> che riceve <code class="inline">crypto</code> e <code class="inline">bcrypt</code>. Confronta sha256 e bcrypt, guarda dentro un hash, misura il costo. <kbd>Ctrl</kbd>+<kbd>Invio</kbd> esegue.</p>
+      <div id="hash" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Dentro un JWT</h3>
+      <p class="text-gray-400 mb-4">Un token firmato con HS256, decodificato e verificato qui nel browser. Cambia il ruolo senza firmare (il server lo rifiuta), poi firma di nuovo: se il segreto è quello giusto il server ci crede. Per questo il segreto deve restare segreto (e lungo). Puoi anche incollare il token della Biblioteca 9.0: il suo segreto è nel file <code class="inline">.env</code> del progetto.</p>
+      <div id="jwt" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <details class="mt-4 bg-gray-800/40 border border-gray-700 rounded-xl p-5">
+        <summary class="cursor-pointer font-semibold text-gray-200">🎯 Quattro domande sul JWT (con le risposte)</summary>
+        <ol class="list-decimal list-inside text-gray-300 space-y-2 mt-4 marker:text-cyan-400">
+          <li>Cancella l'ultimo carattere della firma: che errore dà il server?</li>
+          <li>Cambia il ruolo con il pulsante 😈: che cosa vede il server? E l'header e il payload sono ancora leggibili?</li>
+          <li>Cambia il segreto in "segreto" e premi ✍️: il token ora vale? Per quale server?</li>
+          <li>Che cosa ci guadagna un attaccante a cambiare <code class="inline">"alg": "HS256"</code> in <code class="inline">"none"</code>, se il server non passa <code class="inline">algorithms</code> a <code class="inline">jwt.verify</code>?</li>
+        </ol>
+        <button onclick="toggleSolution('sol-jwt')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela le risposte</button>
+        <div id="sol-jwt" class="solution-container mt-4 text-gray-300 space-y-2">
+          <p>1. <code class="inline">invalid signature</code> (→ 401): la firma non corrisponde più a header e payload.</p>
+          <p>2. Sempre <code class="inline">invalid signature</code>: il payload è cambiato ma la firma no. Header e payload si leggono comunque (sono solo base64url): niente dati segreti nel token.</p>
+          <p>3. Sì, ma solo per un server che usa "segreto" come <code class="inline">JWT_SECRET</code>. Chi conosce il segreto può fabbricare token per chiunque e con qualunque ruolo: va tenuto in <code class="inline">.env</code>, lungo e casuale.</p>
+          <p>4. Con <code class="inline">alg: none</code> un token non ha firma. jsonwebtoken lo rifiuta comunque se c'è un segreto, ma l'opzione <code class="inline">algorithms: ['HS256']</code> mette in chiaro che l'algoritmo lo sceglie il server: è la regola contro tutta una famiglia di attacchi "di confusione dell'algoritmo".</p>
+        </div>
+      </details>
+
+      <h3 class="text-xl font-bold text-white mt-12 mb-2">Che cosa succede?</h3>
+      <p class="text-gray-400 mb-4">Clicca le righe nell'ordine giusto. Alcune possono comparire più di una volta, altre mai!</p>
+      <div id="order-game"></div>
+    </section>
+
+    <!-- 3. BIBLIOTECA 9.0 -->
+    <section id="biblioteca" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="library" class="w-6 h-6 text-yellow-400"></i>
+        <h2 class="text-2xl font-bold text-white">3. Biblioteca 9.0</h2>
+      </div>
+      <p class="text-gray-400 mb-4">La Biblioteca con gli <strong>utenti</strong>: registrazione e login (bcrypt), access token JWT da mandare nell'header, refresh token in un cookie HttpOnly, rotte protette per ruolo. Due utenti nel seed: <code class="inline">giulia@example.com</code> / <code class="inline">giulia-2026</code> (lettrice) e <code class="inline">bibliotecaria@biblioteca.it</code> / <code class="inline">scaffale-2026</code>. Dopo il login copia l'<code class="inline">accessToken</code> dalla risposta e incollalo in <em>Header aggiuntivi</em> al posto di <code class="inline">INCOLLA_QUI_IL_TOKEN</code>. Il riquadro <em>Cookie</em> mostra il refresh token, come i DevTools del browser.</p>
+      <div id="inspector" class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 md:p-6"></div>
+      <button onclick="toggleSolution('codice-server')" class="mt-4 text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="file-code-2" class="w-4 h-4"></i> Mostra il codice del progetto</button>
+      <div id="codice-server" class="solution-container mt-4">
+        <div id="codice-tabs" class="flex flex-wrap gap-1.5 mb-2"></div>
+        <pre class="code small"><code id="codice-src" class="language-javascript"></code></pre>
+      </div>
+    </section>
+
+    <!-- 4. LABORATORI -->
+    <section id="lab" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-2 border-b border-gray-800 pb-2">
+        <i data-lucide="flask-conical" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">4. Laboratori nel browser</h2>
+      </div>
+      <div class="text-gray-400 mb-8 space-y-2">
+        <p>I pacchetti che servono sono già installati e le variabili d'ambiente (i segreti) già impostate. Premi <kbd>▶ Esegui</kbd>, prova con il <strong>Client HTTP</strong> (conserva i cookie come un browser) e poi <kbd>Verifica</kbd>.</p>
+        <p class="text-sm">💡 bcrypt è lento apposta: con il costo 10 ogni hash richiede qualche decina di millisecondi anche qui.</p>
+      </div>
+      <div class="space-y-10" id="labs"></div>
+    </section>
+
+    <!-- 5. MISSIONI SUL PC -->
+    <section id="pc" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="laptop" class="w-6 h-6 text-emerald-400"></i>
+        <h2 class="text-2xl font-bold text-white">5. Missioni sul tuo PC</h2>
+      </div>
+      <div class="space-y-8">
+        <!-- Missione A -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-amber-900/50 flex items-center justify-center border border-amber-500/30"><i data-lucide="globe" class="w-5 h-5 text-amber-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione A: La Biblioteca 9.0 dal browser</h3>
+              <p class="text-sm text-amber-400 font-mono">Focus: segreti casuali, fetch con il Bearer, i cookie nei DevTools</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-amber-500">
+            <li>Nel progetto della missione A del modulo 11 installa <code class="inline">bcrypt</code>, <code class="inline">jsonwebtoken</code> e <code class="inline">cookie-parser</code>, ricopia i file della Biblioteca 9.0 e genera <strong>due segreti nuovi</strong> per il <code class="inline">.env</code>. Avvia con <code class="inline">node --env-file=.env --watch server.js</code>.</li>
+            <li>Crea <code class="inline">public/index.html</code> (servito con <code class="inline">express.static</code>) con un form di login: con <code class="inline">fetch</code> manda email e password, tieni l'<code class="inline">accessToken</code> in una variabile e usalo per chiedere <code class="inline">/api/auth/io</code>.</li>
+            <li>Apri i DevTools → <em>Application</em> → <em>Cookies</em>: c'è il cookie <code class="inline">refresh</code>? Che attributi ha? Prova <code class="inline">document.cookie</code> nella console: lo vedi?</li>
+            <li>Aggiungi un pulsante "Rinnova" che chiama <code class="inline">POST /api/auth/refresh</code>. Perché funziona anche se il tuo JavaScript non conosce il refresh token? E dopo un riavvio del server?</li>
+          </ol>
+          <button onclick="toggleSolution('sol-a')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-a" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-bash">npm install bcrypt jsonwebtoken cookie-parser
+# due segreti da 32 byte, uno per riga, da copiare nel .env
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+node --env-file=.env --watch server.js
+# (in app.js: app.use(express.static('public')) prima delle rotte)</code></pre>
+            <pre class="code small"><code class="language-html">&lt;!-- public/index.html --&gt;
+&lt;form id="login"&gt;
+  &lt;input name="email" value="giulia@example.com"&gt; &lt;input name="password" type="password" value="giulia-2026"&gt;
+  &lt;button&gt;Entra&lt;/button&gt; &lt;button type="button" id="rinnova"&gt;Rinnova&lt;/button&gt;
+&lt;/form&gt;
+&lt;pre id="out"&gt;&lt;/pre&gt;
+&lt;script&gt;
+  let accessToken = null;                      // in memoria: non in localStorage
+  const out = (x) => (document.querySelector('#out').textContent = JSON.stringify(x, null, 2));
+  async function io() {
+    const r = await fetch('/api/auth/io', { headers: { Authorization: `Bearer ${accessToken}` } });
+    out(await r.json());
+  }
+  document.querySelector('#login').onsubmit = async (e) => {
+    e.preventDefault();
+    const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.fromEntries(new FormData(e.target))) });
+    if (!r.ok) return out(await r.json());
+    ({ accessToken } = await r.json());
+    io();
+  };
+  document.querySelector('#rinnova').onclick = async () => {
+    const r = await fetch('/api/auth/refresh', { method: 'POST' });   // il cookie parte da solo
+    if (r.ok) { ({ accessToken } = await r.json()); io(); } else out(await r.json());
+  };
+&lt;/script&gt;</code></pre>
+            <pre class="code small"><code class="language-javascript">// 3. refresh: HttpOnly ✓, SameSite=Strict, Path=/api/auth, scade tra 7 giorni (Secure solo in produzione).
+//    document.cookie non lo mostra: è HttpOnly. Ed è visibile solo sulle richieste a /api/auth.
+// 4. Il browser allega il cookie da solo (stesso sito, path giusto): il JavaScript non deve conoscerlo.
+//    Dopo un riavvio funziona ancora: il refresh token è un JWT firmato e la versione sta in MongoDB.
+//    (Con le sessioni di express-session nel MemoryStore, invece, un riavvio fa uscire tutti.)</code></pre>
+          </div>
+        </article>
+
+        <!-- Missione B -->
+        <article class="bg-gray-800/50 border border-gray-700 rounded-2xl p-6 md:p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-orange-900/50 flex items-center justify-center border border-orange-500/30"><i data-lucide="user-check" class="w-5 h-5 text-orange-400"></i></div>
+            <div>
+              <h3 class="text-2xl font-bold text-white">Missione B: "solo i miei prestiti" e il cambio password</h3>
+              <p class="text-sm text-orange-400 font-mono">Focus: autorizzazione sulla proprietà, verifica della vecchia password, invalidare le sessioni</p>
+            </div>
+          </div>
+          <ol class="list-decimal list-inside text-gray-300 space-y-2 mb-6 marker:text-orange-500">
+            <li>Aggiungi <code class="inline">GET /api/auth/io/prestiti</code>: i libri con un prestito <strong>aperto</strong> dell'utente del token (il filtro usa <code class="inline">req.utente.id</code>, non un parametro dell'URL).</li>
+            <li>Permetti a un lettore di restituire (<code class="inline">DELETE /api/libri/:id/prestito</code>) solo i <strong>suoi</strong> prestiti; la bibliotecaria può restituirli tutti. Che status dai a Giulia che prova a restituire il libro di un altro?</li>
+            <li>Aggiungi <code class="inline">PATCH /api/auth/password</code> con <code class="inline">{ vecchia, nuova }</code>: controlla la vecchia, salva la nuova (passando da <code class="inline">save()</code>, non da <code class="inline">updateOne</code>: perché?) e chiudi le altre sessioni.</li>
+          </ol>
+          <button onclick="toggleSolution('sol-b')" class="text-sm flex items-center gap-2 text-gray-400 hover:text-white transition-colors bg-gray-900 px-4 py-2 rounded-lg border border-gray-700"><i data-lucide="eye" class="w-4 h-4"></i> Rivela soluzione</button>
+          <div id="sol-b" class="solution-container mt-4 space-y-3">
+            <pre class="code small"><code class="language-javascript">// routes/auth.js — 1. i miei prestiti: l'utente viene dal token
+router.get('/io/prestiti', autentica, async (req, res) => {
+  res.json(await Libro.find({ prestiti: { $elemMatch: { utente: req.utente.id, al: null } } }).select('titolo prestiti.$'));
+});
+
+// routes/libri.js — 2. restituire: la bibliotecaria tutto, il lettore solo i suoi
+router.delete('/:id/prestito', autentica, valida({ params: idParam }), async (req, res) => {
+  const filtro = { _id: req.valido.params.id, 'prestiti.al': null };
+  if (req.utente.ruolo !== 'bibliotecario') filtro['prestiti.utente'] = req.utente.id;
+  // (meglio ancora: prestiti: { $elemMatch: { al: null, utente: req.utente.id } }, così le due condizioni valgono per LO STESSO prestito)
+  const libro = await Libro.findOneAndUpdate(filtro, { $set: { disponibile: true, 'prestiti.$.al': new Date() } }, { returnDocument: 'after' });
+  if (!libro) throw new NonTrovato('Nessun tuo prestito in corso per questo libro');   // 404: non riveliamo i prestiti altrui
+  res.json(libro);
+});
+// (un 403 andrebbe bene lo stesso: 404 nasconde anche il fatto che il prestito esista)
+
+// routes/auth.js — 3. il cambio password
+router.patch('/password', autentica, async (req, res) => {
+  const { vecchia, nuova } = z.strictObject({ vecchia: z.string(), nuova: z.string().min(8).max(72) }).parse(req.body);
+  const utente = await Utente.findById(req.utente.id).select('+password +versioneToken');
+  if (!(await utente.verificaPassword(vecchia))) throw new NonAutenticato('Password attuale sbagliata');
+  utente.password = nuova;          // save() → validazione + pre('save') → hash
+  utente.versioneToken += 1;        // i refresh token di tutti i dispositivi non valgono più
+  await utente.save();
+  res.cookie('refresh', refreshToken(utente), opzioniCookie);    // questo dispositivo resta dentro
+  res.json({ accessToken: accessToken(utente) });
+});
+// con updateOne({ password: nuova }) l'hook pre('save') NON gira: nel database finirebbe la password in chiaro</code></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 6. QUIZ -->
+    <section id="quiz" class="scroll-mt-20">
+      <div class="flex items-center gap-3 mb-6 border-b border-gray-800 pb-2">
+        <i data-lucide="check-square" class="w-6 h-6 text-green-400"></i>
+        <h2 class="text-2xl font-bold text-white">6. Quiz di verifica</h2>
+      </div>
+      <div id="quiz-box"></div>
+    </section>
+  </main>
+
+  <footer class="border-t border-gray-800 py-8 bg-gray-900 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm font-mono">studente@nodelab:~$ curl -H "Authorization: Bearer $TOKEN" localhost:3000/api/auth/io</div>
+  </footer>
+
+  <script src="assets/runtime.js"></script>
+  <script src="assets/lab.js"></script>
+  <script src="assets/widgets.js"></script>
+  <script src="assets/m11-biblioteca.js"></script>
+  <script src="assets/m12-biblioteca.js"></script>
+  <script src="assets/labs-m12.js"></script>
+  <script>
+    // ---------------------------------------------------------------- 2. hash, jwt e indovina
+    NodeLab.playground(document.getElementById('hash'), Object.assign({ packages: ['bcrypt'] }, M12_HASH));
+    JwtLab.mount(document.getElementById('jwt'));
+
+    OrderGame.mount(document.getElementById('order-game'), [
+      {
+        title: 'Due hash della stessa password',
+        cmd: '$ node prova.js',
+        code: `const a = await bcrypt.hash('x12345678', 10);
+const b = await bcrypt.hash('x12345678', 10);
+console.log(a === b);
+console.log(await bcrypt.compare('x12345678', a), await bcrypt.compare('x12345678', b));`,
+        chips: ['true', 'false', 'true true', 'true false', 'false false'],
+        answer: ['false', 'true true'],
+        explain: 'Ogni hash ha il suo **sale** casuale, quindi le due stringhe sono diverse. `compare` legge il sale dall\'hash e rifà il calcolo: con tutte e due la password giusta dà `true`.',
+      },
+      {
+        title: 'Che status risponde il server?',
+        cmd: '-- Biblioteca 9.0 · GET pubblica · DELETE con autentica + autorizza(\'bibliotecario\')',
+        prompt: 'Lo status di ogni richiesta, in ordine.',
+        code: `GET    /api/libri          (nessun token)
+DELETE /api/libri/…16      (nessun token)
+DELETE /api/libri/…16      (token di Giulia, lettrice)
+DELETE /api/libri/…16      (token di Anna, bibliotecaria)
+DELETE /api/libri/…16      (token di Anna, scaduto da un minuto)`,
+        chips: ['200', '204', '401', '403', '404'],
+        answer: ['200', '401', '403', '204', '401'],
+        explain: 'Senza token o con un token non valido (anche scaduto) è **401**: il server non sa chi sei. Con un token valido ma il ruolo sbagliato è **403**. La bibliotecaria elimina: **204**.',
+      },
+      {
+        title: 'jwt.verify',
+        cmd: '$ node prova.js',
+        code: `const t = jwt.sign({ sub: 'u1' }, 'A', { expiresIn: '15m' });
+const prove = [[t, 'A'], [t, 'B'], [t.slice(0, -2), 'A'],
+  [jwt.sign({ sub: 'u1' }, 'A', { expiresIn: -1 }), 'A']];
+for (const [token, segreto] of prove) {
+  try { console.log(jwt.verify(token, segreto).sub); }
+  catch (err) { console.log(err.message); }
+}`,
+        chips: ['u1', 'invalid signature', 'jwt expired', 'jwt malformed', 'invalid token'],
+        answer: ['u1', 'invalid signature', 'invalid signature', 'jwt expired'],
+        explain: 'Con il segreto giusto: il payload. Un segreto diverso o una firma tagliata: la firma non torna → `invalid signature`. Un token con `exp` nel passato: `jwt expired` (`TokenExpiredError`, con `err.expiredAt`).',
+      },
+      {
+        title: 'La sessione dopo il riavvio',
+        cmd: '-- express-session con il MemoryStore (quello di default)',
+        prompt: 'Lo status di GET /io, prima e dopo il riavvio del server.',
+        code: `POST /login     → 200  (Set-Cookie: connect.sid=s%3A…)
+GET  /io        → ?
+# il server si riavvia (node --watch ha visto una modifica)
+GET  /io        → ?      (il browser manda lo stesso cookie)`,
+        chips: ['200', '401', '403', '500'],
+        answer: ['200', '401'],
+        explain: 'Il cookie contiene solo l\'**id** della sessione; i dati stanno nella memoria del processo. Dopo il riavvio quell\'id non esiste più: per il server non hai fatto il login. In produzione: uno store esterno (Redis, MongoDB).',
+      },
+      {
+        title: 'Il pre(\'save\') e l\'updateOne',
+        cmd: "$ node prova.js      # nello schema: pre('save') fa l'hash se isModified('password'); password: select: false",
+        code: `const u = await Utente.create({ email: 'a@b.it', nome: 'A', password: 'segreta123' });
+u.nome = 'Anna';
+await u.save();
+const conPw = await Utente.findById(u._id).select('+password');
+console.log(await bcrypt.compare('segreta123', conPw.password));
+await Utente.updateOne({ _id: u._id }, { password: 'nuova-password' });
+console.log((await Utente.findById(u._id).select('+password')).password);
+console.log((await Utente.findById(u._id)).password);`,
+        chips: ['true', 'false', "'$2b$10$…'", 'nuova-password', 'undefined', 'null'],
+        answer: ['true', 'nuova-password', 'undefined'],
+        explain: 'Cambiare il nome non rifà l\'hash (`isModified(\'password\')` è falso), quindi `compare` dà `true`. Ma `updateOne` **non** passa dall\'hook di `save`: la nuova password finisce nel database in chiaro! Senza `+password` il campo non arriva proprio (`select: false`).',
+      },
+      {
+        title: 'BOSS: refresh e logout',
+        cmd: '-- Biblioteca 9.0 · il client conserva i cookie come un browser',
+        prompt: 'Lo status di ogni richiesta, in ordine.',
+        code: `POST /api/auth/login     { giulia@example.com, giulia-2026 }
+POST /api/auth/refresh   (il cookie refresh parte da solo)
+POST /api/auth/logout
+POST /api/auth/refresh   (il cookie è stato cancellato)
+GET  /api/auth/io        (con il primo access token, di 5 minuti fa)`,
+        chips: ['200', '201', '204', '401', '403'],
+        answer: ['200', '200', '204', '401', '200'],
+        explain: 'Il refresh con il cookie dà un nuovo access token. Il logout cancella il cookie e incrementa `versioneToken`: il refresh successivo è 401. Ma un access token già emesso vale fino a `exp` (15 minuti): per questo dura poco.',
+      },
+    ], { id: 'm12-order' });
+
+    // ---------------------------------------------------------------- 3. biblioteca
+    NodeLab.inspector(document.getElementById('inspector'), {
+      id: 'm12-biblioteca-ex',
+      files: M12_BIBLIOTECA.files, fs: M12_BIBLIOTECA.fs, entry: 'server.js', port: 3000, node: M12_BIBLIOTECA.node,
+      packages: M12_BIBLIOTECA.packages, persist: true, watch: M12_BIBLIOTECA.watch,
+      missions: M12_BIBLIOTECA.missions, presets: M12_BIBLIOTECA.presets,
+    });
+    (function codiceProgetto() {
+      const tabs = document.getElementById('codice-tabs');
+      const src = document.getElementById('codice-src');
+      const nomi = Object.keys(M12_BIBLIOTECA.files);
+      function mostra(n) {
+        tabs.querySelectorAll('button').forEach((b) => {
+          b.className = `text-xs font-mono px-2 py-1 rounded border ${b.dataset.f === n ? 'border-green-500 bg-green-500/15 text-white' : 'border-gray-700 bg-gray-900 text-gray-400 hover:text-white'}`;
+        });
+        const testo = M12_BIBLIOTECA.files[n];
+        const lang = n.endsWith('.env') ? 'ini' : 'javascript';
+        if (window.hljs) { src.innerHTML = hljs.highlight(testo, { language: lang }).value; src.classList.add('hljs'); }
+        else src.textContent = testo;
+      }
+      tabs.innerHTML = nomi.map((n) => `<button data-f="${n}">${n}</button>`).join('');
+      tabs.onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) mostra(b.dataset.f); };
+      mostra('middleware/auth.js');
+    })();
+
+    // ---------------------------------------------------------------- 4. laboratori
+    const labsBox = document.getElementById('labs');
+    for (const cfg of window.M12_LABS) {
+      const el = document.createElement('article');
+      el.id = cfg.id;
+      labsBox.appendChild(el);
+      NodeLab.mount(el, cfg);
+    }
+
+    // ---------------------------------------------------------------- 6. quiz
+    Quiz.mount(document.getElementById('quiz-box'), [
+      {
+        question: 'Un utente con un token valido prova a eliminare un libro, ma è un lettore. Che status?',
+        options: ['400', '401', '403', '404'],
+        correct: 2,
+        explanation: '401: il server non sa chi sei (token mancante o non valido). 403: sa chi sei, ma non hai il permesso.',
+      },
+      {
+        question: 'Perché non si salvano le password con `sha256`?',
+        options: ['Perché sha256 non è sicuro per niente', 'Perché è velocissimo: con una GPU si provano miliardi di password al secondo; e senza sale password uguali danno hash uguali', 'Perché sha256 si può decifrare', 'Perché occupa troppo spazio'],
+        correct: 1,
+        explanation: 'Gli hash veloci sono ottimi per i file, pessimi per le password. bcrypt/argon2/scrypt sono lenti apposta (con un costo regolabile) e usano un sale casuale.',
+      },
+      {
+        question: 'Che cosa contiene `$2b$10$LftqW/O8KFwOZfNp3fAV1.OcmWbeDDJ47MMiCo0ezdE42KvZ7J9m.`?',
+        options: ['Solo l\'hash: il sale va salvato a parte', 'Algoritmo, costo, sale e hash', 'La password cifrata, da decifrare con una chiave', 'Un JWT'],
+        correct: 1,
+        explanation: '`$2b$` = bcrypt, `10` = il costo, i 22 caratteri dopo = il sale, il resto = il risultato. Per questo `compare` ha bisogno solo della password e dell\'hash.',
+      },
+      {
+        question: 'Il login risponde "Email non registrata" se l\'email non c\'è e "Password sbagliata" se la password è sbagliata. Che problema c\'è?',
+        options: ['Nessuno, è più chiaro', 'Rivela quali email sono registrate: chi attacca può scoprirle una per una', 'Rallenta il login', 'Viola il formato JSON'],
+        correct: 1,
+        explanation: 'Si usa un messaggio unico ("Email o password non validi") con lo stesso status 401 per tutti e due i casi.',
+      },
+      {
+        question: 'Nel modello Utente: `pre(\'save\')` fa l\'hash della password. Che cosa succede con `Utente.updateOne({ _id }, { password: \'nuova\' })`?',
+        options: ['La password viene salvata in hash', 'La password viene salvata in chiaro: updateOne non passa dall\'hook di save', 'Errore', 'Niente'],
+        correct: 1,
+        explanation: 'Gli hook di documento (`save`) non girano per gli update via query. Per cambiare la password: si legge il documento, si assegna e si chiama `save()`.',
+      },
+      {
+        question: 'A che cosa serve l\'attributo `HttpOnly` di un cookie?',
+        options: ['A mandarlo solo su HTTP e non su HTTPS', 'A renderlo invisibile a JavaScript nella pagina (document.cookie): uno script iniettato (XSS) non lo può rubare', 'A farlo scadere alla chiusura del browser', 'A mandarlo solo alle richieste dello stesso sito'],
+        correct: 1,
+        explanation: 'HttpOnly = niente JavaScript. "Solo HTTPS" è `Secure`; "solo dallo stesso sito" è `SameSite`.',
+      },
+      {
+        question: 'Perché al login si chiama `req.session.regenerate(…)`?',
+        options: ['Per svuotare il carrello', 'Per dare un id di sessione nuovo: un id "piazzato" prima del login (session fixation) non diventa valido', 'Per allungare la durata del cookie', 'Perché express-session lo richiede sempre'],
+        correct: 1,
+        explanation: 'Se un attaccante riesce a far usare alla vittima un id di sessione che conosce, senza regenerate quell\'id diventerebbe autenticato dopo il login della vittima.',
+      },
+      {
+        question: 'Il payload di un JWT è leggibile?',
+        options: ['No, è cifrato con il segreto', 'Sì: è solo codificato in base64url; la firma impedisce di modificarlo, non di leggerlo', 'Solo dal server', 'Solo con la chiave pubblica'],
+        correct: 1,
+        explanation: 'Chiunque abbia il token può fare `jwt.decode` (o copiarlo su jwt.io). Nel payload solo quello che serve: id, ruolo, scadenza.',
+      },
+      {
+        question: 'Perché `jwt.verify(token, segreto, { algorithms: [\'HS256\'] })` e non solo `jwt.verify(token, segreto)`?',
+        options: ['È più veloce', 'Perché così l\'algoritmo lo decide il server e non l\'header del token (che il client può cambiare)', 'Perché HS256 non è il default', 'Non cambia niente'],
+        correct: 1,
+        explanation: 'L\'header del token è sotto il controllo di chi lo manda. Fissare gli algoritmi accettati chiude gli attacchi che giocano sull\'algoritmo (come `alg: none`).',
+      },
+      {
+        question: 'Perché l\'access token dura 15 minuti e il refresh token 7 giorni?',
+        options: ['Per risparmiare memoria', 'L\'access token viaggia a ogni richiesta e non si può revocare: se lo rubano deve valere poco. Il refresh token si usa di rado, sta in un cookie HttpOnly e il server lo controlla nel database', 'Perché jsonwebtoken non accetta durate più lunghe', 'È solo una convenzione senza motivo'],
+        correct: 1,
+        explanation: 'Un JWT valido resta valido fino a `exp`. Con un access token breve e un refresh token controllato (versione o lista nel database) si ottiene il logout "vero" senza perdere i vantaggi dei token.',
+      },
+      {
+        question: 'La registrazione fa `Utente.create(req.body)`. Che cosa succede con il body `{ "email": "…", "nome": "…", "password": "…", "ruolo": "bibliotecario" }`?',
+        options: ['Il ruolo viene ignorato da Mongoose', 'Il nuovo utente diventa bibliotecario: il client ha scelto il proprio ruolo (mass assignment)', 'Errore di validazione', 'Il ruolo viene scritto ma non usato'],
+        correct: 1,
+        explanation: 'Il campo è nello schema, quindi Mongoose lo salva. Dal body si prendono solo i campi previsti (zod `strictObject`, o una destrutturazione `{ email, nome, password }`).',
+      },
+      {
+        question: 'Dove conviene tenere il refresh token in un\'app web?',
+        options: ['In localStorage', 'In un cookie HttpOnly, Secure, SameSite=Strict, con il path delle rotte di autenticazione', 'Nell\'URL', 'In una variabile globale'],
+        correct: 1,
+        explanation: 'localStorage è leggibile da qualunque script della pagina (XSS). Il cookie HttpOnly non lo è; SameSite e il path stretto limitano quando parte.',
+      },
+    ], { id: 'm12-quiz' });
+
+    if (window.hljs) document.querySelectorAll('pre.code code').forEach((el) => { if (!el.dataset.highlighted && el.id !== 'codice-src') hljs.highlightElement(el); });
+    NodeLab.refreshProgress();
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>
